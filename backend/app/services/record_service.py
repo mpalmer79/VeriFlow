@@ -78,6 +78,10 @@ def create_record(db: Session, actor: User, payload: RecordCreate) -> Record:
         insurance_status=payload.insurance_status,
         consent_status=payload.consent_status,
         medical_history_status=payload.medical_history_status,
+        identity_verified=payload.identity_verified,
+        guardian_authorization_signed=payload.guardian_authorization_signed,
+        allergy_info_provided=payload.allergy_info_provided,
+        insurance_in_network=payload.insurance_in_network,
     )
 
     record = record_repository.add(db, record)

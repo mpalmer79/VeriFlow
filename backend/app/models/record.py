@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import Date, Enum, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -61,6 +61,13 @@ class Record(Base, TimestampMixin):
         default=MedicalHistoryStatus.NOT_STARTED,
     )
 
+    identity_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    guardian_authorization_signed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    allergy_info_provided: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    insurance_in_network: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+
     risk_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     risk_band: Mapped[RiskBand] = mapped_column(
         Enum(RiskBand, name="risk_band", native_enum=True, validate_strings=True),
@@ -80,3 +87,4 @@ class Record(Base, TimestampMixin):
     rule_evaluations: Mapped[List["RuleEvaluation"]] = relationship(  # noqa: F821
         back_populates="record", cascade="all, delete-orphan"
     )
+

@@ -105,7 +105,17 @@ The frontend in this phase is a structural scaffold with placeholder pages at
 
 ## Status
 
-Phase 0 and Phase 1 are complete: monorepo structure, data model, JWT auth,
-record CRUD, seed data, tests, and frontend scaffold. The rule engine, risk
-calculation, and document workflow are intentionally deferred — see
-[`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and roadmap.
+Phases 0–2 are complete. The backend now runs a code-driven rule registry,
+computes risk scores and risk bands, persists evaluation outcomes, and
+enforces stage transitions through a rule-gated workflow service.
+
+- `POST /api/records/{id}/evaluate` — runs all active rules, updates the
+  record's `risk_score` / `risk_band`, and returns a structured decision
+- `GET /api/records/{id}/evaluations` — returns the current evaluation rows
+- `POST /api/records/{id}/transition` — attempts a stage transition;
+  blocks when any `BLOCK` rule fails, passes through when only warnings
+  are present
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md) and
+[`docs/workflow_rules.md`](./docs/workflow_rules.md) for the full design.
+Document workflow and expanded reporting remain for later phases.

@@ -1,9 +1,7 @@
-# VeriFlow — Workflow & Rule Concepts
+# VeriFlow — Workflow, Rules, and Transitions
 
-This document describes the demo Healthcare Intake workflow and the initial
-set of rule concepts the engine will enforce. The rule engine itself is
-**not implemented** in Phase 1 — this document captures intent so the data
-model and API surface stay aligned with where the engine is headed.
+This document describes the Healthcare Intake workflow, the initial rule
+set, how evaluation runs, and how stage transitions are enforced.
 
 ## Healthcare Intake — stages
 
@@ -19,92 +17,106 @@ model and API surface stay aligned with where the engine is headed.
 | 8 | Blocked                  | `blocked`                 | yes      | One or more rules failed; resolution required               |
 | 9 | Closed                   | `closed`                  | yes      | Terminal disposition for the record                         |
 
-Records always move through stages by their `order_index` unless a rule
-forces them to `Blocked`. `Blocked` and `Closed` are terminal: records can
-re-open from `Blocked` once the underlying rule passes.
+`Blocked` and `Closed` are terminal. Records re-open from `Blocked` once
+the underlying rule passes.
 
-## Rule outcomes
+## Rule registry
 
-Rules are defined per workflow. The `code` on a rule is unique within its
-workflow, so the same code can exist in two workflows with different
-configuration. A rule carries a static **action** (`warn` or `block`), a
-**severity** (`warning`, `high`, or `critical`), and a **risk weight**.
+Rules in VeriFlow are **code-driven**. There is no DSL, no visual rule
+builder, and no free-form expression parser. The design is a controlled
+registry:
 
-Every evaluation of a rule against a record produces a `RuleEvaluation`
-row with:
+- Every rule has a string `code` and a Python evaluator function.
+- Evaluators register with `@register("<code>")` in
+  `app/services/rules.py`.
+- The `Rule` database row carries metadata only: `workflow_id`,
+  `stage_id`, `code`, `name`, `description`, `action` (`warn` or
+  `block`), `severity` (`warning`, `high`, `critical`), `risk_weight`,
+  and `is_active`.
+- An evaluator receives the record and the `Rule` row and returns a
+  `RuleResult` (`rule_code`, `passed`, `action_applied`, `message`,
+  `risk_applied`).
+- The engine applies the rule's configured `action` on failure, so the
+  same evaluator can be reused across workflows with different
+  severities and weights.
 
-- `passed` — `true` when the record satisfied the rule
-- `action_applied` — `none`, `warn`, or `block`; what the engine actually
-  did for this evaluation
-- `risk_applied` — integer risk contribution recorded for this evaluation
-- `explanation` — human-readable text describing what failed and what is
-  required to resolve it
+Rule `code` is unique per workflow via the composite
+`(workflow_id, code)` constraint.
 
-Keeping the applied action and risk on the evaluation row (rather than
-re-reading the rule definition) preserves the historical decision even if
-the rule is later edited or disabled.
+## Initial rules (Phase 2)
 
-The aggregate `risk_score` is bucketed into a `risk_band`:
+Seven rules ship with the Healthcare Intake workflow. Four are blocking,
+three are warnings.
 
-| Band      | Score range (initial) |
-|-----------|-----------------------|
-| `low`     | 0 – 24                |
-| `moderate`| 25 – 49               |
-| `high`    | 50 – 74               |
-| `critical`| 75+                   |
+| Code | Action | Stage gate | Risk weight | Triggers when… |
+|------|--------|------------|-------------|----------------|
+| `identity_required` | block | Identity Verification | 40 | `identity_verified` is false |
+| `insurance_verified_or_self_pay` | block | Insurance Review | 45 | `insurance_status` is not `verified` and not `uninsured_acknowledged` |
+| `consent_required` | block | Consent & Authorization | 50 | `consent_status` is not `signed` |
+| `guardian_authorization_required` | block | Consent & Authorization | 60 | subject is under 18 and `guardian_authorization_signed` is false |
+| `medical_history_warning` | warn | Clinical History Review | 15 | `medical_history_status` is not `complete` |
+| `allergy_warning` | warn | Clinical History Review | 10 | `allergy_info_provided` is false |
+| `out_of_network_warning` | warn | Insurance Review | 20 | `insurance_in_network` is explicitly `false` (not applied to self-pay) |
 
-Thresholds are intentionally conservative for Phase 1 and will be tuned
-once real evaluation data exists.
+The `stage_id` on a rule row is advisory metadata for surfacing;
+evaluation in Phase 2 runs all active rules for the workflow. Stage-gated
+policy is enforced by the transition service: a transition is blocked
+whenever any `BLOCK` rule currently fails.
 
-## Initial rule concepts
+## Risk scoring
 
-These rules describe what the engine should evaluate per stage. Each is
-named with the code it will be registered under.
+`risk_service` aggregates `risk_applied` values from triggered
+evaluations. The score maps to a `RiskBand` using inclusive thresholds:
 
-### Identity Verification
+| Score range | Band       |
+|-------------|------------|
+| 0 – 24      | `low`      |
+| 25 – 49     | `moderate` |
+| 50 – 79     | `high`     |
+| 80+         | `critical` |
 
-- `identity.required_fields_present` — block if `subject_full_name` or
-  `subject_dob` is missing.
-- `identity.id_document_received` — warn if no ID document is attached;
-  block when leaving this stage.
+These thresholds are centralized in `risk_service` and can evolve without
+touching the engine or persistence.
 
-### Insurance Review
+## Evaluation flow
 
-- `insurance.status_known` — block when leaving this stage if
-  `insurance_status == unknown`.
-- `insurance.invalid_blocks_progress` — block when
-  `insurance_status == invalid`; force the record toward the `Blocked`
-  stage.
-- `insurance.uninsured_acknowledged` — warn when
-  `insurance_status == uninsured_acknowledged`; allow progression but
-  contribute risk.
+`evaluation_service.evaluate_and_persist` is the single entry point for
+running rules against a record. One run:
 
-### Consent & Authorization
+1. loads all active rules for the record's workflow
+2. invokes each rule's registered evaluator
+3. asks `risk_service` to compute the aggregate score and band
+4. **replaces** the record's `rule_evaluations` rows with the new set
+5. writes the new `risk_score` and `risk_band` back to the record
+6. emits `record.evaluated` and `record.risk_recalculated` audit events
 
-- `consent.signature_required` — block when leaving this stage if
-  `consent_status` is `not_provided` or `partial`.
-- `consent.not_expired` — block when `consent_status == expired`; force
-  toward `Blocked` regardless of current stage.
+The `rule_evaluations` table therefore always reflects the **current**
+evaluation run. Long-term history lives in the append-only audit log.
+This keeps explainability questions ("why is this record blocked right
+now?") unambiguous.
 
-### Clinical History Review
+## Transition enforcement
 
-- `clinical_history.complete` — block when leaving this stage if
-  `medical_history_status != complete`.
-- `clinical_history.incomplete_warns` — warn when `incomplete`; contributes
-  risk.
+`workflow_service.transition_record` gates every stage change on
+evaluation:
 
-### Cross-stage
+- the target stage must belong to the record's workflow
+- `record.transition_attempted` is logged
+- evaluation runs in the same transaction as the transition
+- if any `BLOCK` rule fails, the transition is rejected, the current
+  stage is preserved, and `record.transition_blocked` is logged
+- if only warnings are present, the stage is updated and
+  `record.transition_completed` is logged
+- the response payload includes the full `EvaluationDecision`
+  (`can_progress`, `risk_score`, `risk_band`, `violations`, `warnings`,
+  `summary`) so callers always know what happened and why
 
-- `record.high_risk_requires_review` — when `risk_score >= 75`, require an
-  explicit reviewer sign-off before reaching `Ready for Scheduling`.
-- `documents.expired` — any attached document with status `expired`
-  contributes risk and warns at every stage.
+## API surface
 
-## Why this is not yet implemented
-
-The Phase 1 goal is a clean, opinionated foundation: the data model can
-store rules and their evaluations, the API surface can carry rule outcomes
-in later phases, and the audit log already captures the structured payload
-the engine will produce. Building the engine before the surrounding system
-is solid would lock in premature decisions about evaluation order,
-extensibility, and explanation formatting.
+- `POST /api/records/{id}/evaluate` — runs evaluation, persists results,
+  returns the `EvaluationDecision`
+- `GET /api/records/{id}/evaluations` — returns the current
+  `RuleEvaluation` rows for the record
+- `POST /api/records/{id}/transition` — attempts a transition; body is
+  `{ "target_stage_id": <int> }`; response includes success flag,
+  updated stage, and decision payload

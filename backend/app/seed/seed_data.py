@@ -1,14 +1,15 @@
 """Seed demo data for VeriFlow.
 
 Idempotent: safe to run multiple times. Creates one organization, four users
-covering each role, the Healthcare Intake workflow with its nine stages, and
-a small set of demo records exercising different states.
+covering each role, the Healthcare Intake workflow with its nine stages,
+the initial rule set, and a small set of demo records exercising different
+states.
 """
 
 from __future__ import annotations
 
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.models import (
     Base,
     Organization,
     Record,
+    Rule,
     User,
     Workflow,
     WorkflowStage,
@@ -28,6 +30,8 @@ from app.models.enums import (
     MedicalHistoryStatus,
     RecordStatus,
     RiskBand,
+    RuleActionType,
+    RuleSeverity,
     UserRole,
 )
 from app.repositories import user_repository
@@ -47,25 +51,80 @@ WORKFLOW_STAGES: List[Dict] = [
 ]
 
 DEMO_USERS = [
-    {
-        "email": "admin@veriflow.demo",
-        "full_name": "Avery Chen",
-        "role": UserRole.ADMIN,
-    },
+    {"email": "admin@veriflow.demo", "full_name": "Avery Chen", "role": UserRole.ADMIN},
     {
         "email": "intake@veriflow.demo",
         "full_name": "Jordan Patel",
         "role": UserRole.INTAKE_COORDINATOR,
     },
+    {"email": "reviewer@veriflow.demo", "full_name": "Morgan Reyes", "role": UserRole.REVIEWER},
+    {"email": "manager@veriflow.demo", "full_name": "Sam Whitaker", "role": UserRole.MANAGER},
+]
+
+# stage_slug is optional; None means the rule is workflow-global.
+INITIAL_RULES: List[Dict] = [
     {
-        "email": "reviewer@veriflow.demo",
-        "full_name": "Morgan Reyes",
-        "role": UserRole.REVIEWER,
+        "code": "identity_required",
+        "name": "Identity must be verified",
+        "description": "Blocks progression past Identity Verification until identity is verified.",
+        "stage_slug": "identity_verification",
+        "action": RuleActionType.BLOCK,
+        "severity": RuleSeverity.HIGH,
+        "risk_weight": 40,
     },
     {
-        "email": "manager@veriflow.demo",
-        "full_name": "Sam Whitaker",
-        "role": UserRole.MANAGER,
+        "code": "insurance_verified_or_self_pay",
+        "name": "Insurance verified or self-pay acknowledged",
+        "description": "Blocks progression past Insurance Review until coverage is verified or self-pay is acknowledged.",
+        "stage_slug": "insurance_review",
+        "action": RuleActionType.BLOCK,
+        "severity": RuleSeverity.HIGH,
+        "risk_weight": 45,
+    },
+    {
+        "code": "consent_required",
+        "name": "Signed consent required",
+        "description": "Blocks progression past Consent & Authorization without a current signed consent.",
+        "stage_slug": "consent_authorization",
+        "action": RuleActionType.BLOCK,
+        "severity": RuleSeverity.CRITICAL,
+        "risk_weight": 50,
+    },
+    {
+        "code": "guardian_authorization_required",
+        "name": "Guardian authorization required for minors",
+        "description": "Blocks progression for subjects under 18 without guardian authorization.",
+        "stage_slug": "consent_authorization",
+        "action": RuleActionType.BLOCK,
+        "severity": RuleSeverity.CRITICAL,
+        "risk_weight": 60,
+    },
+    {
+        "code": "medical_history_warning",
+        "name": "Medical history incomplete",
+        "description": "Warns when medical history is not complete; does not block.",
+        "stage_slug": "clinical_history_review",
+        "action": RuleActionType.WARN,
+        "severity": RuleSeverity.WARNING,
+        "risk_weight": 15,
+    },
+    {
+        "code": "allergy_warning",
+        "name": "Allergy information missing",
+        "description": "Warns when allergy information has not been provided; does not block.",
+        "stage_slug": "clinical_history_review",
+        "action": RuleActionType.WARN,
+        "severity": RuleSeverity.WARNING,
+        "risk_weight": 10,
+    },
+    {
+        "code": "out_of_network_warning",
+        "name": "Out-of-network coverage",
+        "description": "Warns when insurance coverage is out-of-network; does not block.",
+        "stage_slug": "insurance_review",
+        "action": RuleActionType.WARN,
+        "severity": RuleSeverity.WARNING,
+        "risk_weight": 20,
     },
 ]
 
@@ -79,8 +138,10 @@ DEMO_RECORDS = [
         "insurance_status": InsuranceStatus.UNKNOWN,
         "consent_status": ConsentStatus.NOT_PROVIDED,
         "medical_history_status": MedicalHistoryStatus.NOT_STARTED,
-        "risk_score": 10,
-        "risk_band": RiskBand.LOW,
+        "identity_verified": False,
+        "guardian_authorization_signed": False,
+        "allergy_info_provided": False,
+        "insurance_in_network": None,
         "notes": "New referral, awaiting initial contact.",
     },
     {
@@ -92,8 +153,10 @@ DEMO_RECORDS = [
         "insurance_status": InsuranceStatus.PENDING,
         "consent_status": ConsentStatus.PARTIAL,
         "medical_history_status": MedicalHistoryStatus.INCOMPLETE,
-        "risk_score": 35,
-        "risk_band": RiskBand.MODERATE,
+        "identity_verified": True,
+        "guardian_authorization_signed": False,
+        "allergy_info_provided": False,
+        "insurance_in_network": None,
         "notes": "Insurance card uploaded, awaiting verification call.",
     },
     {
@@ -105,8 +168,10 @@ DEMO_RECORDS = [
         "insurance_status": InsuranceStatus.VERIFIED,
         "consent_status": ConsentStatus.NOT_PROVIDED,
         "medical_history_status": MedicalHistoryStatus.INCOMPLETE,
-        "risk_score": 55,
-        "risk_band": RiskBand.HIGH,
+        "identity_verified": True,
+        "guardian_authorization_signed": False,
+        "allergy_info_provided": True,
+        "insurance_in_network": True,
         "notes": "Consent forms sent; signature still outstanding.",
     },
     {
@@ -118,8 +183,10 @@ DEMO_RECORDS = [
         "insurance_status": InsuranceStatus.INVALID,
         "consent_status": ConsentStatus.EXPIRED,
         "medical_history_status": MedicalHistoryStatus.INCOMPLETE,
-        "risk_score": 85,
-        "risk_band": RiskBand.CRITICAL,
+        "identity_verified": True,
+        "guardian_authorization_signed": False,
+        "allergy_info_provided": False,
+        "insurance_in_network": False,
         "notes": "Insurance rejected and consent expired; outreach required.",
     },
     {
@@ -131,8 +198,10 @@ DEMO_RECORDS = [
         "insurance_status": InsuranceStatus.VERIFIED,
         "consent_status": ConsentStatus.SIGNED,
         "medical_history_status": MedicalHistoryStatus.COMPLETE,
-        "risk_score": 5,
-        "risk_band": RiskBand.LOW,
+        "identity_verified": True,
+        "guardian_authorization_signed": False,
+        "allergy_info_provided": True,
+        "insurance_in_network": True,
         "notes": "All checks passed; ready to schedule with provider.",
     },
 ]
@@ -202,6 +271,33 @@ def _ensure_workflow(db: Session, org: Organization) -> Workflow:
     return workflow
 
 
+def _ensure_rules(db: Session, workflow: Workflow) -> None:
+    stage_lookup = {stage.slug: stage for stage in workflow.stages}
+    existing_codes = {
+        rule.code for rule in db.query(Rule).filter_by(workflow_id=workflow.id).all()
+    }
+
+    for entry in INITIAL_RULES:
+        if entry["code"] in existing_codes:
+            continue
+        stage_slug: Optional[str] = entry.get("stage_slug")
+        stage_id = stage_lookup[stage_slug].id if stage_slug else None
+        db.add(
+            Rule(
+                workflow_id=workflow.id,
+                stage_id=stage_id,
+                code=entry["code"],
+                name=entry["name"],
+                description=entry["description"],
+                action=entry["action"],
+                severity=entry["severity"],
+                risk_weight=entry["risk_weight"],
+                is_active=True,
+            )
+        )
+    db.flush()
+
+
 def _ensure_records(
     db: Session,
     org: Organization,
@@ -236,8 +332,12 @@ def _ensure_records(
                 insurance_status=entry["insurance_status"],
                 consent_status=entry["consent_status"],
                 medical_history_status=entry["medical_history_status"],
-                risk_score=entry["risk_score"],
-                risk_band=entry["risk_band"],
+                identity_verified=entry["identity_verified"],
+                guardian_authorization_signed=entry["guardian_authorization_signed"],
+                allergy_info_provided=entry["allergy_info_provided"],
+                insurance_in_network=entry["insurance_in_network"],
+                risk_score=0,
+                risk_band=RiskBand.LOW,
                 notes=entry["notes"],
             )
         )
@@ -248,6 +348,7 @@ def seed(db: Session) -> None:
     org = _ensure_organization(db)
     users = _ensure_users(db, org)
     workflow = _ensure_workflow(db, org)
+    _ensure_rules(db, workflow)
     _ensure_records(db, org, workflow, users)
     db.commit()
 
