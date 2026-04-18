@@ -1,204 +1,209 @@
-Build Phase 2 for VeriFlow. This phase is focused on evaluation, rule execution, risk scoring, and workflow transition enforcement. Do not broaden scope beyond that.
+Build Phase 3 for VeriFlow. This phase is focused on document evidence, document verification workflow, required-document logic, and stage-aware rule evaluation. Do not broaden scope beyond that.
 
 Project reminder:
 VeriFlow is a workflow intelligence platform that enforces process compliance, detects operational risk, and explains why a record is blocked, warned, or ready to proceed. The first scenario is a healthcare intake and compliance workflow. This is not an EHR, scheduling system, or CRM clone.
 
 Current repo status:
-- Phase 0 and Phase 1 are already implemented on main
-- Models, auth, record CRUD, seed data, and initial docs already exist
-- Schema improvements have already been applied:
-  - Rule.code uniqueness is scoped by workflow
-  - RuleEvaluation includes passed, action_applied, and risk_applied
-  - workflow-stage consistency is enforced in service logic
-  - relationships and indexes were improved
+- Phase 0 and Phase 1 are already on main
+- Phase 2 is implemented with:
+  - code-driven rule registry
+  - seven initial evaluators
+  - risk scoring
+  - evaluation orchestration
+  - transition enforcement
+  - evaluation and transition APIs
+  - tests passing
+- Current limitation:
+  - several rules still depend on boolean fields on Record instead of stronger document evidence
+  - all rules likely run too broadly instead of being filtered by stage context
 
-Your task in this phase is to implement the first real system intelligence layer.
+This phase should make the system feel more real by connecting rule decisions to document evidence and stage relevance.
 
 Primary goals:
-1. Rule registry and rule evaluation
-2. Risk scoring
-3. Evaluation orchestration and persistence
-4. Workflow transition enforcement
-5. API endpoints for evaluation and transition
-6. Strong tests for system behavior
+1. Strengthen document behavior and verification workflow
+2. Introduce required-document logic
+3. Make rules document-aware where appropriate
+4. Add stage-aware rule filtering
+5. Improve audit payload consistency
+6. Add tests that prove the system uses evidence rather than shallow flags
 
-1. Implement a code-driven rule registry
+1. Extend document handling into a real evidence layer
 
-Do not build a visual rule builder.
-Do not build a free-form expression parser.
-Use a controlled registry pattern.
+Use the existing Document model and service structure if already present. Expand behavior so documents are meaningful system evidence, not just metadata rows.
 
-Create a rule engine service with a registry like this conceptually:
-- rule code string maps to a Python evaluator function
+Required document capabilities:
+- support document lifecycle states clearly:
+  - missing
+  - uploaded
+  - verified
+  - rejected
+- support verifier identity and timestamps
+- allow document notes or rejection reasons
+- maintain normalized document types
 
-Examples:
-- identity_required
-- insurance_verified_or_self_pay
-- consent_required
-- guardian_authorization_required
-- medical_history_warning
-- allergy_warning
-- out_of_network_warning
+If current schema is close, make only targeted changes. Do not redesign everything unnecessarily.
 
-Each evaluator should receive the record and any required related context and return a structured result.
+At minimum, the service layer should support:
+- listing documents for a record
+- uploading/creating a document metadata entry
+- marking a document as verified
+- marking a document as rejected
+- retrieving required vs existing document status for a record
 
-Required result structure:
-- passed: boolean
-- action_applied: none | warn | block
-- message: human-readable explanation
-- risk_applied: integer
-- rule_code: string
+2. Implement required-document logic
 
-2. Implement the initial rules
+Add a document requirement concept without overengineering.
 
-Add support for these first rules:
+Acceptable MVP approaches:
+- a small DocumentRequirement model tied to workflow and optionally stage and document_type
+or
+- a tightly scoped equivalent design that is still data-driven
 
-Blocking rules:
-- identity_required
-  - if identity is not verified, block progression past Identity Verification
-- insurance_verified_or_self_pay
-  - if insurance is not verified and self-pay is not acknowledged, block progression past Insurance Review
-- consent_required
-  - if required consent is missing, block progression past Consent & Authorization
-- guardian_authorization_required
-  - if subject is under 18 and guardian authorization is missing, block progression
+Recommended fields if a model is added:
+- id
+- workflow_id
+- stage_id nullable
+- document_type
+- is_required
+- applies_when_code nullable or future-safe metadata
+- created_at
 
-Warning rules:
-- medical_history_warning
-  - if medical history is incomplete, warn but do not block
-- allergy_warning
-  - if allergy information is blank or incomplete, warn but do not block
-- out_of_network_warning
-  - if insurance status or coverage indicates out-of-network handling, warn but do not block
-
-Important:
-- Implement rules against the current schema as it exists
-- If one or two small record fields must be added to support rule clarity, make only minimal necessary schema changes
-- Keep the rule logic deterministic and explicit
-
-3. Implement risk scoring
-
-Create a dedicated risk service that:
-- aggregates risk_applied values from triggered warnings/blocks
-- calculates total risk score
-- returns a risk band
-
-Risk bands:
-- 0 to 24: low
-- 25 to 49: moderate
-- 50 to 79: high
-- 80+: critical
-
-Use the following baseline scoring:
-- identity verification missing: +40
-- unresolved insurance: +45
-- missing consent: +50
-- missing guardian authorization for minor: +60
-- incomplete medical history: +15
-- missing allergy information: +10
-- out-of-network handling: +20
-
-The risk service should return:
-- total_score
-- risk_band
-- summary string if useful
-
-4. Implement evaluation orchestration
-
-Create an evaluation service that:
-- loads the record and relevant context
-- determines which active rules apply
-- runs the rule evaluators
-- persists RuleEvaluation rows
-- recalculates the record’s risk_score and risk_band
-- returns a structured decision payload
-
-Decision payload should include:
-- can_progress: boolean
-- risk_score: integer
-- risk_band: low | moderate | high | critical
-- violations: list of blocking issues
-- warnings: list of warnings
-- summary: concise human-readable explanation
-
-Important:
-- clear old evaluation rows for the record before writing the current set, or implement a clean evaluation-run approach
-- choose one consistent approach and document it
-- do not let stale evaluations accumulate ambiguously
-
-5. Implement workflow transition enforcement
-
-Extend workflow/service logic so that transition attempts are evaluated before progression.
-
-Requirements:
-- transition endpoint should accept a target_stage_id
-- service validates target stage belongs to same workflow
-- service runs evaluation before allowing progression
-- if blocking violations exist, the transition is rejected cleanly
-- if only warnings exist, progression is allowed
-- successful transitions update current_stage_id
-- blocked transitions do not update current_stage_id
-
-Add audit logging for:
-- transition attempted
-- transition blocked
-- transition completed
-- evaluation executed
-- risk recalculated
-
-Do not hardcode route-level logic. Keep this in services.
-
-6. Add API endpoints
-
-Implement:
-- POST /api/records/{id}/evaluate
-- GET /api/records/{id}/evaluations
-- POST /api/records/{id}/transition
+Keep it simple. Do not build a full conditional rules DSL here.
 
 Behavior:
-- evaluate endpoint returns the current evaluation result
-- evaluations endpoint returns persisted evaluation history or current evaluation rows, depending on your chosen design
-- transition endpoint attempts a stage transition and returns:
-  - success/failure
-  - updated stage if successful
-  - blocking/warning summary
-  - risk score and risk band
+- the system must be able to answer:
+  - which documents are required for this record right now
+  - which are present
+  - which are verified
+  - which are missing or rejected
 
-7. Seed initial rules
+Seed the Healthcare Intake workflow with document requirements such as:
+- photo_id
+- insurance_card
+- consent_form
+- guardian_authorization
+- medical_history_form
 
-Update seed/demo data so the Healthcare Intake workflow includes the initial rules.
+3. Make rules document-aware where appropriate
 
-Seed rules with proper:
-- code
-- name
-- description
-- severity
-- action_type
-- risk_weight or equivalent field
-- workflow linkage
-- stage linkage where appropriate
-- active status
+Update the relevant existing rules so they use document evidence instead of only relying on booleans where appropriate.
 
-Make the seed idempotent.
+Priority rule changes:
+- identity_required should prefer verified photo_id document evidence
+- consent_required should prefer verified or accepted consent_form document evidence
+- guardian_authorization_required should prefer verified guardian_authorization document evidence
+- insurance_verified_or_self_pay should consider insurance_card presence/verification where appropriate, while preserving current insurance status logic
+- medical_history_warning should consider medical_history_form presence or completion signal if that fits the current schema cleanly
+
+Important:
+- Do not force every rule to be document-only if the current schema still needs hybrid logic
+- It is acceptable to use both document evidence and existing record fields during this phase
+- But document evidence must become first-class for the rules where it clearly belongs
+
+4. Implement stage-aware rule filtering
+
+Current problem:
+Rules are likely evaluated too broadly.
+
+Required improvement:
+- rules should be filtered based on workflow and stage context
+- support evaluating:
+  - current stage context
+  - target stage context during transition attempts
+
+Minimum expected behavior:
+- if a rule has a stage_id, it should apply only when that stage is relevant
+- workflow-wide rules with no stage_id may still apply globally within the workflow
+
+Recommended evaluation behavior:
+- evaluation endpoint can evaluate against current stage context
+- transition endpoint can evaluate against target stage context, so progression can be blocked by rules tied to the stage being entered or passed
+
+Document your chosen stage-filtering behavior clearly in code and docs.
+
+5. Improve audit payload consistency
+
+Standardize audit payload structures for at least these events:
+- record.evaluated
+- record.risk_recalculated
+- transition_attempted
+- transition_blocked
+- transition_completed
+- document_uploaded
+- document_verified
+- document_rejected
+
+Each payload should be structured and consistent, not ad hoc.
+
+Examples of useful fields:
+- record_id
+- current_stage_id
+- target_stage_id
+- prior_stage_id
+- prior_risk_score
+- new_risk_score
+- risk_band
+- blocking_rule_codes
+- warning_rule_codes
+- document_type
+- document_status
+- verified_by
+- rejection_reason
+
+Do not add generic filler payloads. Make them useful for future analysis and traceability.
+
+6. Add or refine API endpoints
+
+Implement or refine endpoints as needed:
+
+Documents:
+- GET /api/records/{id}/documents
+- POST /api/records/{id}/documents
+- POST /api/documents/{id}/verify
+- POST /api/documents/{id}/reject
+
+Requirements/status:
+- GET /api/records/{id}/document-status
+
+Behavior:
+- document-status endpoint should summarize:
+  - required document types
+  - present document types
+  - verified document types
+  - missing document types
+  - rejected document types
+
+Keep responses clean and useful for a later frontend.
+
+7. Seed document requirements and realistic demo state
+
+Update seed logic idempotently so demo data includes:
+- document requirements for the Healthcare Intake workflow
+- demo records with varied document states:
+  - some missing
+  - some uploaded but not verified
+  - some verified
+  - some rejected
+
+This matters because later screenshots and demo flows need realistic evidence states.
 
 8. Testing requirements
 
-Add strong pytest coverage for the behavior that makes this product valuable.
+Add strong pytest coverage for document evidence and stage-aware evaluation.
 
 Required tests:
-- evaluate returns block when identity is missing
-- evaluate returns block when insurance is unresolved
-- evaluate returns block when consent is missing
-- evaluate returns block for minor without guardian authorization
-- evaluate returns warning, not block, for incomplete medical history
-- evaluate returns warning, not block, for missing allergy information
-- evaluate aggregates multiple triggered rules into correct risk score
-- transition fails when blocking rules are present
-- transition succeeds when only warnings are present
-- transition succeeds and updates stage when requirements are satisfied
-- audit logs are created for transition attempts and outcomes
+- identity rule passes when verified photo_id exists
+- identity rule blocks when required identity document is missing
+- consent rule passes when consent_form is present in acceptable state
+- guardian authorization rule blocks minor without verified guardian authorization
+- guardian authorization rule passes for adult even if guardian document is absent
+- transition evaluates rules using target stage context, not only current stage
+- document-status endpoint correctly reports missing, present, verified, and rejected documents
+- rejecting a required document affects evaluation outcome appropriately
+- verifying a required document can unblock progression when all other requirements are satisfied
+- audit logs are written for document upload, verification, and rejection with structured payloads
 
-These tests should be real and meaningful. Do not reduce everything to mocks if full integration-style tests are reasonable with the current codebase.
+Tests should be meaningful and reflect actual service behavior. Do not reduce the phase to superficial endpoint smoke tests.
 
 9. Documentation updates
 
@@ -206,45 +211,49 @@ Update:
 - ARCHITECTURE.md
 - docs/workflow_rules.md
 - README.md only if needed
+- add docs/document_evidence.md if helpful
 
-Include:
-- rule registry approach
-- evaluation flow
-- risk scoring behavior
-- transition enforcement behavior
-- note that rules are code-driven in this phase
+Docs should clearly explain:
+- document evidence model
+- required-document approach
+- hybrid rule evaluation where applicable
+- stage-aware rule filtering
+- current-state evaluation behavior vs audit history
+- why this phase improves explainability and realism
 
-Do not turn docs into generic filler.
+Do not write vague architecture filler.
 
 10. Constraints
 
-- Do not build a visual rule builder
-- Do not add AI/copilot features
-- Do not expand frontend beyond what is necessary to support API contracts if frontend changes are needed at all
-- Do not redesign the whole schema unless a very small targeted field addition is required
-- Do not introduce background jobs, queues, or microservices
-- Keep code clean, production-minded, and maintainable
+- Do not build file storage integration beyond metadata and state management unless the current codebase already has a clean placeholder pattern
+- Do not add AI features
+- Do not build a no-code admin builder
+- Do not expand frontend significantly
+- Do not redesign the whole schema unless changes are tightly scoped and justified
+- Keep service boundaries clean
 - Keep comments minimal and human-written
-- Preserve service boundaries and separation of concerns
+- Keep the project production-minded, not tutorial-like
 
 11. Deliverables
 
 At the end of this phase, provide:
 - updated backend code
-- any required schema/migration changes
+- any required schema/model changes
 - updated seed logic
 - updated tests
 - updated docs
 - brief summary of:
-  - what was implemented
-  - any schema changes made
-  - how evaluation persistence was handled
+  - what document evidence changes were made
+  - how required documents are modeled
+  - how stage-aware rule filtering works
+  - which rules are now document-aware
   - what remains for the next phase
 
 Acceptance criteria:
-- rules execute through a registry-based engine
-- evaluation endpoint works
-- transition endpoint enforces blocking logic
-- risk score and risk band are persisted on records
+- documents act as real evidence in the workflow
+- required document status can be computed per record
+- key rules use document evidence where appropriate
+- transition evaluation is stage-aware
+- audit payloads are consistent and useful
 - tests pass
-- docs explain the design clearly
+- docs clearly explain the design
