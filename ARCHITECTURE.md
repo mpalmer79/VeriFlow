@@ -85,24 +85,63 @@ explainability and audit:
   evaluation (zero when the rule passed or had no weight)
 - `explanation` — human-readable text surfaced to the user
 
-Historical evaluations are retained so the audit log can answer not only
-"what was the outcome" but "what did each active rule say, and what did it
-contribute to the record's risk".
+The persistence contract for `rule_evaluations` is **current-state, not
+history**. Every evaluation run replaces the record's previous rows so the
+table always answers the question "why is this record blocked, warned, or
+ready right now". Long-term history is captured in the append-only audit
+log (`record.evaluated`, `record.risk_recalculated`, `record.transition_*`)
+which records actor, timestamp, triggered rule codes, and the resulting
+risk figures.
 
 ### Risk scoring
 
-Each rule contributes to a record's risk score when triggered. The aggregate
-score is bucketed into a `risk_band` (`low`, `moderate`, `high`, `critical`).
-The risk band is a coarse signal for prioritization and dashboard surfacing;
+Each triggered rule contributes its `risk_weight` to the record's aggregate
+`risk_score`. The score is bucketed into a `risk_band` using fixed
+inclusive thresholds:
+
+| Score range | Band       |
+|-------------|------------|
+| 0 – 24      | `low`      |
+| 25 – 49     | `moderate` |
+| 50 – 79     | `high`     |
+| 80+         | `critical` |
+
+The band is a coarse signal for prioritization and dashboard surfacing;
 the fine-grained `risk_score` is used by services that need ordering or
-thresholds.
+thresholds. Scoring logic lives in `risk_service` as a pure function of
+the evaluation results so thresholds can evolve without touching the
+engine or the persistence layer.
 
 ### Audit logging
 
-Every significant write — record creation, record update, rule evaluation,
-stage transition, authentication event — produces an `AuditLog` entry. Logs
-capture the actor, the affected entity, and a structured payload. They are
-append-only and form the basis for compliance reporting.
+Every significant write — record creation, record update, rule
+evaluation, stage transition, document lifecycle change — produces an
+`AuditLog` entry. Logs capture the actor, the affected entity, and a
+**structured, canonical payload**. Payload shapes are centralized in
+`app/services/audit_payloads.py` so every event of a given action has
+the same keys. They are append-only and form the basis for compliance
+reporting.
+
+Canonical payload fields include `record_id`, `current_stage_id`,
+`target_stage_id`, `prior_stage_id`, `new_stage_id`, `prior_risk_score`,
+`new_risk_score`, `risk_score`, `risk_band`, `blocking_rule_codes`,
+`warning_rule_codes`, `stage_context_id`, `rules_evaluated`,
+`document_id`, `document_type`, `document_status`, `verified_by`,
+`rejected_by`, and `rejection_reason`. See
+[`docs/document_evidence.md`](./docs/document_evidence.md) for the
+per-action list.
+
+### Document evidence
+
+Documents are first-class evidence, not just metadata. `Document`
+carries a verification lifecycle (`uploaded`, `verified`, `rejected`)
+with verifier identity, timestamps, and rejection reason.
+`DocumentRequirement` declares which document types a workflow needs,
+optionally scoped to a stage. Required-vs-present-vs-verified status is
+computed per record by `document_service`. Rules consume evidence via
+small helpers in `document_repository`; hybrid rule logic keeps records
+without documents meaningful while promoting document evidence as the
+primary signal.
 
 ## Service Architecture
 
@@ -129,30 +168,66 @@ codebase.
 - Will, in later phases, invoke `rule_engine_service` and `risk_service` on
   every mutation
 
-### `workflow_service` (in-progress)
+### `workflow_service`
 
-Currently exposed as `workflow_repository`. As the rule engine matures, a
-`workflow_service` will own stage-transition policy, terminal-state handling,
-and workflow versioning.
+Owns stage-transition policy. `transition_record` validates that the
+target stage belongs to the record's workflow, runs evaluation through
+`evaluation_service`, and rejects the transition when any blocking rule
+fails. Warnings do not block. Successful transitions update
+`current_stage_id`; blocked transitions leave the stage unchanged. Every
+outcome is recorded in the audit log.
 
-### `document_service` (planned)
+### `rule_engine_service`
 
-Will manage document attachments — upload metadata, status transitions
-(`pending`, `received`, `rejected`, `expired`), and rule contributions
-(e.g. expired consent forms blocking progression).
+Owns the rule **registry** and stage-aware filtering. Each rule `code`
+maps to a Python evaluator function registered with
+`@register("<code>")`. Evaluators receive the record and the `Rule` row
+so the same evaluator can be reused across workflows with different
+severities or risk weights. The engine exposes
+`evaluate_record(db, record, stage_context=...)` which:
 
-### `rule_engine_service` (planned)
+- loads every active rule for the record's workflow
+- filters them via `applicable_rules(rules, stage_context, stages_by_id)`:
+  workflow-global rules always apply; stage-gated rules apply when the
+  rule's stage `order_index` is `<=` the context's `order_index`
+- invokes each applicable evaluator and returns `RuleResult` objects
 
-Will evaluate active rules for a workflow + stage against a record, persist
-`RuleEvaluation` rows, and return a structured outcome (allowed / blocked,
-triggered rules, explanations). The engine will remain code-driven in early
-phases — rule definitions are data, but evaluation logic is Python.
+`stage_context` defaults to the record's current stage; transitions pass
+the target stage so rules for stages the record is about to enter (or
+cross) come into scope.
 
-### `risk_service` (planned)
+Several Phase 3 evaluators are **hybrid**: they pass when either the
+record's legacy flag is set or the relevant `Document` is verified. See
+`docs/document_evidence.md` for the per-rule mapping.
 
-Will aggregate triggered rules' weights into a `risk_score` and map the
-score to a `risk_band`. Decoupled from the rule engine so weighting and
-banding can evolve independently.
+### `evaluation_service`
+
+Orchestrates a single evaluation run. It calls `rule_engine_service`,
+asks `risk_service` to aggregate the results, replaces the record's
+`rule_evaluations` rows with the current set, writes the new
+`risk_score` and `risk_band` onto the record, and emits `record.evaluated`
+and `record.risk_recalculated` audit events. Returns a structured
+`EvaluationDecision` (`can_progress`, `risk_score`, `risk_band`,
+`violations`, `warnings`, `summary`). `workflow_service` invokes this
+with `commit=False` so evaluation and transition land in the same
+transaction.
+
+### `risk_service`
+
+Pure function. Aggregates `risk_applied` from triggered evaluations into
+a total score and maps the score to a `RiskBand` using the thresholds
+above. Has no database or side effects.
+
+### `document_service`
+
+Owns the document evidence layer. Upload, verify, reject, and per-record
+document-status computation. Documents are first-class inputs to rule
+evaluation via the `document_repository` helpers (`has_verified`,
+`has_present`). Every lifecycle change (`uploaded`, `verified`,
+`rejected`) emits a structured audit event. Required-document logic is
+driven by the `DocumentRequirement` table, which scopes a document type
+to a workflow and optionally a stage; `required_document_types` computes
+the set in scope for a record given its current stage.
 
 ### `audit_service`
 
@@ -161,28 +236,34 @@ every service that mutates state. Append-only by contract.
 
 ## Data Flow
 
-The intended end-to-end flow for a record mutation:
+### Evaluation (`POST /api/records/{id}/evaluate`)
 
-1. **HTTP request** — `PATCH /api/records/{id}` with proposed changes
-2. **Authentication** — `auth_service` resolves the JWT to a user; the
-   request is rejected if the user is missing, inactive, or unauthorized
-3. **Record service** — applies the change in memory and validates basic
-   invariants (e.g. stage belongs to the record's workflow)
-4. **Rule engine evaluation** *(planned)* — `rule_engine_service` evaluates
-   all active rules for the workflow + new stage against the proposed state
-5. **Risk calculation** *(planned)* — `risk_service` aggregates triggered
-   rules into a new `risk_score` and `risk_band`
-6. **Persistence** — record is saved with its new state, evaluations are
-   stored, and the response is shaped (allowed / blocked, explanations,
-   risk band)
-7. **Audit log** — `audit_service` records the mutation, the actor, and the
-   structured outcome
-8. **Response** — the API returns the updated record plus, in later phases,
-   the structured rule outcome and explanations
+1. `auth_service` resolves the JWT and authorizes the request
+2. `record_service.get_record` loads the record scoped to the caller's org
+3. `evaluation_service.evaluate_and_persist` is invoked, which:
+   a. asks `rule_engine_service` to evaluate every active rule for the
+      record's workflow
+   b. asks `risk_service` to aggregate `risk_applied` into a score + band
+   c. replaces the record's `rule_evaluations` rows with the current set
+   d. writes the new `risk_score` and `risk_band` onto the record
+   e. emits `record.evaluated` and `record.risk_recalculated` audit events
+4. The structured `EvaluationDecision` is returned as JSON
 
-In Phase 1, steps 4 and 5 are stubbed — risk fields are read from the
-record's current values rather than recomputed — so the surface area is
-ready for the engine without overcommitting to a design.
+### Transition (`POST /api/records/{id}/transition`)
+
+1. `auth_service` resolves the JWT and authorizes the request
+2. `workflow_service.transition_record` loads the record and validates the
+   target stage belongs to the record's workflow
+3. `record.transition_attempted` is written to the audit log
+4. `evaluation_service.evaluate_and_persist` runs within the same
+   transaction (`commit=False`)
+5. If any `BLOCK` rule fails, the transition is rejected: the current
+   stage is unchanged, `record.transition_blocked` is logged, the
+   transaction is committed, and the API returns `success=false` with the
+   full decision payload
+6. Otherwise the stage is updated, `record.transition_completed` is
+   logged, the transaction is committed, and the API returns
+   `success=true` with the updated stage and the decision payload
 
 ## Key Design Decisions
 
@@ -207,6 +288,11 @@ ready for the engine without overcommitting to a design.
   violations return structured, user-facing errors.
 - **JWT for auth.** Stateless tokens with role and organization claims keep
   the API horizontally scalable and easy to integrate.
+- **Current-state evaluation storage.** The `rule_evaluations` table is
+  always a replica of the most recent run for each record. Evaluation
+  history is captured in the append-only audit log. This avoids ambiguity
+  about which rows represent the "current" outcome and keeps the
+  explainability API simple.
 
 ## Future Extensions
 

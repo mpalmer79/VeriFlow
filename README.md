@@ -105,7 +105,25 @@ The frontend in this phase is a structural scaffold with placeholder pages at
 
 ## Status
 
-Phase 0 and Phase 1 are complete: monorepo structure, data model, JWT auth,
-record CRUD, seed data, tests, and frontend scaffold. The rule engine, risk
-calculation, and document workflow are intentionally deferred — see
-[`ARCHITECTURE.md`](./ARCHITECTURE.md) for the full design and roadmap.
+Phases 0–3 are complete. Phase 3 adds document evidence, a required-
+document model, document-aware hybrid rules, and stage-aware rule
+filtering.
+
+- `POST /api/records/{id}/evaluate` — runs applicable rules against the
+  record's current stage, updates `risk_score` / `risk_band`, returns a
+  structured decision
+- `GET /api/records/{id}/evaluations` — current evaluation rows
+- `POST /api/records/{id}/transition` — evaluates against the **target**
+  stage context; blocks on any `BLOCK` rule failure
+- `GET /api/records/{id}/documents` · `POST /api/records/{id}/documents`
+  — list and upload document evidence
+- `GET /api/records/{id}/document-status` — required vs present vs
+  verified vs missing vs rejected
+- `POST /api/documents/{id}/verify` · `POST /api/documents/{id}/reject`
+  — document verification lifecycle
+
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md),
+[`docs/workflow_rules.md`](./docs/workflow_rules.md), and
+[`docs/document_evidence.md`](./docs/document_evidence.md) for the full
+design. Reporting, analytics, and a real frontend remain for later
+phases.

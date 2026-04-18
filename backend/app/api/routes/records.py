@@ -6,10 +6,38 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.document import (
+    DocumentCreate,
+    DocumentRead,
+    DocumentStatusResponse,
+)
+from app.schemas.evaluation import (
+    EvaluationDecisionRead,
+    EvaluationIssue as EvaluationIssueSchema,
+    RuleEvaluationRead,
+    TransitionRequest,
+    TransitionResponse,
+)
 from app.schemas.record import RecordCreate, RecordRead, RecordUpdate
-from app.services import record_service
+from app.services import (
+    document_service,
+    evaluation_service,
+    record_service,
+    workflow_service,
+)
 
 router = APIRouter(prefix="/records", tags=["records"])
+
+
+def _decision_to_schema(decision) -> EvaluationDecisionRead:
+    return EvaluationDecisionRead(
+        can_progress=decision.can_progress,
+        risk_score=decision.risk_score,
+        risk_band=decision.risk_band,
+        violations=[EvaluationIssueSchema(**v.__dict__) for v in decision.violations],
+        warnings=[EvaluationIssueSchema(**w.__dict__) for w in decision.warnings],
+        summary=decision.summary,
+    )
 
 
 @router.get("", response_model=List[RecordRead])
@@ -63,3 +91,119 @@ def update_record(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
     return record
+
+
+@router.post("/{record_id}/evaluate", response_model=EvaluationDecisionRead)
+def evaluate_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    decision = evaluation_service.evaluate_and_persist(
+        db, actor=current_user, record=record
+    )
+    return _decision_to_schema(decision)
+
+
+@router.get("/{record_id}/evaluations", response_model=List[RuleEvaluationRead])
+def list_evaluations(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    return evaluation_service.current_evaluations(db, record)
+
+
+@router.post("/{record_id}/transition", response_model=TransitionResponse)
+def transition_record(
+    record_id: int,
+    payload: TransitionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        result = workflow_service.transition_record(
+            db,
+            actor=current_user,
+            record_id=record_id,
+            target_stage_id=payload.target_stage_id,
+        )
+    except (record_service.StageNotFound, record_service.StageWorkflowMismatch) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    return TransitionResponse(
+        success=result.success,
+        from_stage_id=result.from_stage_id,
+        target_stage_id=result.target_stage_id,
+        updated_stage_id=result.updated_stage_id,
+        decision=_decision_to_schema(result.decision),
+        message=result.message,
+    )
+
+
+@router.get("/{record_id}/documents", response_model=List[DocumentRead])
+def list_documents(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    return document_service.list_for_record(db, current_user, record)
+
+
+@router.post(
+    "/{record_id}/documents",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def upload_document(
+    record_id: int,
+    payload: DocumentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    return document_service.upload_document(
+        db,
+        actor=current_user,
+        record=record,
+        document_type=payload.document_type,
+        label=payload.label,
+        storage_uri=payload.storage_uri,
+        notes=payload.notes,
+    )
+
+
+@router.get("/{record_id}/document-status", response_model=DocumentStatusResponse)
+def document_status(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    summary = document_service.document_status(db, record)
+    return DocumentStatusResponse(
+        required_types=summary.required_types,
+        present_types=summary.present_types,
+        verified_types=summary.verified_types,
+        missing_types=summary.missing_types,
+        rejected_types=summary.rejected_types,
+        documents=summary.documents,
+    )

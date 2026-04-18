@@ -1,9 +1,7 @@
-# VeriFlow — Workflow & Rule Concepts
+# VeriFlow — Workflow, Rules, and Transitions
 
-This document describes the demo Healthcare Intake workflow and the initial
-set of rule concepts the engine will enforce. The rule engine itself is
-**not implemented** in Phase 1 — this document captures intent so the data
-model and API surface stay aligned with where the engine is headed.
+This document describes the Healthcare Intake workflow, the initial rule
+set, how evaluation runs, and how stage transitions are enforced.
 
 ## Healthcare Intake — stages
 
@@ -19,92 +17,125 @@ model and API surface stay aligned with where the engine is headed.
 | 8 | Blocked                  | `blocked`                 | yes      | One or more rules failed; resolution required               |
 | 9 | Closed                   | `closed`                  | yes      | Terminal disposition for the record                         |
 
-Records always move through stages by their `order_index` unless a rule
-forces them to `Blocked`. `Blocked` and `Closed` are terminal: records can
-re-open from `Blocked` once the underlying rule passes.
+`Blocked` and `Closed` are terminal. Records re-open from `Blocked` once
+the underlying rule passes.
 
-## Rule outcomes
+## Rule registry
 
-Rules are defined per workflow. The `code` on a rule is unique within its
-workflow, so the same code can exist in two workflows with different
-configuration. A rule carries a static **action** (`warn` or `block`), a
-**severity** (`warning`, `high`, or `critical`), and a **risk weight**.
+Rules in VeriFlow are **code-driven**. There is no DSL, no visual rule
+builder, and no free-form expression parser. The design is a controlled
+registry:
 
-Every evaluation of a rule against a record produces a `RuleEvaluation`
-row with:
+- Every rule has a string `code` and a Python evaluator function.
+- Evaluators register with `@register("<code>")` in
+  `app/services/rules.py`.
+- The `Rule` database row carries metadata only: `workflow_id`,
+  `stage_id`, `code`, `name`, `description`, `action` (`warn` or
+  `block`), `severity` (`warning`, `high`, `critical`), `risk_weight`,
+  and `is_active`.
+- An evaluator receives the record and the `Rule` row and returns a
+  `RuleResult` (`rule_code`, `passed`, `action_applied`, `message`,
+  `risk_applied`).
+- The engine applies the rule's configured `action` on failure, so the
+  same evaluator can be reused across workflows with different
+  severities and weights.
 
-- `passed` — `true` when the record satisfied the rule
-- `action_applied` — `none`, `warn`, or `block`; what the engine actually
-  did for this evaluation
-- `risk_applied` — integer risk contribution recorded for this evaluation
-- `explanation` — human-readable text describing what failed and what is
-  required to resolve it
+Rule `code` is unique per workflow via the composite
+`(workflow_id, code)` constraint.
 
-Keeping the applied action and risk on the evaluation row (rather than
-re-reading the rule definition) preserves the historical decision even if
-the rule is later edited or disabled.
+## Initial rules
 
-The aggregate `risk_score` is bucketed into a `risk_band`:
+Seven rules ship with the Healthcare Intake workflow. Four are blocking,
+three are warnings. Rules marked "hybrid" pass when **either** the
+legacy flag is set **or** a verified document of the listed type is
+attached.
 
-| Band      | Score range (initial) |
-|-----------|-----------------------|
-| `low`     | 0 – 24                |
-| `moderate`| 25 – 49               |
-| `high`    | 50 – 74               |
-| `critical`| 75+                   |
+| Code | Action | Stage gate | Risk weight | Passes when… |
+|------|--------|------------|-------------|----------------|
+| `identity_required` | block | Identity Verification | 40 | verified `photo_id` document OR `identity_verified` *(hybrid)* |
+| `insurance_verified_or_self_pay` | block | Insurance Review | 45 | verified `insurance_card` OR `insurance_status` is `verified`/`uninsured_acknowledged` *(hybrid)* |
+| `consent_required` | block | Consent & Authorization | 50 | verified `consent_form` OR `consent_status == signed` *(hybrid)* |
+| `guardian_authorization_required` | block | Consent & Authorization | 60 | subject is 18+ OR verified `guardian_authorization` OR `guardian_authorization_signed` *(hybrid)* |
+| `medical_history_warning` | warn | Clinical History Review | 15 | verified `medical_history_form` OR `medical_history_status == complete` *(hybrid)* |
+| `allergy_warning` | warn | Clinical History Review | 10 | `allergy_info_provided` is true |
+| `out_of_network_warning` | warn | Insurance Review | 20 | `insurance_in_network` is not explicitly `false` (self-pay passes) |
 
-Thresholds are intentionally conservative for Phase 1 and will be tuned
-once real evaluation data exists.
+The `stage_id` on a rule row drives **stage-aware filtering** (added in
+Phase 3):
 
-## Initial rule concepts
+- rules with `stage_id = NULL` are workflow-global and always apply
+- rules with a `stage_id` apply when that stage's `order_index` is `<=`
+  the evaluation's stage context
 
-These rules describe what the engine should evaluate per stage. Each is
-named with the code it will be registered under.
+The `evaluate` endpoint uses the record's current stage as the context;
+the `transition` endpoint uses the target stage as the context, so a
+transition to a later stage pulls in every rule up to and including that
+stage.
 
-### Identity Verification
+## Risk scoring
 
-- `identity.required_fields_present` — block if `subject_full_name` or
-  `subject_dob` is missing.
-- `identity.id_document_received` — warn if no ID document is attached;
-  block when leaving this stage.
+`risk_service` aggregates `risk_applied` values from triggered
+evaluations. The score maps to a `RiskBand` using inclusive thresholds:
 
-### Insurance Review
+| Score range | Band       |
+|-------------|------------|
+| 0 – 24      | `low`      |
+| 25 – 49     | `moderate` |
+| 50 – 79     | `high`     |
+| 80+         | `critical` |
 
-- `insurance.status_known` — block when leaving this stage if
-  `insurance_status == unknown`.
-- `insurance.invalid_blocks_progress` — block when
-  `insurance_status == invalid`; force the record toward the `Blocked`
-  stage.
-- `insurance.uninsured_acknowledged` — warn when
-  `insurance_status == uninsured_acknowledged`; allow progression but
-  contribute risk.
+These thresholds are centralized in `risk_service` and can evolve without
+touching the engine or persistence.
 
-### Consent & Authorization
+## Evaluation flow
 
-- `consent.signature_required` — block when leaving this stage if
-  `consent_status` is `not_provided` or `partial`.
-- `consent.not_expired` — block when `consent_status == expired`; force
-  toward `Blocked` regardless of current stage.
+`evaluation_service.evaluate_and_persist` is the single entry point for
+running rules against a record. One run:
 
-### Clinical History Review
+1. loads all active rules for the record's workflow
+2. invokes each rule's registered evaluator
+3. asks `risk_service` to compute the aggregate score and band
+4. **replaces** the record's `rule_evaluations` rows with the new set
+5. writes the new `risk_score` and `risk_band` back to the record
+6. emits `record.evaluated` and `record.risk_recalculated` audit events
 
-- `clinical_history.complete` — block when leaving this stage if
-  `medical_history_status != complete`.
-- `clinical_history.incomplete_warns` — warn when `incomplete`; contributes
-  risk.
+The `rule_evaluations` table therefore always reflects the **current**
+evaluation run. Long-term history lives in the append-only audit log.
+This keeps explainability questions ("why is this record blocked right
+now?") unambiguous.
 
-### Cross-stage
+## Transition enforcement
 
-- `record.high_risk_requires_review` — when `risk_score >= 75`, require an
-  explicit reviewer sign-off before reaching `Ready for Scheduling`.
-- `documents.expired` — any attached document with status `expired`
-  contributes risk and warns at every stage.
+`workflow_service.transition_record` gates every stage change on
+evaluation:
 
-## Why this is not yet implemented
+- the target stage must belong to the record's workflow
+- `record.transition_attempted` is logged
+- evaluation runs in the same transaction as the transition
+- if any `BLOCK` rule fails, the transition is rejected, the current
+  stage is preserved, and `record.transition_blocked` is logged
+- if only warnings are present, the stage is updated and
+  `record.transition_completed` is logged
+- the response payload includes the full `EvaluationDecision`
+  (`can_progress`, `risk_score`, `risk_band`, `violations`, `warnings`,
+  `summary`) so callers always know what happened and why
 
-The Phase 1 goal is a clean, opinionated foundation: the data model can
-store rules and their evaluations, the API surface can carry rule outcomes
-in later phases, and the audit log already captures the structured payload
-the engine will produce. Building the engine before the surrounding system
-is solid would lock in premature decisions about evaluation order,
-extensibility, and explanation formatting.
+## API surface
+
+- `POST /api/records/{id}/evaluate` — runs evaluation against the
+  record's current stage, persists results, returns the
+  `EvaluationDecision`
+- `GET /api/records/{id}/evaluations` — returns the current
+  `RuleEvaluation` rows for the record
+- `POST /api/records/{id}/transition` — attempts a transition; body is
+  `{ "target_stage_id": <int> }`; evaluation runs with the target stage
+  as the context so rules for stages the record is about to enter apply
+- `GET /api/records/{id}/documents` — list documents on the record
+- `POST /api/records/{id}/documents` — upload a document metadata entry
+- `GET /api/records/{id}/document-status` — required vs present vs
+  verified vs missing vs rejected summary
+- `POST /api/documents/{id}/verify` / `POST /api/documents/{id}/reject`
+  — mark a document verified or rejected (with optional reason)
+
+See [`document_evidence.md`](./document_evidence.md) for the document
+evidence model and the hybrid rule evaluation contract.
