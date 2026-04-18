@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
@@ -28,4 +28,14 @@ class AuditLog(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    organization: Mapped[Optional["Organization"]] = relationship(  # noqa: F821
+        foreign_keys=[organization_id]
+    )
+    actor_user: Mapped[Optional["User"]] = relationship(  # noqa: F821
+        foreign_keys=[actor_user_id]
+    )
+    record: Mapped[Optional["Record"]] = relationship(  # noqa: F821
+        foreign_keys=[record_id]
     )

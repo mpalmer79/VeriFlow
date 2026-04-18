@@ -60,3 +60,9 @@ class RuleSeverity(str, enum.Enum):
     WARNING = "warning"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class RuleActionApplied(str, enum.Enum):
+    NONE = "none"
+    WARN = "warn"
+    BLOCK = "block"

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import RecordStatus
 from app.models.record import Record
 from app.models.user import User
+from app.models.workflow import WorkflowStage
 from app.repositories import record_repository, workflow_repository
 from app.schemas.record import RecordCreate, RecordUpdate
 from app.services import audit_service
@@ -20,6 +21,23 @@ class WorkflowNotFound(RecordServiceError):
 
 class StageNotFound(RecordServiceError):
     pass
+
+
+class StageWorkflowMismatch(RecordServiceError):
+    """Raised when a stage does not belong to the target workflow."""
+
+
+def _load_stage_for_workflow(
+    db: Session, workflow_id: int, stage_id: int
+) -> WorkflowStage:
+    stage = workflow_repository.get_stage(db, stage_id)
+    if stage is None:
+        raise StageNotFound(f"Stage {stage_id} not found")
+    if stage.workflow_id != workflow_id:
+        raise StageWorkflowMismatch(
+            f"Stage {stage_id} does not belong to workflow {workflow_id}"
+        )
+    return stage
 
 
 def list_records(db: Session, actor: User, limit: int = 100, offset: int = 0) -> List[Record]:
@@ -40,14 +58,17 @@ def create_record(db: Session, actor: User, payload: RecordCreate) -> Record:
     if workflow is None or workflow.organization_id != actor.organization_id:
         raise WorkflowNotFound("Workflow not found for this organization")
 
-    first_stage = workflow_repository.get_first_stage(db, workflow.id)
-    if first_stage is None:
-        raise StageNotFound("Workflow has no stages configured")
+    if payload.current_stage_id is not None:
+        stage = _load_stage_for_workflow(db, workflow.id, payload.current_stage_id)
+    else:
+        stage = workflow_repository.get_first_stage(db, workflow.id)
+        if stage is None:
+            raise StageNotFound("Workflow has no stages configured")
 
     record = Record(
         organization_id=actor.organization_id,
         workflow_id=workflow.id,
-        current_stage_id=first_stage.id,
+        current_stage_id=stage.id,
         assigned_user_id=payload.assigned_user_id,
         external_reference=payload.external_reference,
         subject_full_name=payload.subject_full_name,
@@ -68,7 +89,7 @@ def create_record(db: Session, actor: User, payload: RecordCreate) -> Record:
         organization_id=actor.organization_id,
         actor_user_id=actor.id,
         record_id=record.id,
-        payload={"workflow_id": workflow.id, "stage_id": first_stage.id},
+        payload={"workflow_id": workflow.id, "stage_id": stage.id},
     )
     db.commit()
     db.refresh(record)
@@ -84,10 +105,9 @@ def update_record(
 
     changes = payload.model_dump(exclude_unset=True)
 
-    if "current_stage_id" in changes and changes["current_stage_id"] is not None:
-        stage = workflow_repository.get_stage(db, changes["current_stage_id"])
-        if stage is None or stage.workflow_id != record.workflow_id:
-            raise StageNotFound("Stage does not belong to this record's workflow")
+    new_stage_id = changes.get("current_stage_id")
+    if new_stage_id is not None:
+        _load_stage_for_workflow(db, record.workflow_id, new_stage_id)
 
     for field, value in changes.items():
         setattr(record, field, value)
