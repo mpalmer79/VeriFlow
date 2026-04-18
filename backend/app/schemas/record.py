@@ -21,6 +21,7 @@ class RecordBase(BaseModel):
 
 class RecordCreate(RecordBase):
     workflow_id: int
+    current_stage_id: Optional[int] = None
     assigned_user_id: Optional[int] = None
     insurance_status: InsuranceStatus = InsuranceStatus.UNKNOWN
     consent_status: ConsentStatus = ConsentStatus.NOT_PROVIDED

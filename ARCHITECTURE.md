@@ -67,6 +67,28 @@ of the code that evaluates them, but their evaluation logic lives in code
 during the early phases — there is **no** visual rule builder and no
 runtime DSL.
 
+Rule `code` is unique **per workflow**, not globally. The same code (for
+example `insurance.status_known`) may exist in multiple workflows with
+different actions, severities, or risk weights. This is enforced by a
+composite unique constraint on `(workflow_id, code)`.
+
+### Rule evaluations
+
+Every rule evaluation against a record is persisted as a `RuleEvaluation`
+row. The row captures a structured outcome intended to support
+explainability and audit:
+
+- `passed` — `true` when the record satisfied the rule
+- `action_applied` — `none`, `warn`, or `block`; the action the engine
+  actually took for this evaluation
+- `risk_applied` — the integer risk contribution recorded for this
+  evaluation (zero when the rule passed or had no weight)
+- `explanation` — human-readable text surfaced to the user
+
+Historical evaluations are retained so the audit log can answer not only
+"what was the outcome" but "what did each active rule say, and what did it
+contribute to the record's risk".
+
 ### Risk scoring
 
 Each rule contributes to a record's risk score when triggered. The aggregate
@@ -98,8 +120,11 @@ codebase.
 
 - Lists, creates, retrieves, and updates records scoped to the caller's
   organization
-- Places new records on the first stage of the chosen workflow
-- Validates stage transitions belong to the record's workflow
+- Places new records on the first stage of the chosen workflow unless an
+  explicit `current_stage_id` is provided
+- Validates workflow/stage integrity on both create and update: a stage
+  must belong to the record's workflow or the operation is rejected with a
+  clear `StageWorkflowMismatch` error (HTTP 400)
 - Emits audit events for create and update operations
 - Will, in later phases, invoke `rule_engine_service` and `risk_service` on
   every mutation
@@ -176,6 +201,10 @@ ready for the engine without overcommitting to a design.
   the database directly; repositories never raise HTTP exceptions.
 - **Database-backed enums.** Enum columns use SQLAlchemy `Enum` with
   `native_enum=True` so production Postgres uses real enum types.
+- **Workflow-scoped integrity.** Rule codes are unique per workflow and
+  record/stage pairings are validated in the service layer. Integrity
+  rules that cannot be expressed as FK constraints live in services so
+  violations return structured, user-facing errors.
 - **JWT for auth.** Stateless tokens with role and organization claims keep
   the API horizontally scalable and easy to integrate.
 

@@ -25,16 +25,24 @@ re-open from `Blocked` once the underlying rule passes.
 
 ## Rule outcomes
 
-Every rule produces:
+Rules are defined per workflow. The `code` on a rule is unique within its
+workflow, so the same code can exist in two workflows with different
+configuration. A rule carries a static **action** (`warn` or `block`), a
+**severity** (`warning`, `high`, or `critical`), and a **risk weight**.
 
-- a **triggered** boolean
-- an **action**: `warn` (advance allowed, surfaced as a warning) or `block`
-  (advance prevented)
-- a **severity**: `warning`, `high`, or `critical` (drives UI surfacing)
-- a **risk weight**: integer added to the record's `risk_score` when
-  triggered
-- an **explanation**: human-readable text describing what failed and what
-  is required to resolve it
+Every evaluation of a rule against a record produces a `RuleEvaluation`
+row with:
+
+- `passed` — `true` when the record satisfied the rule
+- `action_applied` — `none`, `warn`, or `block`; what the engine actually
+  did for this evaluation
+- `risk_applied` — integer risk contribution recorded for this evaluation
+- `explanation` — human-readable text describing what failed and what is
+  required to resolve it
+
+Keeping the applied action and risk on the evaluation row (rather than
+re-reading the rule definition) preserves the historical decision even if
+the rule is later edited or disabled.
 
 The aggregate `risk_score` is bucketed into a `risk_band`:
 

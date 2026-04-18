@@ -32,7 +32,7 @@ def create_record(
         return record_service.create_record(db, current_user, payload)
     except record_service.WorkflowNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except record_service.StageNotFound as exc:
+    except (record_service.StageNotFound, record_service.StageWorkflowMismatch) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
@@ -57,7 +57,7 @@ def update_record(
 ):
     try:
         record = record_service.update_record(db, current_user, record_id, payload)
-    except record_service.StageNotFound as exc:
+    except (record_service.StageNotFound, record_service.StageWorkflowMismatch) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     if record is None:

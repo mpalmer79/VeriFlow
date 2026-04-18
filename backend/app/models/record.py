@@ -28,7 +28,7 @@ class Record(Base, TimestampMixin):
         ForeignKey("workflow_stages.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     assigned_user_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     external_reference: Mapped[Optional[str]] = mapped_column(String(80), nullable=True, index=True)

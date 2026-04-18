@@ -27,6 +27,9 @@ class Workflow(Base, TimestampMixin):
     records: Mapped[List["Record"]] = relationship(  # noqa: F821
         back_populates="workflow", cascade="all, delete-orphan"
     )
+    rules: Mapped[List["Rule"]] = relationship(  # noqa: F821
+        back_populates="workflow", cascade="all, delete-orphan"
+    )
 
 
 class WorkflowStage(Base, TimestampMixin):
@@ -46,3 +49,6 @@ class WorkflowStage(Base, TimestampMixin):
     is_terminal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     workflow: Mapped["Workflow"] = relationship(back_populates="stages")
+    rules: Mapped[List["Rule"]] = relationship(  # noqa: F821
+        back_populates="stage", cascade="all, delete-orphan"
+    )
