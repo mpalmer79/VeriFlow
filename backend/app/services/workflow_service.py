@@ -1,8 +1,10 @@
 """Workflow transition enforcement.
 
 Owns the policy for moving a record from its current stage to a target
-stage. Evaluation runs before the transition is committed, and the
-transition is rejected if any blocking rule fails. Warnings do not block.
+stage. Evaluation runs before the transition is committed, against the
+**target stage context** so a transition to a later stage pulls in every
+rule up to and including that stage. If any blocking rule fails, the
+transition is rejected; warnings do not block.
 """
 
 from __future__ import annotations
@@ -16,6 +18,11 @@ from app.models.record import Record
 from app.models.user import User
 from app.repositories import record_repository, workflow_repository
 from app.services import audit_service, evaluation_service
+from app.services.audit_payloads import (
+    transition_attempted,
+    transition_blocked,
+    transition_completed,
+)
 from app.services.evaluation_service import EvaluationDecision
 from app.services.record_service import (
     StageNotFound,
@@ -72,11 +79,19 @@ def transition_record(
         organization_id=record.organization_id,
         actor_user_id=actor.id,
         record_id=record.id,
-        payload={"from_stage_id": from_stage_id, "target_stage_id": target_stage.id},
+        payload=transition_attempted(
+            record_id=record.id,
+            current_stage_id=from_stage_id,
+            target_stage_id=target_stage.id,
+        ),
     )
 
     decision = evaluation_service.evaluate_and_persist(
-        db, actor=actor, record=record, commit=False
+        db,
+        actor=actor,
+        record=record,
+        stage_context=target_stage,
+        commit=False,
     )
 
     if not decision.can_progress:
@@ -88,13 +103,12 @@ def transition_record(
             organization_id=record.organization_id,
             actor_user_id=actor.id,
             record_id=record.id,
-            payload={
-                "from_stage_id": from_stage_id,
-                "target_stage_id": target_stage.id,
-                "violations": [v.rule_code for v in decision.violations],
-                "risk_score": decision.risk_score,
-                "risk_band": decision.risk_band,
-            },
+            payload=transition_blocked(
+                record_id=record.id,
+                current_stage_id=from_stage_id,
+                target_stage_id=target_stage.id,
+                decision=decision,
+            ),
         )
         db.commit()
         db.refresh(record)
@@ -119,13 +133,12 @@ def transition_record(
         organization_id=record.organization_id,
         actor_user_id=actor.id,
         record_id=record.id,
-        payload={
-            "from_stage_id": from_stage_id,
-            "to_stage_id": target_stage.id,
-            "warnings": [w.rule_code for w in decision.warnings],
-            "risk_score": decision.risk_score,
-            "risk_band": decision.risk_band,
-        },
+        payload=transition_completed(
+            record_id=record.id,
+            prior_stage_id=from_stage_id,
+            new_stage_id=target_stage.id,
+            decision=decision,
+        ),
     )
     db.commit()
     db.refresh(record)

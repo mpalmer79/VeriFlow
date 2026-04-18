@@ -114,10 +114,34 @@ engine or the persistence layer.
 
 ### Audit logging
 
-Every significant write — record creation, record update, rule evaluation,
-stage transition, authentication event — produces an `AuditLog` entry. Logs
-capture the actor, the affected entity, and a structured payload. They are
-append-only and form the basis for compliance reporting.
+Every significant write — record creation, record update, rule
+evaluation, stage transition, document lifecycle change — produces an
+`AuditLog` entry. Logs capture the actor, the affected entity, and a
+**structured, canonical payload**. Payload shapes are centralized in
+`app/services/audit_payloads.py` so every event of a given action has
+the same keys. They are append-only and form the basis for compliance
+reporting.
+
+Canonical payload fields include `record_id`, `current_stage_id`,
+`target_stage_id`, `prior_stage_id`, `new_stage_id`, `prior_risk_score`,
+`new_risk_score`, `risk_score`, `risk_band`, `blocking_rule_codes`,
+`warning_rule_codes`, `stage_context_id`, `rules_evaluated`,
+`document_id`, `document_type`, `document_status`, `verified_by`,
+`rejected_by`, and `rejection_reason`. See
+[`docs/document_evidence.md`](./docs/document_evidence.md) for the
+per-action list.
+
+### Document evidence
+
+Documents are first-class evidence, not just metadata. `Document`
+carries a verification lifecycle (`uploaded`, `verified`, `rejected`)
+with verifier identity, timestamps, and rejection reason.
+`DocumentRequirement` declares which document types a workflow needs,
+optionally scoped to a stage. Required-vs-present-vs-verified status is
+computed per record by `document_service`. Rules consume evidence via
+small helpers in `document_repository`; hybrid rule logic keeps records
+without documents meaningful while promoting document evidence as the
+primary signal.
 
 ## Service Architecture
 
@@ -155,14 +179,26 @@ outcome is recorded in the audit log.
 
 ### `rule_engine_service`
 
-Owns the rule **registry**. Each rule `code` maps to a Python evaluator
-function registered with `@register("<code>")`. Evaluators receive the
-record and the `Rule` row so the same evaluator can be reused across
-workflows with different severities or risk weights. The engine exposes
-`evaluate_record(db, record)` which loads every active rule for the
-record's workflow and returns a list of `RuleResult` objects. Rule
-definitions are data; evaluation logic is Python. There is no DSL or
-visual builder in this phase.
+Owns the rule **registry** and stage-aware filtering. Each rule `code`
+maps to a Python evaluator function registered with
+`@register("<code>")`. Evaluators receive the record and the `Rule` row
+so the same evaluator can be reused across workflows with different
+severities or risk weights. The engine exposes
+`evaluate_record(db, record, stage_context=...)` which:
+
+- loads every active rule for the record's workflow
+- filters them via `applicable_rules(rules, stage_context, stages_by_id)`:
+  workflow-global rules always apply; stage-gated rules apply when the
+  rule's stage `order_index` is `<=` the context's `order_index`
+- invokes each applicable evaluator and returns `RuleResult` objects
+
+`stage_context` defaults to the record's current stage; transitions pass
+the target stage so rules for stages the record is about to enter (or
+cross) come into scope.
+
+Several Phase 3 evaluators are **hybrid**: they pass when either the
+record's legacy flag is set or the relevant `Document` is verified. See
+`docs/document_evidence.md` for the per-rule mapping.
 
 ### `evaluation_service`
 
@@ -182,11 +218,16 @@ Pure function. Aggregates `risk_applied` from triggered evaluations into
 a total score and maps the score to a `RiskBand` using the thresholds
 above. Has no database or side effects.
 
-### `document_service` (planned)
+### `document_service`
 
-Will manage document attachments — upload metadata, status transitions
-(`pending`, `received`, `rejected`, `expired`), and rule contributions
-(e.g. expired consent forms blocking progression).
+Owns the document evidence layer. Upload, verify, reject, and per-record
+document-status computation. Documents are first-class inputs to rule
+evaluation via the `document_repository` helpers (`has_verified`,
+`has_present`). Every lifecycle change (`uploaded`, `verified`,
+`rejected`) emits a structured audit event. Required-document logic is
+driven by the `DocumentRequirement` table, which scopes a document type
+to a workflow and optionally a stage; `required_document_types` computes
+the set in scope for a record given its current stage.
 
 ### `audit_service`
 

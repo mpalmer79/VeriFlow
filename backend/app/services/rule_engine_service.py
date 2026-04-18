@@ -15,7 +15,7 @@ same evaluator could be reused with different severities across workflows.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.models.enums import RuleActionApplied, RuleActionType
 from app.models.record import Record
 from app.models.rule import Rule
+from app.models.workflow import WorkflowStage
 
 
 @dataclass(frozen=True)
@@ -108,11 +109,59 @@ def load_active_rules(db: Session, workflow_id: int) -> List[Rule]:
     return list(db.execute(stmt).scalars().all())
 
 
-def evaluate_record(db: Session, record: Record) -> List[RuleResult]:
-    """Run every active rule for the record's workflow and return all results."""
-    rules = load_active_rules(db, record.workflow_id)
-    results: List[RuleResult] = []
+def applicable_rules(
+    rules: List[Rule],
+    stage_context: Optional[WorkflowStage],
+    stages_by_id: Dict[int, WorkflowStage],
+) -> List[Rule]:
+    """Filter rules to those that apply at the given stage context.
+
+    Policy:
+      - rules with `stage_id` = null are workflow-global and always apply
+      - rules with a stage apply when that stage is at or before the
+        stage context (by `order_index`); i.e. a stage-gated rule is in
+        scope once the record has reached that stage's "exit gate"
+      - if no stage context is given (None), every active rule applies
+
+    The context is the current stage for plain evaluation and the target
+    stage during a transition, so a transition to a later stage pulls in
+    every rule up to and including the target.
+    """
+    if stage_context is None:
+        return rules
+    ctx_order = stage_context.order_index
+    out: List[Rule] = []
     for rule in rules:
+        if rule.stage_id is None:
+            out.append(rule)
+            continue
+        stage = stages_by_id.get(rule.stage_id)
+        if stage is not None and stage.order_index <= ctx_order:
+            out.append(rule)
+    return out
+
+
+def evaluate_record(
+    db: Session,
+    record: Record,
+    *,
+    stage_context: Optional[WorkflowStage] = None,
+) -> List[RuleResult]:
+    """Run active rules applicable at `stage_context` and return all results.
+
+    `stage_context` defaults to the record's current stage. Pass the target
+    stage explicitly during a transition to evaluate against the stage the
+    record is attempting to enter.
+    """
+    if stage_context is None:
+        stage_context = record.current_stage
+
+    rules = load_active_rules(db, record.workflow_id)
+    stages_by_id = {stage.id: stage for stage in record.workflow.stages}
+    applicable = applicable_rules(rules, stage_context, stages_by_id)
+
+    results: List[RuleResult] = []
+    for rule in applicable:
         evaluator = get_evaluator(rule.code)
         results.append(evaluator(record, rule))
     return results

@@ -38,10 +38,19 @@ class MedicalHistoryStatus(str, enum.Enum):
 
 
 class DocumentStatus(str, enum.Enum):
-    PENDING = "pending"
-    RECEIVED = "received"
+    UPLOADED = "uploaded"
+    VERIFIED = "verified"
     REJECTED = "rejected"
     EXPIRED = "expired"
+
+
+class DocumentType(str, enum.Enum):
+    PHOTO_ID = "photo_id"
+    INSURANCE_CARD = "insurance_card"
+    CONSENT_FORM = "consent_form"
+    GUARDIAN_AUTHORIZATION = "guardian_authorization"
+    MEDICAL_HISTORY_FORM = "medical_history_form"
+    OTHER = "other"
 
 
 class RiskBand(str, enum.Enum):

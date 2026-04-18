@@ -43,25 +43,34 @@ registry:
 Rule `code` is unique per workflow via the composite
 `(workflow_id, code)` constraint.
 
-## Initial rules (Phase 2)
+## Initial rules
 
 Seven rules ship with the Healthcare Intake workflow. Four are blocking,
-three are warnings.
+three are warnings. Rules marked "hybrid" pass when **either** the
+legacy flag is set **or** a verified document of the listed type is
+attached.
 
-| Code | Action | Stage gate | Risk weight | Triggers when… |
+| Code | Action | Stage gate | Risk weight | Passes when… |
 |------|--------|------------|-------------|----------------|
-| `identity_required` | block | Identity Verification | 40 | `identity_verified` is false |
-| `insurance_verified_or_self_pay` | block | Insurance Review | 45 | `insurance_status` is not `verified` and not `uninsured_acknowledged` |
-| `consent_required` | block | Consent & Authorization | 50 | `consent_status` is not `signed` |
-| `guardian_authorization_required` | block | Consent & Authorization | 60 | subject is under 18 and `guardian_authorization_signed` is false |
-| `medical_history_warning` | warn | Clinical History Review | 15 | `medical_history_status` is not `complete` |
-| `allergy_warning` | warn | Clinical History Review | 10 | `allergy_info_provided` is false |
-| `out_of_network_warning` | warn | Insurance Review | 20 | `insurance_in_network` is explicitly `false` (not applied to self-pay) |
+| `identity_required` | block | Identity Verification | 40 | verified `photo_id` document OR `identity_verified` *(hybrid)* |
+| `insurance_verified_or_self_pay` | block | Insurance Review | 45 | verified `insurance_card` OR `insurance_status` is `verified`/`uninsured_acknowledged` *(hybrid)* |
+| `consent_required` | block | Consent & Authorization | 50 | verified `consent_form` OR `consent_status == signed` *(hybrid)* |
+| `guardian_authorization_required` | block | Consent & Authorization | 60 | subject is 18+ OR verified `guardian_authorization` OR `guardian_authorization_signed` *(hybrid)* |
+| `medical_history_warning` | warn | Clinical History Review | 15 | verified `medical_history_form` OR `medical_history_status == complete` *(hybrid)* |
+| `allergy_warning` | warn | Clinical History Review | 10 | `allergy_info_provided` is true |
+| `out_of_network_warning` | warn | Insurance Review | 20 | `insurance_in_network` is not explicitly `false` (self-pay passes) |
 
-The `stage_id` on a rule row is advisory metadata for surfacing;
-evaluation in Phase 2 runs all active rules for the workflow. Stage-gated
-policy is enforced by the transition service: a transition is blocked
-whenever any `BLOCK` rule currently fails.
+The `stage_id` on a rule row drives **stage-aware filtering** (added in
+Phase 3):
+
+- rules with `stage_id = NULL` are workflow-global and always apply
+- rules with a `stage_id` apply when that stage's `order_index` is `<=`
+  the evaluation's stage context
+
+The `evaluate` endpoint uses the record's current stage as the context;
+the `transition` endpoint uses the target stage as the context, so a
+transition to a later stage pulls in every rule up to and including that
+stage.
 
 ## Risk scoring
 
@@ -113,10 +122,20 @@ evaluation:
 
 ## API surface
 
-- `POST /api/records/{id}/evaluate` — runs evaluation, persists results,
-  returns the `EvaluationDecision`
+- `POST /api/records/{id}/evaluate` — runs evaluation against the
+  record's current stage, persists results, returns the
+  `EvaluationDecision`
 - `GET /api/records/{id}/evaluations` — returns the current
   `RuleEvaluation` rows for the record
 - `POST /api/records/{id}/transition` — attempts a transition; body is
-  `{ "target_stage_id": <int> }`; response includes success flag,
-  updated stage, and decision payload
+  `{ "target_stage_id": <int> }`; evaluation runs with the target stage
+  as the context so rules for stages the record is about to enter apply
+- `GET /api/records/{id}/documents` — list documents on the record
+- `POST /api/records/{id}/documents` — upload a document metadata entry
+- `GET /api/records/{id}/document-status` — required vs present vs
+  verified vs missing vs rejected summary
+- `POST /api/documents/{id}/verify` / `POST /api/documents/{id}/reject`
+  — mark a document verified or rejected (with optional reason)
+
+See [`document_evidence.md`](./document_evidence.md) for the document
+evidence model and the hybrid rule evaluation contract.

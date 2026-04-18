@@ -105,17 +105,25 @@ The frontend in this phase is a structural scaffold with placeholder pages at
 
 ## Status
 
-Phases 0–2 are complete. The backend now runs a code-driven rule registry,
-computes risk scores and risk bands, persists evaluation outcomes, and
-enforces stage transitions through a rule-gated workflow service.
+Phases 0–3 are complete. Phase 3 adds document evidence, a required-
+document model, document-aware hybrid rules, and stage-aware rule
+filtering.
 
-- `POST /api/records/{id}/evaluate` — runs all active rules, updates the
-  record's `risk_score` / `risk_band`, and returns a structured decision
-- `GET /api/records/{id}/evaluations` — returns the current evaluation rows
-- `POST /api/records/{id}/transition` — attempts a stage transition;
-  blocks when any `BLOCK` rule fails, passes through when only warnings
-  are present
+- `POST /api/records/{id}/evaluate` — runs applicable rules against the
+  record's current stage, updates `risk_score` / `risk_band`, returns a
+  structured decision
+- `GET /api/records/{id}/evaluations` — current evaluation rows
+- `POST /api/records/{id}/transition` — evaluates against the **target**
+  stage context; blocks on any `BLOCK` rule failure
+- `GET /api/records/{id}/documents` · `POST /api/records/{id}/documents`
+  — list and upload document evidence
+- `GET /api/records/{id}/document-status` — required vs present vs
+  verified vs missing vs rejected
+- `POST /api/documents/{id}/verify` · `POST /api/documents/{id}/reject`
+  — document verification lifecycle
 
-See [`ARCHITECTURE.md`](./ARCHITECTURE.md) and
-[`docs/workflow_rules.md`](./docs/workflow_rules.md) for the full design.
-Document workflow and expanded reporting remain for later phases.
+See [`ARCHITECTURE.md`](./ARCHITECTURE.md),
+[`docs/workflow_rules.md`](./docs/workflow_rules.md), and
+[`docs/document_evidence.md`](./docs/document_evidence.md) for the full
+design. Reporting, analytics, and a real frontend remain for later
+phases.

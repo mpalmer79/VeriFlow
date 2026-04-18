@@ -3,6 +3,12 @@
 Each evaluator is registered by its rule code. The registry is imported at
 the bottom of `rule_engine_service` so these evaluators become available
 as soon as the engine module is loaded.
+
+Evidence model (Phase 3):
+    Several rules prefer document evidence (verified `Document` rows of a
+    specific type) but still honour the legacy boolean flags on `Record`.
+    This hybrid keeps earlier records meaningful while making verified
+    documents the primary signal going forward.
 """
 
 from __future__ import annotations
@@ -10,9 +16,15 @@ from __future__ import annotations
 from datetime import date
 from typing import Optional
 
-from app.models.enums import ConsentStatus, InsuranceStatus, MedicalHistoryStatus
+from app.models.enums import (
+    ConsentStatus,
+    DocumentType,
+    InsuranceStatus,
+    MedicalHistoryStatus,
+)
 from app.models.record import Record
 from app.models.rule import Rule
+from app.repositories import document_repository as doc_repo
 from app.services.rule_engine_service import RuleResult, apply, register
 
 
@@ -28,38 +40,63 @@ def _age_years(dob: Optional[date], reference: Optional[date] = None) -> Optiona
 
 @register("identity_required")
 def identity_required(record: Record, rule: Rule) -> RuleResult:
-    passed = bool(record.identity_verified)
-    message = (
-        "Identity verified."
-        if passed
-        else "Identity verification is required before advancing past Identity Verification."
-    )
+    has_verified_photo_id = doc_repo.has_verified(record, DocumentType.PHOTO_ID)
+    passed = has_verified_photo_id or bool(record.identity_verified)
+    if passed:
+        message = (
+            "Identity verified via photo_id document."
+            if has_verified_photo_id
+            else "Identity verified."
+        )
+    else:
+        message = (
+            "A verified photo_id document (or identity verification) is required "
+            "before advancing past Identity Verification."
+        )
     return apply(rule, passed=passed, message=message)
 
 
 @register("insurance_verified_or_self_pay")
 def insurance_verified_or_self_pay(record: Record, rule: Rule) -> RuleResult:
     accepted = {InsuranceStatus.VERIFIED, InsuranceStatus.UNINSURED_ACKNOWLEDGED}
-    passed = record.insurance_status in accepted
+    status_ok = record.insurance_status in accepted
+    card_verified = doc_repo.has_verified(record, DocumentType.INSURANCE_CARD)
+    passed = status_ok or card_verified
+
     if passed:
-        message = "Insurance verified or self-pay acknowledged."
+        if record.insurance_status == InsuranceStatus.UNINSURED_ACKNOWLEDGED:
+            message = "Self-pay acknowledged."
+        elif card_verified:
+            message = "Insurance verified via insurance_card document."
+        else:
+            message = "Insurance verified."
     else:
         message = (
-            "Insurance must be verified or self-pay must be acknowledged before "
-            "advancing past Insurance Review."
+            "Insurance must be verified (via verified insurance_card or status) "
+            "or self-pay must be acknowledged before advancing past Insurance Review."
         )
     return apply(rule, passed=passed, message=message)
 
 
 @register("consent_required")
 def consent_required(record: Record, rule: Rule) -> RuleResult:
-    passed = record.consent_status == ConsentStatus.SIGNED
+    consent_doc_verified = doc_repo.has_verified(record, DocumentType.CONSENT_FORM)
+    status_signed = record.consent_status == ConsentStatus.SIGNED
+    passed = consent_doc_verified or status_signed
+
     if passed:
-        message = "Consent signed and current."
+        message = (
+            "Consent verified via consent_form document."
+            if consent_doc_verified
+            else "Consent signed and current."
+        )
     elif record.consent_status == ConsentStatus.EXPIRED:
         message = "Consent on file is expired; a current signed consent is required."
     else:
-        message = "Signed consent is required before advancing past Consent & Authorization."
+        message = (
+            "A verified consent_form document (or signed consent status) is required "
+            "before advancing past Consent & Authorization."
+        )
     return apply(rule, passed=passed, message=message)
 
 
@@ -69,23 +106,39 @@ def guardian_authorization_required(record: Record, rule: Rule) -> RuleResult:
     if age is None or age >= 18:
         return apply(rule, passed=True, message="Guardian authorization not required.")
 
-    passed = bool(record.guardian_authorization_signed)
-    message = (
-        "Guardian authorization on file."
-        if passed
-        else "Subject is a minor; guardian authorization is required before advancing."
+    guardian_doc_verified = doc_repo.has_verified(
+        record, DocumentType.GUARDIAN_AUTHORIZATION
     )
+    passed = guardian_doc_verified or bool(record.guardian_authorization_signed)
+    if passed:
+        message = (
+            "Guardian authorization verified via guardian_authorization document."
+            if guardian_doc_verified
+            else "Guardian authorization on file."
+        )
+    else:
+        message = (
+            "Subject is a minor; a verified guardian_authorization document "
+            "(or signed authorization flag) is required before advancing."
+        )
     return apply(rule, passed=passed, message=message)
 
 
 @register("medical_history_warning")
 def medical_history_warning(record: Record, rule: Rule) -> RuleResult:
-    passed = record.medical_history_status == MedicalHistoryStatus.COMPLETE
-    message = (
-        "Medical history complete."
-        if passed
-        else "Medical history is incomplete; progression allowed but review is recommended."
+    history_doc_verified = doc_repo.has_verified(
+        record, DocumentType.MEDICAL_HISTORY_FORM
     )
+    status_complete = record.medical_history_status == MedicalHistoryStatus.COMPLETE
+    passed = history_doc_verified or status_complete
+    if passed:
+        message = (
+            "Medical history complete via medical_history_form document."
+            if history_doc_verified
+            else "Medical history complete."
+        )
+    else:
+        message = "Medical history is incomplete; progression allowed but review is recommended."
     return apply(rule, passed=passed, message=message)
 
 
@@ -102,9 +155,6 @@ def allergy_warning(record: Record, rule: Rule) -> RuleResult:
 
 @register("out_of_network_warning")
 def out_of_network_warning(record: Record, rule: Rule) -> RuleResult:
-    # A record passes this rule if coverage is known to be in-network or if
-    # the subject is self-pay. Out-of-network coverage warns but does not
-    # block; unknown coverage is treated as acceptable until verified.
     if record.insurance_status == InsuranceStatus.UNINSURED_ACKNOWLEDGED:
         return apply(rule, passed=True, message="Self-pay; network status not applicable.")
     if record.insurance_in_network is False:

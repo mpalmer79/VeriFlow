@@ -4,6 +4,7 @@ from app.models.user import User
 from app.models.workflow import Workflow, WorkflowStage
 from app.models.record import Record
 from app.models.document import Document
+from app.models.document_requirement import DocumentRequirement
 from app.models.rule import Rule, RuleEvaluation
 from app.models.audit import AuditLog
 
@@ -15,6 +16,7 @@ __all__ = [
     "WorkflowStage",
     "Record",
     "Document",
+    "DocumentRequirement",
     "Rule",
     "RuleEvaluation",
     "AuditLog",

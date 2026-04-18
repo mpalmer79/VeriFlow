@@ -35,7 +35,20 @@ def _stage_ids(db_session):
     return {stage.slug: stage.id for stage in stages}, workflow
 
 
+def _app_stage_ids():
+    """Resolve stage ids using the app's (possibly monkey-patched) session factory."""
+    from app.core import database as db_module
+
+    with db_module.SessionLocal() as db:
+        stages, _ = _stage_ids(db)
+    return stages
+
+
 def _create_record(client, auth_headers, workflow_id, **overrides):
+    # Default to Clinical History Review so all seven rules are in scope under
+    # stage-aware filtering; individual tests can pass current_stage_id=None
+    # to leave the record at the workflow's first stage.
+    stage_override = overrides.pop("current_stage_id", "default")
     payload = {
         "workflow_id": workflow_id,
         "subject_full_name": overrides.pop("subject_full_name", "Test Subject"),
@@ -53,7 +66,24 @@ def _create_record(client, auth_headers, workflow_id, **overrides):
     payload = {k: v for k, v in payload.items() if v is not None or k == "insurance_in_network"}
     response = client.post("/api/records", json=payload, headers=auth_headers)
     assert response.status_code == 201, response.text
-    return response.json()
+    record = response.json()
+
+    if stage_override == "default":
+        target = _app_stage_ids()["clinical_history_review"]
+    elif stage_override is None:
+        target = None
+    else:
+        target = stage_override
+
+    if target is not None and record["current_stage_id"] != target:
+        patch = client.patch(
+            f"/api/records/{record['id']}",
+            json={"current_stage_id": target},
+            headers=auth_headers,
+        )
+        assert patch.status_code == 200, patch.text
+        record = patch.json()
+    return record
 
 
 def _patch_record(client, auth_headers, record_id, **fields):

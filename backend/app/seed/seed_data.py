@@ -17,6 +17,8 @@ from app.core.database import SessionLocal, engine
 from app.core.security import hash_password
 from app.models import (
     Base,
+    Document,
+    DocumentRequirement,
     Organization,
     Record,
     Rule,
@@ -26,6 +28,8 @@ from app.models import (
 )
 from app.models.enums import (
     ConsentStatus,
+    DocumentStatus,
+    DocumentType,
     InsuranceStatus,
     MedicalHistoryStatus,
     RecordStatus,
@@ -62,6 +66,37 @@ DEMO_USERS = [
 ]
 
 # stage_slug is optional; None means the rule is workflow-global.
+# Document requirements scoped by stage. `stage_slug=None` means workflow-global.
+INITIAL_DOCUMENT_REQUIREMENTS: List[Dict] = [
+    {
+        "document_type": DocumentType.PHOTO_ID,
+        "stage_slug": "identity_verification",
+        "is_required": True,
+    },
+    {
+        "document_type": DocumentType.INSURANCE_CARD,
+        "stage_slug": "insurance_review",
+        "is_required": True,
+    },
+    {
+        "document_type": DocumentType.CONSENT_FORM,
+        "stage_slug": "consent_authorization",
+        "is_required": True,
+    },
+    {
+        "document_type": DocumentType.GUARDIAN_AUTHORIZATION,
+        "stage_slug": "consent_authorization",
+        "is_required": True,
+        "applies_when_code": "subject_is_minor",
+    },
+    {
+        "document_type": DocumentType.MEDICAL_HISTORY_FORM,
+        "stage_slug": "clinical_history_review",
+        "is_required": True,
+    },
+]
+
+
 INITIAL_RULES: List[Dict] = [
     {
         "code": "identity_required",
@@ -143,6 +178,7 @@ DEMO_RECORDS = [
         "allergy_info_provided": False,
         "insurance_in_network": None,
         "notes": "New referral, awaiting initial contact.",
+        "documents": [],
     },
     {
         "subject_full_name": "Casey Nguyen",
@@ -158,6 +194,18 @@ DEMO_RECORDS = [
         "allergy_info_provided": False,
         "insurance_in_network": None,
         "notes": "Insurance card uploaded, awaiting verification call.",
+        "documents": [
+            {
+                "document_type": DocumentType.PHOTO_ID,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Driver's license scan",
+            },
+            {
+                "document_type": DocumentType.INSURANCE_CARD,
+                "status": DocumentStatus.UPLOADED,
+                "label": "Front/back insurance card",
+            },
+        ],
     },
     {
         "subject_full_name": "Devon Alvarez",
@@ -173,6 +221,18 @@ DEMO_RECORDS = [
         "allergy_info_provided": True,
         "insurance_in_network": True,
         "notes": "Consent forms sent; signature still outstanding.",
+        "documents": [
+            {
+                "document_type": DocumentType.PHOTO_ID,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Passport scan",
+            },
+            {
+                "document_type": DocumentType.INSURANCE_CARD,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Insurance card (verified)",
+            },
+        ],
     },
     {
         "subject_full_name": "Harper Kim",
@@ -188,6 +248,25 @@ DEMO_RECORDS = [
         "allergy_info_provided": False,
         "insurance_in_network": False,
         "notes": "Insurance rejected and consent expired; outreach required.",
+        "documents": [
+            {
+                "document_type": DocumentType.PHOTO_ID,
+                "status": DocumentStatus.VERIFIED,
+                "label": "State ID",
+            },
+            {
+                "document_type": DocumentType.INSURANCE_CARD,
+                "status": DocumentStatus.REJECTED,
+                "label": "Insurance card (rejected)",
+                "rejection_reason": "Coverage terminated on effective date.",
+            },
+            {
+                "document_type": DocumentType.CONSENT_FORM,
+                "status": DocumentStatus.REJECTED,
+                "label": "Consent form (expired)",
+                "rejection_reason": "Signature date outside validity window.",
+            },
+        ],
     },
     {
         "subject_full_name": "Quinn Foster",
@@ -203,6 +282,28 @@ DEMO_RECORDS = [
         "allergy_info_provided": True,
         "insurance_in_network": True,
         "notes": "All checks passed; ready to schedule with provider.",
+        "documents": [
+            {
+                "document_type": DocumentType.PHOTO_ID,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Driver's license",
+            },
+            {
+                "document_type": DocumentType.INSURANCE_CARD,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Insurance card",
+            },
+            {
+                "document_type": DocumentType.CONSENT_FORM,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Signed consent",
+            },
+            {
+                "document_type": DocumentType.MEDICAL_HISTORY_FORM,
+                "status": DocumentStatus.VERIFIED,
+                "label": "Medical history",
+            },
+        ],
     },
 ]
 
@@ -298,6 +399,30 @@ def _ensure_rules(db: Session, workflow: Workflow) -> None:
     db.flush()
 
 
+def _ensure_document_requirements(db: Session, workflow: Workflow) -> None:
+    stage_lookup = {stage.slug: stage for stage in workflow.stages}
+    existing = {
+        (req.stage_id, req.document_type)
+        for req in db.query(DocumentRequirement).filter_by(workflow_id=workflow.id).all()
+    }
+    for entry in INITIAL_DOCUMENT_REQUIREMENTS:
+        stage_slug = entry.get("stage_slug")
+        stage_id = stage_lookup[stage_slug].id if stage_slug else None
+        key = (stage_id, entry["document_type"])
+        if key in existing:
+            continue
+        db.add(
+            DocumentRequirement(
+                workflow_id=workflow.id,
+                stage_id=stage_id,
+                document_type=entry["document_type"],
+                is_required=entry.get("is_required", True),
+                applies_when_code=entry.get("applies_when_code"),
+            )
+        )
+    db.flush()
+
+
 def _ensure_records(
     db: Session,
     org: Organization,
@@ -306,6 +431,7 @@ def _ensure_records(
 ) -> None:
     stage_lookup = {stage.slug: stage for stage in workflow.stages}
     intake_user = users[UserRole.INTAKE_COORDINATOR]
+    reviewer = users[UserRole.REVIEWER]
 
     for entry in DEMO_RECORDS:
         existing = (
@@ -319,28 +445,48 @@ def _ensure_records(
         if existing is not None:
             continue
         stage = stage_lookup[entry["stage_slug"]]
-        db.add(
-            Record(
-                organization_id=org.id,
-                workflow_id=workflow.id,
-                current_stage_id=stage.id,
-                assigned_user_id=intake_user.id,
-                external_reference=entry["external_reference"],
-                subject_full_name=entry["subject_full_name"],
-                subject_dob=entry["subject_dob"],
-                status=entry["status"],
-                insurance_status=entry["insurance_status"],
-                consent_status=entry["consent_status"],
-                medical_history_status=entry["medical_history_status"],
-                identity_verified=entry["identity_verified"],
-                guardian_authorization_signed=entry["guardian_authorization_signed"],
-                allergy_info_provided=entry["allergy_info_provided"],
-                insurance_in_network=entry["insurance_in_network"],
-                risk_score=0,
-                risk_band=RiskBand.LOW,
-                notes=entry["notes"],
-            )
+        record = Record(
+            organization_id=org.id,
+            workflow_id=workflow.id,
+            current_stage_id=stage.id,
+            assigned_user_id=intake_user.id,
+            external_reference=entry["external_reference"],
+            subject_full_name=entry["subject_full_name"],
+            subject_dob=entry["subject_dob"],
+            status=entry["status"],
+            insurance_status=entry["insurance_status"],
+            consent_status=entry["consent_status"],
+            medical_history_status=entry["medical_history_status"],
+            identity_verified=entry["identity_verified"],
+            guardian_authorization_signed=entry["guardian_authorization_signed"],
+            allergy_info_provided=entry["allergy_info_provided"],
+            insurance_in_network=entry["insurance_in_network"],
+            risk_score=0,
+            risk_band=RiskBand.LOW,
+            notes=entry["notes"],
         )
+        db.add(record)
+        db.flush()
+
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        for doc_entry in entry.get("documents", []):
+            doc_kwargs = dict(
+                record_id=record.id,
+                document_type=doc_entry["document_type"],
+                label=doc_entry.get("label"),
+                notes=doc_entry.get("notes"),
+                status=doc_entry["status"],
+            )
+            if doc_entry["status"] == DocumentStatus.VERIFIED:
+                doc_kwargs["verified_by_user_id"] = reviewer.id
+                doc_kwargs["verified_at"] = now
+            elif doc_entry["status"] == DocumentStatus.REJECTED:
+                doc_kwargs["rejected_by_user_id"] = reviewer.id
+                doc_kwargs["rejected_at"] = now
+                doc_kwargs["rejection_reason"] = doc_entry.get("rejection_reason")
+            db.add(Document(**doc_kwargs))
     db.flush()
 
 
@@ -349,6 +495,7 @@ def seed(db: Session) -> None:
     users = _ensure_users(db, org)
     workflow = _ensure_workflow(db, org)
     _ensure_rules(db, workflow)
+    _ensure_document_requirements(db, workflow)
     _ensure_records(db, org, workflow, users)
     db.commit()
 

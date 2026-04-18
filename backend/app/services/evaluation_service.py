@@ -3,29 +3,29 @@
 This service is the seam between the rule engine, the risk service, and
 the database. It owns three responsibilities:
 
-- run every active rule for a record's workflow
+- run every applicable rule for a record at a given stage context
 - persist the current evaluation set (replacing the previous set) so the
   `rule_evaluations` table always reflects the latest run
 - recalculate and persist `risk_score` / `risk_band` on the record
 
-Historical outcomes are preserved through the audit log, which is written
-for every evaluation run. Keeping only the current evaluation set in
-`rule_evaluations` avoids ambiguity when callers ask "why is this record
-blocked right now".
+The `rule_evaluations` table is **current state, not history**. Long-term
+history lives in the append-only audit log (`record.evaluated`,
+`record.risk_recalculated`, `record.transition_*`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.enums import RuleActionApplied
+from app.models.enums import RiskBand, RuleActionApplied
 from app.models.record import Record
 from app.models.rule import RuleEvaluation
 from app.models.user import User
+from app.models.workflow import WorkflowStage
 from app.services import audit_service, rule_engine_service, risk_service
 from app.services.rule_engine_service import RuleResult
 
@@ -93,7 +93,10 @@ def _build_decision(results: List[RuleResult]) -> EvaluationDecision:
 
 def _replace_evaluations(db: Session, record: Record, results: List[RuleResult]) -> None:
     db.execute(delete(RuleEvaluation).where(RuleEvaluation.record_id == record.id))
-    rules_by_code = {rule.code: rule for rule in rule_engine_service.load_active_rules(db, record.workflow_id)}
+    rules_by_code = {
+        rule.code: rule
+        for rule in rule_engine_service.load_active_rules(db, record.workflow_id)
+    }
     for result in results:
         rule = rules_by_code.get(result.rule_code)
         if rule is None:
@@ -116,23 +119,37 @@ def evaluate_and_persist(
     *,
     actor: User,
     record: Record,
+    stage_context: Optional[WorkflowStage] = None,
     commit: bool = True,
 ) -> EvaluationDecision:
     """Run evaluation, persist results, recalculate risk, and audit.
+
+    `stage_context` selects which rules apply (see
+    `rule_engine_service.applicable_rules`). Defaults to the record's
+    current stage; `workflow_service.transition_record` passes the target
+    stage so the transition is evaluated against where the record is
+    trying to go.
 
     When `commit` is False the caller is responsible for committing; this
     is used by `workflow_service.transition_record` so evaluation and
     transition land in the same transaction.
     """
-    results = rule_engine_service.evaluate_record(db, record)
+    # Import locally to avoid a circular import through rule_engine_service.
+    from app.services.audit_payloads import record_evaluated, risk_recalculated
+
+    results = rule_engine_service.evaluate_record(
+        db, record, stage_context=stage_context
+    )
     decision = _build_decision(results)
 
     _replace_evaluations(db, record, results)
 
+    prior_risk_score = record.risk_score
     record.risk_score = decision.risk_score
-    record.risk_band = _risk_band_enum(decision.risk_band)
+    record.risk_band = RiskBand(decision.risk_band)
     db.flush()
 
+    effective_context = stage_context or record.current_stage
     audit_service.record_event(
         db,
         action="record.evaluated",
@@ -141,13 +158,13 @@ def evaluate_and_persist(
         organization_id=record.organization_id,
         actor_user_id=actor.id,
         record_id=record.id,
-        payload={
-            "rules_evaluated": len(results),
-            "violations": [v.rule_code for v in decision.violations],
-            "warnings": [w.rule_code for w in decision.warnings],
-            "risk_score": decision.risk_score,
-            "risk_band": decision.risk_band,
-        },
+        payload=record_evaluated(
+            record_id=record.id,
+            current_stage_id=record.current_stage_id,
+            stage_context_id=effective_context.id if effective_context else None,
+            rules_evaluated=len(results),
+            decision=decision,
+        ),
     )
     audit_service.record_event(
         db,
@@ -157,7 +174,12 @@ def evaluate_and_persist(
         organization_id=record.organization_id,
         actor_user_id=actor.id,
         record_id=record.id,
-        payload={"risk_score": decision.risk_score, "risk_band": decision.risk_band},
+        payload=risk_recalculated(
+            record_id=record.id,
+            prior_risk_score=prior_risk_score,
+            new_risk_score=decision.risk_score,
+            risk_band=decision.risk_band,
+        ),
     )
 
     if commit:
@@ -165,12 +187,6 @@ def evaluate_and_persist(
         db.refresh(record)
 
     return decision
-
-
-def _risk_band_enum(value: str):
-    from app.models.enums import RiskBand
-
-    return RiskBand(value)
 
 
 def current_evaluations(db: Session, record: Record) -> List[RuleEvaluation]:
