@@ -1,0 +1,55 @@
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.models.base import Base, TimestampMixin
+from app.models.enums import RuleActionType, RuleSeverity
+
+
+class Rule(Base, TimestampMixin):
+    __tablename__ = "rules"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    workflow_id: Mapped[int] = mapped_column(
+        ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stage_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("workflow_stages.id", ondelete="CASCADE"), nullable=True
+    )
+
+    code: Mapped[str] = mapped_column(String(100), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+
+    action: Mapped[RuleActionType] = mapped_column(
+        Enum(RuleActionType, name="rule_action_type", native_enum=True, validate_strings=True),
+        nullable=False,
+    )
+    severity: Mapped[RuleSeverity] = mapped_column(
+        Enum(RuleSeverity, name="rule_severity", native_enum=True, validate_strings=True),
+        nullable=False,
+    )
+    risk_weight: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+
+class RuleEvaluation(Base):
+    __tablename__ = "rule_evaluations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    record_id: Mapped[int] = mapped_column(
+        ForeignKey("records.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    rule_id: Mapped[int] = mapped_column(
+        ForeignKey("rules.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    triggered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    explanation: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    evaluated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    record: Mapped["Record"] = relationship(back_populates="rule_evaluations")  # noqa: F821
+    rule: Mapped["Rule"] = relationship()
