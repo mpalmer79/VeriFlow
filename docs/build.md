@@ -1,135 +1,250 @@
-Refactor the existing VeriFlow Phase 0 and Phase 1 implementation with targeted schema and service improvements only. Do not broaden scope. Do not start Phase 2 rule engine implementation yet. This is a focused cleanup pass before moving forward.
+Build Phase 2 for VeriFlow. This phase is focused on evaluation, rule execution, risk scoring, and workflow transition enforcement. Do not broaden scope beyond that.
 
 Project reminder:
-VeriFlow is a workflow intelligence platform that enforces process compliance, detects operational risk, and explains why a record is blocked, warned, or ready to proceed. The first scenario is healthcare intake and compliance workflow. This is not an EHR, scheduling system, or CRM clone.
+VeriFlow is a workflow intelligence platform that enforces process compliance, detects operational risk, and explains why a record is blocked, warned, or ready to proceed. The first scenario is a healthcare intake and compliance workflow. This is not an EHR, scheduling system, or CRM clone.
 
-Your task is to make the following corrections and improvements to the existing codebase.
+Current repo status:
+- Phase 0 and Phase 1 are already implemented on main
+- Models, auth, record CRUD, seed data, and initial docs already exist
+- Schema improvements have already been applied:
+  - Rule.code uniqueness is scoped by workflow
+  - RuleEvaluation includes passed, action_applied, and risk_applied
+  - workflow-stage consistency is enforced in service logic
+  - relationships and indexes were improved
 
-1. Fix Rule.code uniqueness scope
+Your task in this phase is to implement the first real system intelligence layer.
 
-Current issue:
-Rule.code is globally unique, which is too restrictive for a multi-workflow and future multi-tenant system.
+Primary goals:
+1. Rule registry and rule evaluation
+2. Risk scoring
+3. Evaluation orchestration and persistence
+4. Workflow transition enforcement
+5. API endpoints for evaluation and transition
+6. Strong tests for system behavior
 
-Required change:
-- Remove global uniqueness from Rule.code
-- Enforce uniqueness at the workflow level instead
-- Add an explicit composite uniqueness constraint for:
-  - workflow_id + code
+1. Implement a code-driven rule registry
 
-Acceptance criteria:
-- Multiple workflows can reuse the same rule code
-- The same workflow cannot have duplicate rule codes
+Do not build a visual rule builder.
+Do not build a free-form expression parser.
+Use a controlled registry pattern.
 
-2. Add missing relationships to Rule and AuditLog
+Create a rule engine service with a registry like this conceptually:
+- rule code string maps to a Python evaluator function
 
-Required changes:
+Examples:
+- identity_required
+- insurance_verified_or_self_pay
+- consent_required
+- guardian_authorization_required
+- medical_history_warning
+- allergy_warning
+- out_of_network_warning
 
-For Rule:
-- Add SQLAlchemy relationship fields for:
-  - workflow
-  - stage
+Each evaluator should receive the record and any required related context and return a structured result.
 
-For AuditLog:
-- Add SQLAlchemy relationship fields for:
-  - organization
-  - actor_user
-  - record
+Required result structure:
+- passed: boolean
+- action_applied: none | warn | block
+- message: human-readable explanation
+- risk_applied: integer
+- rule_code: string
 
-Acceptance criteria:
-- These relationships are defined cleanly and do not break existing tests
-- Model readability and service-layer usage improve
+2. Implement the initial rules
 
-3. Add index to assigned_user_id on Record
+Add support for these first rules:
 
-Required change:
-- Ensure assigned_user_id is indexed for dashboard and filtering performance
+Blocking rules:
+- identity_required
+  - if identity is not verified, block progression past Identity Verification
+- insurance_verified_or_self_pay
+  - if insurance is not verified and self-pay is not acknowledged, block progression past Insurance Review
+- consent_required
+  - if required consent is missing, block progression past Consent & Authorization
+- guardian_authorization_required
+  - if subject is under 18 and guardian authorization is missing, block progression
 
-Acceptance criteria:
-- Record model includes index support for assigned_user_id
-- Migration or schema update reflects this correctly
+Warning rules:
+- medical_history_warning
+  - if medical history is incomplete, warn but do not block
+- allergy_warning
+  - if allergy information is blank or incomplete, warn but do not block
+- out_of_network_warning
+  - if insurance status or coverage indicates out-of-network handling, warn but do not block
 
-4. Strengthen RuleEvaluation model for future explainability
+Important:
+- Implement rules against the current schema as it exists
+- If one or two small record fields must be added to support rule clarity, make only minimal necessary schema changes
+- Keep the rule logic deterministic and explicit
 
-Current issue:
-The model is too thin and will weaken auditability and explainability.
+3. Implement risk scoring
 
-Required changes:
-- Keep existing structure if needed for compatibility, but improve semantics
-- Add:
-  - risk_applied (integer, default 0)
-- Replace or improve the meaning of triggered by adding clearer evaluation state
+Create a dedicated risk service that:
+- aggregates risk_applied values from triggered warnings/blocks
+- calculates total risk score
+- returns a risk band
 
-Preferred direction:
-- Use:
-  - passed: boolean
-  - action_applied: enum or string with values like none, warn, block
-- If replacing triggered is too disruptive, preserve backward compatibility but still add:
-  - passed
-  - action_applied
-  - risk_applied
+Risk bands:
+- 0 to 24: low
+- 25 to 49: moderate
+- 50 to 79: high
+- 80+: critical
 
-Acceptance criteria:
-- RuleEvaluation clearly communicates evaluation result
-- Historical risk contribution is persisted
-- Existing services/tests are updated as needed
+Use the following baseline scoring:
+- identity verification missing: +40
+- unresolved insurance: +45
+- missing consent: +50
+- missing guardian authorization for minor: +60
+- incomplete medical history: +15
+- missing allergy information: +10
+- out-of-network handling: +20
 
-5. Enforce workflow-stage consistency in service logic
+The risk service should return:
+- total_score
+- risk_band
+- summary string if useful
 
-Current issue:
-A Record can potentially reference a current_stage_id that does not belong to its workflow_id.
+4. Implement evaluation orchestration
 
-Required change:
-- Add service-layer validation so that:
-  - when creating a record
-  - when updating a record
-  - when assigning or changing current_stage_id
-  the stage must belong to the record’s workflow
+Create an evaluation service that:
+- loads the record and relevant context
+- determines which active rules apply
+- runs the rule evaluators
+- persists RuleEvaluation rows
+- recalculates the record’s risk_score and risk_band
+- returns a structured decision payload
 
-Acceptance criteria:
-- Invalid workflow/stage combinations are rejected with a clear error
-- This logic is implemented in the appropriate service layer, not scattered in routes
-- Existing APIs remain clean
+Decision payload should include:
+- can_progress: boolean
+- risk_score: integer
+- risk_band: low | moderate | high | critical
+- violations: list of blocking issues
+- warnings: list of warnings
+- summary: concise human-readable explanation
 
-6. Add tests for workflow-stage consistency
+Important:
+- clear old evaluation rows for the record before writing the current set, or implement a clean evaluation-run approach
+- choose one consistent approach and document it
+- do not let stale evaluations accumulate ambiguously
 
-Add or update pytest tests for:
-- record creation fails when current_stage_id does not belong to workflow_id
-- record update fails when assigning a stage from another workflow
-- valid workflow-stage pair succeeds
+5. Implement workflow transition enforcement
 
-Acceptance criteria:
-- Tests are meaningful and pass
-- Coverage improves around service-layer integrity rules
+Extend workflow/service logic so that transition attempts are evaluated before progression.
 
-7. Update docs where needed
+Requirements:
+- transition endpoint should accept a target_stage_id
+- service validates target stage belongs to same workflow
+- service runs evaluation before allowing progression
+- if blocking violations exist, the transition is rejected cleanly
+- if only warnings exist, progression is allowed
+- successful transitions update current_stage_id
+- blocked transitions do not update current_stage_id
 
-Update the following only if necessary to reflect the refactor:
+Add audit logging for:
+- transition attempted
+- transition blocked
+- transition completed
+- evaluation executed
+- risk recalculated
+
+Do not hardcode route-level logic. Keep this in services.
+
+6. Add API endpoints
+
+Implement:
+- POST /api/records/{id}/evaluate
+- GET /api/records/{id}/evaluations
+- POST /api/records/{id}/transition
+
+Behavior:
+- evaluate endpoint returns the current evaluation result
+- evaluations endpoint returns persisted evaluation history or current evaluation rows, depending on your chosen design
+- transition endpoint attempts a stage transition and returns:
+  - success/failure
+  - updated stage if successful
+  - blocking/warning summary
+  - risk score and risk band
+
+7. Seed initial rules
+
+Update seed/demo data so the Healthcare Intake workflow includes the initial rules.
+
+Seed rules with proper:
+- code
+- name
+- description
+- severity
+- action_type
+- risk_weight or equivalent field
+- workflow linkage
+- stage linkage where appropriate
+- active status
+
+Make the seed idempotent.
+
+8. Testing requirements
+
+Add strong pytest coverage for the behavior that makes this product valuable.
+
+Required tests:
+- evaluate returns block when identity is missing
+- evaluate returns block when insurance is unresolved
+- evaluate returns block when consent is missing
+- evaluate returns block for minor without guardian authorization
+- evaluate returns warning, not block, for incomplete medical history
+- evaluate returns warning, not block, for missing allergy information
+- evaluate aggregates multiple triggered rules into correct risk score
+- transition fails when blocking rules are present
+- transition succeeds when only warnings are present
+- transition succeeds and updates stage when requirements are satisfied
+- audit logs are created for transition attempts and outcomes
+
+These tests should be real and meaningful. Do not reduce everything to mocks if full integration-style tests are reasonable with the current codebase.
+
+9. Documentation updates
+
+Update:
 - ARCHITECTURE.md
-- docs/architecture.md if it exists
-- README.md only if schema semantics or model behavior are mentioned there
+- docs/workflow_rules.md
+- README.md only if needed
 
-Do not rewrite docs broadly. Only make precise corrections related to:
-- workflow-scoped rule codes
-- rule evaluation semantics
-- workflow-stage integrity validation
+Include:
+- rule registry approach
+- evaluation flow
+- risk scoring behavior
+- transition enforcement behavior
+- note that rules are code-driven in this phase
 
-Constraints:
-- Do not introduce a no-code rule builder
-- Do not implement the full rule engine yet
-- Do not expand frontend scope
-- Do not refactor unrelated files just for style
+Do not turn docs into generic filler.
+
+10. Constraints
+
+- Do not build a visual rule builder
+- Do not add AI/copilot features
+- Do not expand frontend beyond what is necessary to support API contracts if frontend changes are needed at all
+- Do not redesign the whole schema unless a very small targeted field addition is required
+- Do not introduce background jobs, queues, or microservices
+- Keep code clean, production-minded, and maintainable
 - Keep comments minimal and human-written
-- Maintain production-minded structure and clean separation of concerns
+- Preserve service boundaries and separation of concerns
 
-Deliverables:
-- updated models
-- any required migration/schema adjustments
-- updated services
+11. Deliverables
+
+At the end of this phase, provide:
+- updated backend code
+- any required schema/migration changes
+- updated seed logic
 - updated tests
-- brief summary of what changed and why
+- updated docs
+- brief summary of:
+  - what was implemented
+  - any schema changes made
+  - how evaluation persistence was handled
+  - what remains for the next phase
 
-Acceptance criteria for the whole task:
-- existing functionality still works
-- new integrity rules are enforced
+Acceptance criteria:
+- rules execute through a registry-based engine
+- evaluation endpoint works
+- transition endpoint enforces blocking logic
+- risk score and risk band are persisted on records
 - tests pass
-- schema is stronger and better aligned with the project’s long-term direction
+- docs explain the design clearly
