@@ -1,294 +1,207 @@
-Build Phase 4 for VeriFlow. This phase is the minimal but serious frontend demonstration layer for the existing backend system. Do not broaden scope beyond that. This work should result in a usable product walkthrough surface by the end of the run.
+Perform a high-ROI polish pass for VeriFlow. This is not a new feature phase. Do not broaden scope. Focus on the small but important backend and frontend improvements that make the current system feel complete, coherent, and portfolio-ready.
 
 Project reminder:
 VeriFlow is a workflow intelligence platform that enforces process compliance, detects operational risk, and explains why a record is blocked, warned, or ready to proceed. The first scenario is a healthcare intake and compliance workflow. This is not an EHR, scheduling system, or CRM clone.
 
 Current repo status:
-- Backend foundation, auth, records, workflows, rules, evaluations, risk scoring, transition enforcement, document evidence, document requirements, stage-aware rule filtering, and audit payloads already exist
-- Backend is the strongest part of the project and must not be diluted by weak frontend decisions
-- This phase exists to expose and demonstrate backend capabilities through a clean UI
+- Backend architecture is strong
+- Rule engine, risk scoring, transitions, document evidence, document requirements, stage-aware evaluation, and audit trail are implemented
+- Frontend includes login, dashboard, records list, and record detail
+- Frontend build succeeds and backend tests pass
+- The system is now in the polish and presentation stage
 
-Primary goal:
-Build a focused frontend that showcases the system’s real value:
-- workflow state
-- document evidence
-- evaluation outcomes
-- blocking and warning logic
-- risk scoring
-- auditability
+This pass must focus on the following only.
 
-Do not build fake analytics, AI features, admin builders, or decorative UI.
+1. Fix record assignee display quality
 
-1. Frontend scope
+Current problem:
+The frontend renders `assigned_user_id` as `User #{id}`, which feels unfinished.
 
-Build or complete the following pages only:
-- /login
-- /dashboard
-- /records
-- /records/[id]
+Required improvement:
+Make the assignee display human-readable in the API response and UI.
 
-Add only the minimal shared layout and auth plumbing needed to support those screens.
+Preferred solution:
+- include `assigned_user_name` in the record read/list payloads
+- if clean, also include `created_by_user_name` where useful
+- keep the payload light; do not introduce a large nested user object unless it is clearly better
 
-2. UX and design constraints
-
-The UI must feel like a serious operational system, not a school project or flashy startup landing page.
-
-Requirements:
-- clean, modern, restrained design
-- information-dense but readable
-- strong hierarchy for important operational states
-- consistent severity display for low, moderate, high, critical
-- no emoji UI
-- no decorative charts unless an existing backend endpoint naturally supports a simple one and it is clearly worth it
-- no animations unless extremely light and justified
-- avoid overdesign
-- prioritize clarity, explainability, and usability
-
-Use:
-- Next.js with TypeScript
-- existing frontend stack in the repo
-- Tailwind and shadcn/ui components if already present or appropriate
-
-3. Auth flow
-
-Implement a working auth flow using the existing backend auth endpoints.
-
-Requirements:
-- login form submits to backend auth endpoint
-- store token in a reasonable MVP-safe frontend pattern consistent with the current app
-- protected pages redirect unauthenticated users to /login
-- display useful auth error states
-- provide logout action
-
-Keep the auth implementation clean and minimal. Do not overengineer session management.
-
-4. Shared layout and navigation
-
-Build a minimal app shell for authenticated pages.
-
-Should include:
-- app header or sidebar
-- navigation links to Dashboard and Records
-- user context or simple logged-in state if easy
-- logout action
-
-Do not build a large navigation system.
-
-5. Dashboard page
-
-Build a practical dashboard that surfaces core operational information.
-
-The page should show:
-- total active records
-- blocked records
-- high-risk records
-- records needing review if an appropriate backend field or endpoint supports it
-- recent records and/or recent audit activity
-
-If exact summary endpoints already exist, use them.
-If not, derive the view from available APIs with minimal frontend logic.
-
-Dashboard should not rely on charts to feel complete. Cards plus actionable lists are enough.
-
-6. Records list page
-
-Build a professional records table/list view.
-
-Show columns such as:
-- subject name
-- current stage
-- status
-- risk score
-- risk band
-- assigned user
-- updated at
-
-Requirements:
-- clickable rows into record detail
-- basic search by subject name if feasible
-- filters for stage and risk band if feasible
-- blocked/high-risk states visually identifiable
-- loading and empty states
-
-Do not build complex pagination unless already needed by the current backend responses.
-
-7. Record detail page
-
-This is the most important page in the whole UI. It must clearly demonstrate the system’s intelligence and workflow enforcement.
-
-Include:
-
-Header:
-- subject name
-- current stage
-- status
-- risk score
-- risk band
-- assigned user if available
-
-Sections:
-- evaluation summary
-- blocking issues
-- warnings
-- workflow stage timeline or ordered stage list with current stage clearly indicated
-- document evidence panel
-- document status summary
-- audit trail
-
-Actions:
-- run evaluation
-- attempt transition to next stage or selected allowed stage if supported cleanly
-- verify document
-- reject document
-
-The page should make it obvious:
-- why the record is blocked or not blocked
-- which evidence exists
-- what remains missing
-- what changed over time
-
-8. Document evidence UI
-
-For each record, show:
-- required document types
-- present document types
-- satisfied document types
-- missing document types
-- rejected document types
-
-Also show document entries with fields like:
-- document type
-- status
-- uploaded at
-- verified at
-- verifier
-- rejection reason if present
-
-Actions:
-- verify document
-- reject document
-
-Use the existing backend document endpoints and status endpoint.
-Do not build file upload integration beyond what the backend currently supports if storage is still metadata-driven.
-
-9. Evaluation and transition UX
-
-The record detail page should allow:
-- manual evaluation trigger
-- transition attempt
-
-Requirements:
-- show evaluation result payload clearly
-- separate blocking violations from warnings
-- show risk score and risk band updates
-- show transition success/failure messages clearly
-- refresh state correctly after evaluation or transition
-
-Do not hide important details behind excessive accordions or modals.
-
-10. Type safety and API integration
-
-Create or refine:
-- frontend/lib/api.ts
-- frontend/lib/auth.ts
-- frontend/lib/types.ts
-
-Requirements:
-- typed response handling for:
-  - auth
-  - record list
-  - record detail
-  - evaluation result
-  - document status
-  - audit entries
-- avoid scattered fetch calls across components where a small API helper layer is more appropriate
-- keep the abstraction thin and practical
-
-11. Component structure
-
-Create reusable but not overabstracted components such as:
-- dashboard stat card
-- risk badge
-- stage badge
-- violation list
-- warning list
-- document status panel
-- audit timeline
-- records table
-
-Do not create a giant component architecture for its own sake.
-
-12. Loading, error, and empty states
-
-Every main page should handle:
-- loading
-- backend failure
-- empty datasets
-
-The record detail page especially must handle:
-- missing record
-- missing documents
-- no audit entries
-- no warnings
-- no blocking issues
-
-13. Minimal polish requirements
-
-Before finishing:
-- ensure spacing and typography are consistent
-- ensure severity indicators are visually clear
-- ensure tables/cards do not feel raw or unfinished
-- remove placeholder text
-- remove obvious scaffolding noise
-- ensure the app can be navigated cleanly end-to-end
-
-14. Do not broaden scope
-
-Explicitly do not:
-- add AI/copilot features
-- add charts unless clearly justified and supported
-- build admin workflow/rule editors
-- build multi-industry modules
-- redesign the backend architecture
-- introduce state management libraries unless already necessary and justified
-- chase pixel perfection at the expense of functionality
-
-15. Testing and validation
-
-At minimum:
-- keep the existing backend tests passing
-- ensure the frontend builds successfully
-- fix TypeScript issues
-- add lightweight frontend tests only if already supported and quick to do, but do not let that consume the phase
-
-16. Documentation updates
-
-Update README and any frontend-specific docs only as needed to reflect:
-- available UI pages
-- how to log in locally
-- what the UI demonstrates
-
-Do not turn docs into marketing copy.
-
-17. Deliverables
-
-At the end of this phase, provide:
-- the implemented frontend pages
-- any API helper/types additions
-- any minimal backend contract adjustments if absolutely required
-- brief summary of:
-  - which pages were built
-  - how auth is handled
-  - what actions are supported on record detail
-  - any known limitations left for future polish
+Update:
+- backend schemas
+- record query/service logic
+- frontend types and rendering
 
 Acceptance criteria:
-- login works
-- protected pages work
-- dashboard is usable
-- records list is usable
-- record detail clearly demonstrates workflow, evidence, evaluation, risk, and auditability
-- frontend build succeeds
-- the UI feels like a serious operations product, not a toy
+- records list shows a readable assignee name
+- record detail shows a readable assignee name
+- if no assignee exists, the UI handles it cleanly
 
-Assign multiple agents to work in parallel and not overlapping of each other
+2. Fix persisted evaluation display quality
+
+Current problem:
+On initial page load, persisted `RuleEvaluation` rows do not expose a rule code, so the frontend falls back to `rule#N`.
+
+Required improvement:
+Include a stable human-readable rule identifier in persisted evaluation responses.
+
+Preferred solution:
+- add `rule_code` to the relevant read schema and API response
+- optionally add `rule_name` too if that can be done cleanly and without clutter
+
+Update:
+- backend schemas
+- evaluation query/service logic
+- frontend types and rendering
+
+Acceptance criteria:
+- record detail never needs to render `rule#N`
+- persisted evaluations and fresh evaluation responses use consistent identifiers
+- UI explanations feel coherent before and after clicking “Run evaluation”
+
+3. Tighten severity and status presentation in the frontend
+
+Current problem:
+The core information is present, but visual consistency may still vary across pages.
+
+Required improvement:
+Standardize display components for:
+- risk band
+- record status
+- workflow stage
+- document status
+- blocking violations
+- warnings
+
+Suggested approach:
+- create or refine shared components such as:
+  - RiskBadge
+  - StatusBadge
+  - StageBadge
+  - SeverityPanel
+  - EmptyState
+- make sure the same labels, colors, and hierarchy are used across dashboard, records list, and record detail
+
+Acceptance criteria:
+- the same concept looks the same everywhere
+- blocked/high-risk states are obvious without feeling noisy
+- warning vs blocking states are easy to distinguish
+
+4. Refine login helper presentation
+
+Current problem:
+The local demo access helper is useful, but it can easily feel toy-like if the tone or styling is off.
+
+Required improvement:
+Keep the seeded-account helper, but present it as a restrained local-demo convenience.
+
+Requirements:
+- label it clearly as local demo access
+- avoid playful or casual styling
+- keep it visually secondary to the main login form
+- make sure it reads like a practical demo affordance, not a gimmick
+
+Acceptance criteria:
+- the helper remains useful
+- it does not cheapen the product tone
+
+5. Improve dashboard usefulness without expanding scope
+
+Current problem:
+The dashboard may be functionally correct but still feel generic if its lists are not clearly actionable.
+
+Required improvement:
+Review the dashboard composition and make sure the existing content feels operationally useful.
+
+Do not add charts or new data domains.
+Instead:
+- improve wording
+- improve ordering
+- improve table/list labels
+- surface risk and blocked states clearly
+- ensure “needs attention” is genuinely useful
+- avoid filler panels
+
+Acceptance criteria:
+- dashboard gives a quick sense of operational state
+- the most urgent records are easy to identify
+- the page feels practical, not decorative
+
+6. Tighten record detail page wording and empty states
+
+Required improvement:
+Review the record detail page and improve:
+- labels
+- section headings
+- repeated language
+- empty states for:
+  - no blocking issues
+  - no warnings
+  - no documents
+  - no audit history
+  - no evaluations yet
+
+Goal:
+The page should feel clear and intentional, not raw.
+
+Acceptance criteria:
+- copy is concise and professional
+- empty states feel finished, not placeholder-like
+- the page remains information-dense but readable
+
+7. Update docs only where needed
+
+Make targeted updates to:
+- README.md
+- frontend/README.md if present
+
+Potential updates:
+- note the assignee/rule-code response improvements
+- improve local demo access wording
+- add or tighten the UI walkthrough section if useful
+
+Do not rewrite docs broadly. Keep this targeted.
+
+8. Add tests where appropriate
+
+Add or update tests only where they provide meaningful coverage for the backend response improvements.
+
+Examples:
+- record response includes assigned_user_name when available
+- evaluation response includes rule_code
+- API output remains stable for null assignee
+
+Do not get pulled into a frontend test project. Keep this lightweight and high-value.
+
+9. Do not broaden scope
+
+Explicitly do not:
+- add new major pages
+- add charts
+- add frontend testing frameworks
+- add AI features
+- redesign auth
+- build admin editors
+- expand domain support
+- refactor unrelated code for style alone
+
+Keep this pass small, focused, and high-value.
+
+10. Deliverables
+
+At the end of this task, provide:
+- updated backend response schemas and logic
+- updated frontend display components and pages
+- any added tests
+- brief summary of:
+  - what was polished
+  - how assignee names are now exposed
+  - how rule codes are now exposed
+  - any remaining presentation limitations before deployment/showcase
+
+Acceptance criteria:
+- assignee names are human-readable
+- rule identifiers are human-readable everywhere
+- frontend severity/status presentation is consistent
+- login helper feels professional
+- dashboard and record detail read like a real operations product
+- build still succeeds
+- backend tests still pass
