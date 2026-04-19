@@ -52,9 +52,20 @@ to a stage) requires a given document type:
 | `is_required`         | bool                                                  |
 | `applies_when_code`   | reserved for future conditional logic (see below)     |
 
-Composite uniqueness is enforced on
-`(workflow_id, stage_id, document_type)` so a workflow can have one
-requirement per type per stage scope.
+Uniqueness is enforced with **two partial unique indexes** so the
+nullable `stage_id` cannot allow duplicate workflow-global rows in
+PostgreSQL (where NULLs are treated as distinct in standard unique
+constraints):
+
+- `uq_doc_req_workflow_global_type` — when `stage_id IS NULL`, unique
+  on `(workflow_id, document_type)`
+- `uq_doc_req_workflow_stage_type` — when `stage_id IS NOT NULL`,
+  unique on `(workflow_id, stage_id, document_type)`
+
+Both are emitted with `postgresql_where` and `sqlite_where` predicates
+so PostgreSQL in production and SQLite in tests reject duplicates at
+the database layer with an `IntegrityError`. The service layer does not
+need to pre-check.
 
 ## Required-document logic
 
@@ -81,18 +92,30 @@ introduce a small, controlled resolver for these codes without a DSL.
 
 ## Document status endpoint
 
-`GET /api/records/{id}/document-status` returns the computed summary:
+`GET /api/records/{id}/document-status` returns an explicit, non-
+overlapping view of the record's document evidence. A requirement is
+satisfied **only** by a verified document; an uploaded-but-not-yet-
+verified document is not enough.
 
 - `required_types` — types required at the record's current stage
 - `present_types` — types with at least one non-rejected document
+  (present does not imply verified)
 - `verified_types` — types with at least one verified document
-- `missing_types` — required types with no non-rejected document
-- `rejected_types` — types whose only attached documents are rejected
+- `satisfied_types` — required types whose requirement is met
+  (`required ∩ verified`)
+- `missing_types` — required types whose requirement is not met
+  (`required − verified`)
+- `rejected_types` — types with at least one rejected document. This is
+  historical information; a type can appear here alongside
+  `verified_types` when a record has both a rejected and a later
+  verified document.
 - `documents` — the full `Document` rows for display
 
-A type can appear in both `missing_types` and `rejected_types` when the
-only evidence on file was rejected; the UI can present that as "needs
-re-submission".
+The invariant `required_types = satisfied_types + missing_types` always
+holds, so API callers can rely on these sets as a partition of the
+requirement surface. A required type whose only evidence is uploaded
+(not yet verified) appears in `present_types` and in `missing_types` —
+the document is on file, but the requirement is not yet satisfied.
 
 ## Hybrid rule evaluation
 

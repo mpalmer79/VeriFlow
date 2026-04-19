@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Boolean, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, Enum, ForeignKey, Index, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -15,15 +15,39 @@ class DocumentRequirement(Base, TimestampMixin):
     It is not interpreted in this phase; `guardian_authorization_required`
     keeps its minor check in code. Keeping the column now keeps the schema
     forward-compatible without pushing a DSL into scope.
+
+    Uniqueness is enforced via two partial unique indexes so nullable
+    `stage_id` does not allow duplicates:
+
+    - `uq_doc_req_workflow_global_type` — when `stage_id IS NULL`, only
+      one row per `(workflow_id, document_type)` may exist.
+    - `uq_doc_req_workflow_stage_type` — when `stage_id IS NOT NULL`,
+      only one row per `(workflow_id, stage_id, document_type)` may
+      exist.
+
+    A standard multi-column unique constraint would not catch duplicate
+    workflow-global rows in PostgreSQL because NULLs are treated as
+    distinct.
     """
 
     __tablename__ = "document_requirements"
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_doc_req_workflow_global_type",
+            "workflow_id",
+            "document_type",
+            unique=True,
+            postgresql_where=text("stage_id IS NULL"),
+            sqlite_where=text("stage_id IS NULL"),
+        ),
+        Index(
+            "uq_doc_req_workflow_stage_type",
             "workflow_id",
             "stage_id",
             "document_type",
-            name="uq_doc_req_workflow_stage_type",
+            unique=True,
+            postgresql_where=text("stage_id IS NOT NULL"),
+            sqlite_where=text("stage_id IS NOT NULL"),
         ),
     )
 
