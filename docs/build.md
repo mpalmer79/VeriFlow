@@ -1,6 +1,6 @@
-You are acting as a staff-level full-stack engineer performing Phase 3 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
+You are acting as a staff-level full-stack engineer performing Phase 4 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
 
-Phase 1 and Phase 2 already landed. The repo now has:
+Phase 1 through Phase 3 already landed. The repo now has:
 - optimistic concurrency on records
 - tamper-evident audit chaining
 - stronger JWT claims/validation
@@ -10,24 +10,28 @@ Phase 1 and Phase 2 already landed. The repo now has:
 - document integrity-check endpoint
 - blocked-transition risk mutation fix
 - Alembic bootstrap with a baseline migration
+- frontend upload flow
+- frontend integrity-check visibility
+- evidence deletion with local file cleanup
+- stronger file type validation at ingest
 
-Your job in Phase 3 is to improve operational completeness and product usability without breaking the current architecture.
+Your job in Phase 4 is to improve operational robustness, content access, and storage lifecycle without breaking the current architecture.
 
-This is not a rewrite. This is a focused hardening and completion pass.
+This is not a rewrite. This is a focused hardening and product-completion pass.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Implement the following Phase 3 upgrades:
+Implement the following Phase 4 upgrades:
 
-1. Frontend wiring for real document upload
-2. Frontend wiring for integrity-check visibility
-3. Evidence deletion / cleanup lifecycle
-4. Stronger file validation at ingest
-5. Explicit incremental Alembic migration for Phase 3 changes if schema changes are required
-6. Admin/debug integrity tooling where appropriate
-7. Tests covering the new behavior
+1. Secure content delivery endpoint for stored evidence
+2. Streaming upload hashing and storage to avoid whole-file memory reads
+3. Record-level and cascade-safe evidence cleanup strategy
+4. Audit payload normalization cleanup
+5. Optional lightweight admin/debug tooling for audit and storage integrity
+6. Tests covering the new behavior
+7. Explicit incremental Alembic migration only if schema changes are required
 
 Do not stop at analysis. Inspect the repo, reconcile to actual file paths, and implement completely.
 
@@ -38,36 +42,39 @@ NON-NEGOTIABLE EXECUTION RULES
 1. Inspect the repo first.
    - Read the current backend and frontend structure fully.
    - Identify the actual files for:
-     - records detail page
-     - frontend API client/types
      - document routes
+     - record routes
+     - evidence storage helper
      - document service
-     - evidence storage
+     - audit payload builders
      - config/settings
      - migrations
+     - frontend API helpers/types
+     - current record detail page
      - tests
-   - Confirm the existing UI path where document verify/reject actions already live.
+   - Confirm the current upload, verify, integrity-check, and delete flows before changing them.
 
 2. Preserve the current architecture.
    - Keep FastAPI + SQLAlchemy + local evidence storage
    - Keep Next.js app structure as-is
    - Do not introduce cloud storage
    - Do not introduce background workers
-   - Do not redesign the entire frontend
+   - Do not redesign auth architecture
+   - Do not redesign the frontend
 
 3. Prefer modifying existing files.
-   - Avoid duplicate components
-   - Reuse existing patterns for API calls, UI state, error handling, and tables/cards
+   - Avoid duplicate components and helpers
+   - Reuse existing patterns for API calls, UI state, error handling, and audit events
 
-4. No fake UX.
-   - Do not expose a “Verify” happy path in the UI for metadata-only documents as if they were real uploaded evidence
-   - The UI must reflect whether a document has stored content
-   - Integrity status must reflect actual backend results
+4. Keep security and correctness ahead of convenience.
+   - Do not expose raw filesystem paths
+   - Do not stream files without access control
+   - Do not allow file deletion outside the managed storage root
+   - Do not weaken existing integrity semantics
 
-5. Keep security and correctness ahead of convenience.
-   - Do not trust filename extension alone
-   - Do not expose absolute storage paths to users
-   - Do not let deletion leave silent orphan files where avoidable
+5. No fake UX.
+   - Do not expose a “download” or “view” action unless the backend route actually serves stored content securely
+   - Do not show content actions for metadata-only documents as if they were upload-backed evidence
 
 6. No half-finished migration work.
    - If schema changes are needed, add a proper incremental Alembic revision
@@ -145,16 +152,7 @@ If a schema change is required:
    - upgrade()
    - downgrade()
 
-Example:
-
-def upgrade():
-    op.add_column(
-        "documents",
-        sa.Column("has_stored_content", sa.Boolean(), nullable=True),
-    )
-
-def downgrade():
-    op.drop_column("documents", "has_stored_content")
+4. Do not touch the baseline migration.
 
 ----------------------------------------
 MODEL ↔ MIGRATION CONSISTENCY
@@ -220,139 +218,269 @@ If NO schema change:
 → explicitly say: "No new migration required"
 
 ==================================================
-PHASE 3 REQUIREMENTS
+PHASE 4 REQUIREMENTS
 ==================================================
 
 ----------------------------------------
-A. FRONTEND: REAL DOCUMENT UPLOAD
+A. SECURE CONTENT DELIVERY ENDPOINT
 ----------------------------------------
 
-Wire the UI to:
+Goal:
+Add a secure way to retrieve stored evidence content for upload-backed documents.
 
-POST /api/records/{id}/documents/upload
+Required behavior:
+1. Add a backend endpoint to stream or serve stored content for a document.
+2. Access control must match the project's existing organization/user authorization model.
+3. The route must only work for documents with stored local content.
+4. Metadata-only documents must return a coherent failure response.
+5. The route must not expose internal filesystem paths in the response.
+6. Content delivery should set appropriate response headers:
+   - content type
+   - content disposition if appropriate
+   - safe filename when possible
+
+Preferred route style:
+- GET /api/documents/{id}/content
 
 Requirements:
-- file picker
-- document type selection (if required)
-- optional label/notes
-- refresh document list after upload
-- disable duplicate submission
-- handle errors cleanly
+- verify the document belongs to the caller’s organization
+- verify stored content exists
+- stream or return file content without loading arbitrarily large content into memory if practical
+- use the server-known content type, not blind client trust
 
-Must clearly distinguish:
-- metadata-only documents
-- real uploaded evidence
+Do not:
+- expose raw `storage_uri`
+- serve files outside the configured storage root
+- allow content access for metadata-only documents
 
-Do not expose storage URIs.
+If the current UI supports it cleanly:
+- add a “View” or “Download” action only for upload-backed evidence
 
 ----------------------------------------
-B. FRONTEND: INTEGRITY CHECK
+B. STREAMING UPLOAD HASHING / STORAGE
 ----------------------------------------
 
-Use:
+Goal:
+Stop reading the entire upload into memory before hashing and writing.
 
-/api/documents/{id}/integrity-check
+Current known limitation:
+- upload path reads `await file.read()` into memory
 
-Display:
-- match
-- mismatch
-- missing content
+Required behavior:
+1. Refactor ingest so hashing and file persistence are performed incrementally in chunks.
+2. Preserve current behavior:
+   - compute SHA-256 from exact stored bytes
+   - compute size_bytes from actual bytes
+   - store under server-controlled managed path
+3. Respect `max_upload_bytes` while streaming.
+4. If payload exceeds limit:
+   - abort safely
+   - clean up partial file
+   - return coherent error response
+
+Preferred design:
+- centralize chunked hashing/writing in `evidence_storage.py`
+- document service remains orchestration layer
+- route layer stays thin
+
+Do not:
+- regress file type validation
+- keep dual code paths unless necessary
+- leave partial files orphaned on failure
+
+----------------------------------------
+C. RECORD-LEVEL / CASCADE-SAFE EVIDENCE CLEANUP
+----------------------------------------
+
+Goal:
+Close the remaining storage lifecycle gap around orphaned files.
+
+Current known limitation:
+- when records are cascade-deleted, DB rows disappear but local files may remain orphaned
+
+You must inspect the current deletion behavior first.
+
+Required behavior:
+Implement one coherent strategy that fits the existing architecture:
+
+Preferred approach:
+1. Add a record-level delete path that explicitly deletes associated managed evidence files before deleting the record
+2. If a record delete route already exists, extend it
+3. If not, add the smallest correct delete path consistent with current architecture
 
 Requirements:
-- action button per document
-- visible result without reload
-- not available for metadata-only docs
+- gather associated documents
+- delete managed local files safely
+- then delete record and related rows
+- emit appropriate audit events
+- tolerate already-missing files where correct
+- never delete outside managed storage root
 
-Do not mutate document state.
+Alternative if record deletion is not yet part of product surface:
+- add a dedicated cleanup helper and tests proving cascade orphan prevention strategy
+- document the operational deletion path clearly
 
-----------------------------------------
-C. EVIDENCE DELETION / CLEANUP
-----------------------------------------
-
-When deleting a document:
-- delete DB row
-- delete file from disk if managed
-- ensure path is inside storage root
-- handle missing files safely
-- emit audit event
-
-Do not allow path traversal.
+Do not:
+- rely on DB cascade alone for file cleanup
+- delete arbitrary file URIs
+- silently ignore unsafe storage paths
 
 ----------------------------------------
-D. FILE VALIDATION AT INGEST
+D. AUDIT PAYLOAD NORMALIZATION
 ----------------------------------------
 
-Add validation:
-- allowlist file types (PDF, PNG, JPEG minimum)
-- reject unsupported types
-- prefer lightweight magic-byte detection if feasible
+Goal:
+Clean up remaining ad-hoc audit payloads so audit events are consistently shaped.
 
-Behavior:
-- mismatch → reject or normalize
-- unsupported → 400
+Required behavior:
+1. Inspect current `audit_payloads.py` usage
+2. Find remaining ad-hoc payload construction in services/routes
+3. Normalize those into canonical payload builders
+4. At minimum, route the known ad-hoc integrity-related payloads through the central builder module
 
-Do not trust extension alone.
+Requirements:
+- preserve current event semantics
+- improve consistency of payload shape
+- avoid changing unrelated audit history patterns
 
-----------------------------------------
-E. FRONTEND/API CONTRACT CLEANUP
-----------------------------------------
-
-Ensure UI reflects backend truth:
-- show which docs have stored content
-- hide or disable invalid actions
-- avoid frontend guessing
-
-Add fields like:
-- has_stored_content (if needed)
+Do not:
+- redesign the entire audit system
+- break existing tests for audit events
 
 ----------------------------------------
-F. ADMIN / DEBUG TOOLING
+E. OPTIONAL ADMIN / DEBUG TOOLING
 ----------------------------------------
 
-Add ONE small tool:
-- document integrity summary OR
-- file existence check OR
-- per-record integrity overview
+Goal:
+Add one small operational tool that improves trust and diagnosability.
 
-Keep it minimal and secure.
+Pick the best fit after inspecting current repo patterns.
+
+Good options:
+1. Audit chain verification endpoint/service for a record or organization scope
+2. Storage consistency checker for a record
+3. Combined record evidence + audit integrity debug summary
+
+Preferred characteristics:
+- narrow
+- read-only
+- useful
+- secure
+- consistent with existing auth patterns
+
+Do not:
+- build a giant admin panel
+- dump internal paths directly to end users
+- expose unsafe filesystem details
 
 ----------------------------------------
-G. ALEMBIC (IF NEEDED)
+F. FRONTEND/API CONTRACT CLEANUP
 ----------------------------------------
 
-If schema changes occur:
-- create new incremental migration
-- do NOT modify baseline
+Goal:
+Reflect new content-delivery and cleanup capabilities in the UI without misleading users.
 
-If not:
-→ state clearly no migration needed
+Required behavior:
+1. Update frontend types and API helpers as needed
+2. Add UI affordance for upload-backed documents only:
+   - View / Download content if content endpoint is added
+3. Preserve explicit separation between:
+   - metadata-only docs
+   - upload-backed evidence
+4. Ensure delete flow updates UI state correctly
+5. Ensure integrity summary / content actions do not appear where they cannot work
+
+Do not:
+- expose actions the backend cannot fulfill
+- infer capability from brittle heuristics if backend can tell you directly
+
+If backend needs to expose a derived capability field for UI clarity, do so without adding unnecessary persisted schema.
+
+----------------------------------------
+G. FILE VALIDATION HARDENING (LIGHTWEIGHT ONLY)
+----------------------------------------
+
+Goal:
+Strengthen validation without overbuilding.
+
+Current known limitation:
+- magic-byte detection is header-oriented and intentionally lightweight
+
+Required behavior:
+1. Review current validation helper
+2. Improve safety where feasible without adding heavy infrastructure
+3. At minimum:
+   - keep current allowlist strict
+   - ensure server-detected type always wins
+   - make failure responses coherent
+4. If practical and low-risk:
+   - improve JPEG/PNG/PDF signature handling slightly
+   - centralize allowlist and detection behavior more clearly
+
+Do not:
+- add antivirus
+- add heavyweight parsing libraries unless absolutely necessary and justified
+- broaden supported file types casually
+
+If no meaningful safe improvement is needed, keep the current approach and state that clearly.
 
 ----------------------------------------
 H. TESTING
 ----------------------------------------
 
-Add/update tests for:
-- upload flow
-- file validation
-- integrity check
-- metadata vs real doc behavior
-- deletion cleanup
-- edge cases
+Extend the current test suite.
 
-Use existing patterns.
+At minimum add/update tests for:
+1. content endpoint returns data only for upload-backed docs
+2. content endpoint rejects metadata-only docs
+3. content endpoint respects org access boundaries
+4. streaming upload path computes correct hash and size
+5. oversize streaming upload aborts and cleans partial files
+6. record-level cleanup removes managed files safely
+7. cleanup does not delete outside storage root
+8. normalized audit payload builders are used for known ad-hoc cases
+9. any new admin/debug route behaves correctly
+
+Use existing test patterns and fixtures.
+Do not create a new framework.
+
+==================================================
+IMPLEMENTATION DISCOVERY STEPS
+==================================================
+
+Before editing:
+1. Read current backend files for:
+   - document routes
+   - record routes
+   - evidence storage helper
+   - document service
+   - audit payloads
+   - config
+   - migrations
+2. Read current frontend files for:
+   - records detail page
+   - API client
+   - shared types
+3. Determine whether a record delete route already exists.
+4. Determine whether document content serving already partially exists.
+5. Determine current testing patterns.
+
+Then implement the changes.
 
 ==================================================
 ACCEPTANCE CRITERIA
 ==================================================
 
-- real upload works from UI
-- integrity check visible in UI
-- metadata vs real docs clearly separated
-- deletion cleans up files safely
-- file validation improved
-- migrations handled correctly
-- tests pass
-- no runtime inconsistencies
+- upload-backed evidence can be retrieved securely through a real content endpoint
+- metadata-only documents do not expose invalid content actions
+- upload ingest no longer requires loading whole file into memory first
+- partial uploads are cleaned up on failure
+- evidence cleanup strategy for record/file lifecycle is materially improved
+- remaining ad-hoc audit payloads are normalized
+- frontend reflects new content capabilities correctly
+- tests cover the critical new behavior
+- imports are clean
+- no obvious runtime mismatch remains
 
 ==================================================
 OUTPUT FORMAT
