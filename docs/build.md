@@ -1,6 +1,6 @@
-You are acting as a staff-level full-stack engineer performing Phase 5 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
+You are acting as a staff-level full-stack engineer performing Phase 6 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
 
-Phase 1 through Phase 4 already landed. The repo now has:
+Phase 1 through Phase 5 already landed. The repo now has:
 - optimistic concurrency on records
 - tamper-evident audit chaining
 - stronger JWT claims/validation
@@ -18,22 +18,26 @@ Phase 1 through Phase 4 already landed. The repo now has:
 - streaming upload hashing and storage
 - record-level managed file cleanup
 - audit chain verification endpoint
+- inline preview UX for PDF / PNG / JPEG
+- range request support on the content endpoint
+- record-scoped evidence summary
+- org-scoped storage inventory endpoint
 
-Your job in Phase 5 is to improve evidence usability, lifecycle policy, and operational maturity without breaking the current architecture.
+Your job in Phase 6 is to improve access control, retention/cleanup operations, accessibility, and browser/app security posture without breaking the current architecture.
 
-This is not a rewrite. This is a focused product-hardening and operational-completion pass.
+This is not a rewrite. This is a focused security and operational-maturity pass.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Implement the following Phase 5 upgrades:
+Implement the following Phase 6 upgrades:
 
-1. Inline evidence preview UX for upload-backed documents
-2. Retention / storage lifecycle controls and cleanup tooling
-3. Record-scoped storage and integrity operational summary
-4. Optional range-request support for content delivery if it fits cleanly
-5. Defensive download/preview header hardening
+1. Short-lived signed content access flow for preview/download
+2. Safe orphan cleanup workflow and retention-oriented storage tooling
+3. Role-based protection for admin/debug reporting routes
+4. Accessibility pass for the preview modal and related evidence UI
+5. App-wide security header / CSP hardening where appropriate
 6. Tests covering the new behavior
 7. Explicit incremental Alembic migration only if schema changes are required
 
@@ -46,42 +50,45 @@ NON-NEGOTIABLE EXECUTION RULES
 1. Inspect the repo first.
    - Read the current backend and frontend structure fully.
    - Identify the actual files for:
+     - auth/security helpers
+     - user model / roles / auth dependencies
      - content delivery route
      - document routes
-     - record routes
+     - audit/storage inventory routes
      - evidence storage helper
      - document service
-     - record service
-     - audit/debug routes
      - config/settings
+     - app startup / middleware
      - frontend API helpers/types
      - record detail page
+     - preview modal UI
      - tests
      - migrations
-   - Confirm the current upload, verify, integrity-check, download, and delete flows before changing them.
+   - Confirm the current preview/download flow before changing it.
 
 2. Preserve the current architecture.
    - Keep FastAPI + SQLAlchemy + local evidence storage
    - Keep Next.js app structure as-is
    - Do not introduce cloud storage
    - Do not introduce background workers
-   - Do not redesign auth architecture
+   - Do not redesign the core auth architecture unless required for role checks
    - Do not redesign the data model unless truly necessary
 
 3. Prefer modifying existing files.
    - Avoid duplicate components and helpers
-   - Reuse current patterns for API calls, UI state, cards, tables, and error handling
+   - Reuse existing patterns for API calls, UI state, auth dependencies, and route organization
 
 4. Keep security and correctness ahead of convenience.
    - Do not expose raw filesystem paths
-   - Do not allow preview/download actions for metadata-only documents
+   - Do not allow unsafe cleanup of managed storage
    - Do not weaken existing org-scoped authorization
-   - Do not introduce unsafe cleanup that deletes files outside the managed storage root
+   - Do not create long-lived signed access that effectively bypasses auth
+   - Do not add destructive admin actions without deliberate safeguards
 
 5. No fake UX.
-   - Only show preview actions for content types actually supported by the frontend preview experience
-   - Do not show preview buttons for unsupported types unless the UI clearly falls back to download-only
-   - Do not imply retention policy exists if it does not
+   - If signed preview/download links are introduced, they must actually enforce expiry and scope
+   - If retention tooling is dry-run only, the UI and API must say so
+   - Do not imply automatic cleanup exists if only reporting exists
 
 6. No half-finished migration work.
    - If schema changes are needed, add a proper incremental Alembic revision
@@ -225,229 +232,235 @@ If NO schema change:
 → explicitly say: "No new migration required"
 
 ==================================================
-PHASE 5 REQUIREMENTS
+PHASE 6 REQUIREMENTS
 ==================================================
 
 ----------------------------------------
-A. INLINE EVIDENCE PREVIEW UX
+A. SHORT-LIVED SIGNED CONTENT ACCESS
 ----------------------------------------
 
 Goal:
-Allow users to preview supported upload-backed evidence directly from the record detail page instead of always downloading.
+Improve preview/download UX by allowing direct media loading without requiring the frontend to fetch the entire blob with a bearer token first.
+
+You must inspect the current auth and content-delivery implementation first.
 
 Required behavior:
-1. Inspect current document UI on the record detail page.
-2. Add preview support for at least:
-   - PDF
-   - PNG
-   - JPEG
-3. Preview should only be available for upload-backed documents with stored content.
-4. Metadata-only docs must not show preview actions.
-5. Unsupported content types should fall back to download-only.
+Implement a short-lived signed access flow for document content.
 
-Preferred UX:
-- “Preview” button per eligible document
-- modal, drawer, or inline panel using existing UI conventions
-- minimal and clean
-- preserve current document list usability
-
-Backend/API requirements:
-- reuse the secure content endpoint where appropriate
-- do not expose raw storage paths
-- preserve auth boundaries
-
-Implementation guidance:
-- For PDFs, an iframe or browser-native embed is acceptable if done safely
-- For images, object URL or blob-backed preview is acceptable
-- Reuse existing API helper patterns
-
-Do not:
-- build a giant document viewer
-- add a heavy PDF rendering framework unless absolutely necessary
-- expose preview for metadata-only documents
-
-----------------------------------------
-B. RETENTION / STORAGE LIFECYCLE CONTROLS
-----------------------------------------
-
-Goal:
-Start making evidence lifecycle operationally explicit.
-
-You must inspect current deletion and storage helpers first.
-
-Required behavior:
-Implement a lightweight, practical retention/control layer that fits the current local-storage architecture.
-
-Choose the best fit after inspecting the repo. Acceptable options include:
-
-Option 1: Record-level storage summary + stale/orphan cleanup helper
-Option 2: Manual cleanup endpoint/service for managed evidence not referenced by live rows
-Option 3: Retention policy configuration with dry-run reporting only
-
-Minimum acceptable Phase 5 outcome:
-- a safe way to identify orphaned managed files
-- a safe way to report storage footprint by record or org
-- optional cleanup action if it can be done safely within current architecture
+Preferred approach:
+1. Add a backend endpoint that issues a short-lived signed access token or signed URL descriptor for a specific document content request
+2. Add a content-serving path that validates the signed token and serves only the intended document, for a short time window
+3. Support both preview and download semantics safely
 
 Requirements:
-- never delete outside the managed storage root
-- distinguish live referenced files vs orphaned files
-- do not rely on DB row existence alone without checking managed storage state
-- keep it operationally useful, not theoretical
+- token/link must be short-lived
+- token/link must be scoped to:
+  - one document
+  - one disposition mode if appropriate
+  - one organization or user context if feasible within existing auth model
+- signed content route must still enforce managed-path safety
+- metadata-only documents must not be eligible
+- do not expose filesystem paths
+- signed access must not become a general auth bypass
 
-Preferred design:
-- centralize filesystem scanning in `evidence_storage.py`
-- keep destructive cleanup opt-in and safe
-- if automatic deletion is risky, provide dry-run reporting instead
+Good acceptable options:
+- JWT-like signed content token
+- HMAC-signed query parameters with expiry
+- another lightweight signed mechanism that fits the repo
 
-Do not:
-- build a scheduler
-- build a full quota management system
-- overpromise retention guarantees
-
-----------------------------------------
-C. RECORD-SCOPED OPERATIONAL SUMMARY
-----------------------------------------
-
-Goal:
-Give operators a concise view of evidence/storage/integrity state for a record.
-
-Required behavior:
-Add a read-only backend summary for a single record that includes useful operational information, such as:
-- document count
-- upload-backed count
-- metadata-only count
-- total stored bytes for managed evidence
-- integrity-check-able count
-- missing-content count
-- last verification state summary if feasible
-- optionally download/preview capability indicators
-
-Preferred route:
-- GET /api/records/{id}/evidence-summary
-or equivalent consistent with current route style
+Preferred route style:
+- POST /api/documents/{id}/signed-access
+- GET /api/documents/content/signed?...   or equivalent
 
 Frontend:
-- surface this summary on the record detail page in a lightweight way
-- do not clutter the UI
-- integrate with existing document/status area
+- update preview/download flow to use short-lived signed access for upload-backed docs where appropriate
+- reduce or eliminate full-blob prefetch for preview if cleanly possible
 
 Do not:
-- dump raw storage URIs
-- create a huge analytics dashboard
-- mix this up with workflow evaluation status
+- create long-lived tokens
+- persist signed links unnecessarily
+- weaken org/user scoping
+- add a full CDN architecture
 
 ----------------------------------------
-D. OPTIONAL RANGE REQUEST SUPPORT
+B. SAFE ORPHAN CLEANUP / RETENTION TOOLING
 ----------------------------------------
 
 Goal:
-Improve content serving for PDFs and large files, but only if it fits cleanly.
+Move from orphan reporting to a safe operational cleanup workflow.
 
-You must inspect the current content endpoint first.
-
-If range support can be added cleanly without destabilizing the route:
-- support basic `Range` handling for content delivery
-- especially useful for PDF preview/browser-native viewing
-
-If it cannot be added safely within scope:
-- do not force it
-- keep the endpoint correct and document that range support is deferred
-
-Requirements if implemented:
-- preserve org-scoped authorization
-- preserve managed-path safety checks
-- return correct partial content semantics
-- do not expose internal paths
-
-Do not:
-- implement a broken partial-content layer
-- guess at HTTP range semantics
-
-----------------------------------------
-E. DOWNLOAD/PREVIEW HEADER HARDENING
-----------------------------------------
-
-Goal:
-Tighten content response behavior.
+You must inspect existing storage inventory behavior first.
 
 Required behavior:
-Review and improve headers for content delivery and preview.
+Implement a safe, bounded cleanup capability for managed orphaned files OR a structured dry-run + explicit cleanup workflow.
 
-Consider:
-- Content-Disposition
-- Content-Type
-- Cache-Control
-- X-Content-Type-Options: nosniff
-- inline vs attachment semantics depending on preview/download flow
+Preferred design:
+1. Add a dry-run report for orphaned managed files
+2. Add a separate explicit cleanup action that only removes:
+   - files under the managed root
+   - files not referenced by any live document row
+3. Return counts/totals, not raw internal paths unless the route is clearly admin-only and even then be cautious
 
 Requirements:
-- header behavior must be deliberate
-- preview and download should behave predictably
-- do not weaken current safety posture
+- must never delete outside the managed storage root
+- must only consider files managed by the app
+- must tolerate race conditions where a file disappears between scan and delete
+- must be scoped safely
+- cleanup should be deliberate, not automatic by default
+
+Preferred route shape:
+- GET /api/audit/storage-inventory   existing report
+- POST /api/audit/storage-cleanup?dry_run=true|false   or equivalent
+
+If destructive cleanup is added:
+- require admin-level protection
+- return structured counts:
+  - files_examined
+  - orphaned_found
+  - orphaned_deleted
+  - bytes_reclaimed
+  - errors
 
 Do not:
-- rely on browser guesswork
-- expose unsafe filenames
+- automatically sweep at startup
+- build a scheduler
+- delete files referenced by live rows
+- trust unvalidated storage URIs
 
 ----------------------------------------
-F. ADMIN / DEBUG TOOLING
+C. ROLE-BASED PROTECTION FOR ADMIN/DEBUG ROUTES
 ----------------------------------------
 
 Goal:
-Add one small operational tool that helps validate storage state.
+Stop treating all authenticated users the same for operational routes.
 
-Pick one best-fit addition after inspecting current tooling.
-
-Good options:
-1. Managed storage inventory summary
-2. Orphaned-file dry-run report
-3. Record evidence audit/storage combined summary
-4. Organization storage summary
-
-Preferred characteristics:
-- read-only by default
-- narrow
-- useful
-- secure
-- consistent with current auth patterns
-
-Do not:
-- build a giant admin panel
-- dump filesystem internals casually
-- create destructive tooling unless very clearly safe
-
-----------------------------------------
-G. FRONTEND/API CONTRACT CLEANUP
-----------------------------------------
-
-Goal:
-Reflect preview/download/storage summary capabilities correctly in the UI.
+You must inspect the current auth dependency and user/role model first.
 
 Required behavior:
-1. Update frontend types and API helpers as needed
-2. Add preview/download actions only where supported
-3. Render metadata-only vs upload-backed distinction clearly
-4. Surface evidence summary data coherently
-5. Keep UI capability-driven, not heuristic-driven
+Protect admin/debug routes such as:
+- audit chain verification
+- storage inventory
+- storage cleanup if added
+- any other operational-only routes
 
-If backend needs to expose derived fields for clarity, do so without unnecessary persisted schema.
+Requirements:
+- use existing role model if present
+- if roles already exist, wire proper authorization checks
+- if a minimal admin role concept already exists but is unused, activate it
+- if no viable role mechanism exists, add the smallest correct role-based guard consistent with the current auth model
+
+Preferred behavior:
+- normal users can access record/document routes within their org
+- admin/debug routes require elevated role
+
+Do not:
+- redesign the full RBAC model unless necessary
+- add giant permissions matrices
+- leave operational routes broadly exposed
+
+If schema changes are required for roles:
+- use a proper incremental migration
+- keep the change minimal
 
 ----------------------------------------
-H. TESTING
+D. ACCESSIBILITY PASS FOR PREVIEW MODAL / EVIDENCE UI
+----------------------------------------
+
+Goal:
+Fix the known accessibility weakness in the preview UX.
+
+Required behavior:
+Improve the preview modal and related controls so they behave more like a real accessible dialog.
+
+At minimum:
+- keyboard focus moves into the modal on open
+- Escape closes the modal
+- focus returns to the trigger on close
+- tab focus stays trapped inside the modal while open
+- dialog has appropriate labels / semantics
+- close control is keyboard accessible
+
+Also review:
+- button labels for Preview / Download / Integrity check
+- status chips for metadata-only docs
+- screen-reader-friendly text where needed
+
+Do not:
+- introduce a giant component library unless already present
+- rebuild the whole page layout
+
+Preferred approach:
+- use current frontend patterns
+- keep modal lightweight and accessible
+
+----------------------------------------
+E. APP-WIDE SECURITY HEADER / CSP HARDENING
+----------------------------------------
+
+Goal:
+Improve browser-facing security posture at the app level.
+
+You must inspect current FastAPI app startup / middleware first.
+
+Required behavior:
+Add deliberate application-level security headers where appropriate.
+
+Consider:
+- Content-Security-Policy
+- X-Frame-Options or frame-ancestors via CSP
+- Referrer-Policy if not already app-wide
+- X-Content-Type-Options if not already app-wide
+- Permissions-Policy where practical
+
+Requirements:
+- do not break the current preview flow
+- if PDF/image preview requires inline rendering, ensure CSP is compatible
+- keep the policy realistic for the current app
+- avoid a fake “secure headers” patch that breaks functionality
+
+Preferred outcome:
+- app-level middleware or equivalent sets a coherent baseline
+- content route can still apply route-specific headers if needed
+
+Do not:
+- add a CSP that breaks the frontend
+- claim security hardening without validating app behavior after the change
+
+----------------------------------------
+F. FRONTEND/API CONTRACT CLEANUP
+----------------------------------------
+
+Goal:
+Reflect signed access, admin scoping, and preview improvements correctly in the UI.
+
+Required behavior:
+1. Update frontend API helpers and types as needed
+2. Prefer signed access flow for preview/download if implemented
+3. Ensure metadata-only docs never offer false preview/download actions
+4. Keep capability-driven rendering
+5. If admin-only features are surfaced in UI, show them only when appropriate
+
+Do not:
+- assume admin status without backend truth
+- leave stale blob/object URL cleanup bugs behind
+- create inconsistent fallback behavior
+
+----------------------------------------
+G. TESTING
 ----------------------------------------
 
 Extend the current test suite.
 
 At minimum add/update tests for:
-1. preview/download endpoint behavior for upload-backed docs
-2. metadata-only docs do not expose false preview/download capabilities
-3. evidence summary returns coherent counts and totals
-4. storage/orphan reporting works correctly
-5. any cleanup tooling is safe and root-bounded
-6. range support if implemented
-7. header behavior is deliberate and correct
-8. frontend-facing API contract remains consistent
+1. signed content access succeeds for the intended document and expires correctly
+2. signed access cannot be reused outside scope or after expiry
+3. metadata-only docs cannot get signed access
+4. admin/debug routes are denied to non-admins
+5. storage cleanup dry-run vs destructive mode behaves correctly
+6. cleanup never deletes outside managed storage root
+7. accessibility-critical frontend behavior is at least covered where current test setup allows, or clearly explain if frontend test infra is absent
+8. app-level security headers are present and do not break core content flows
+9. range/preview/download still work after the signed-access and header changes
 
 Use existing test patterns and fixtures.
 Do not create a new framework.
@@ -458,20 +471,22 @@ IMPLEMENTATION DISCOVERY STEPS
 
 Before editing:
 1. Read current backend files for:
-   - documents content route
-   - record routes
+   - auth/security helpers
+   - user model / roles
+   - document routes
+   - audit routes
    - evidence storage helper
-   - document service
-   - audit/debug routes
+   - app startup / middleware
    - config
    - migrations
 2. Read current frontend files for:
    - records detail page
    - API client
    - shared types
-3. Determine whether current content endpoint is suitable for preview reuse.
-4. Determine current storage helper capabilities and whether orphan scanning exists.
-5. Determine current testing patterns.
+   - preview modal implementation
+3. Determine whether any role mechanism already exists.
+4. Determine whether signed access can reuse existing token utilities safely.
+5. Determine current testing patterns for backend and frontend.
 
 Then implement the changes.
 
@@ -479,12 +494,12 @@ Then implement the changes.
 ACCEPTANCE CRITERIA
 ==================================================
 
-- supported upload-backed evidence can be previewed in the UI
-- metadata-only docs never expose false preview actions
-- record-level evidence summary exists and is useful
-- storage/orphan tooling materially improves operational visibility
-- header behavior for content delivery is deliberate and hardened
-- range support is either implemented correctly or explicitly deferred
+- upload-backed evidence can be previewed/downloaded through a short-lived signed access flow or an equally safe direct mechanism
+- metadata-only docs cannot obtain content access
+- orphan cleanup workflow is safe, deliberate, and root-bounded
+- admin/debug routes are no longer broadly exposed
+- preview modal accessibility is materially improved
+- app-level security headers are deliberate and compatible with current behavior
 - tests cover the critical new behavior
 - imports are clean
 - no obvious runtime mismatch remains
