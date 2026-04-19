@@ -13,7 +13,6 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core import evidence_storage
 from app.models.enums import DocumentType
 
@@ -110,6 +109,28 @@ def update_record(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
     return record
+
+
+@router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_record(
+    record_id: int,
+    expected_version: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        deleted = record_service.delete_record(
+            db,
+            actor=current_user,
+            record_id=record_id,
+            expected_version=expected_version,
+        )
+    except record_service.VersionConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    return None
 
 
 @router.post("/{record_id}/evaluate", response_model=EvaluationDecisionRead)
@@ -236,20 +257,13 @@ async def upload_document_file(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
 
-    content = await file.read()
-    max_bytes = get_settings().max_upload_bytes
-    if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds maximum upload size of {max_bytes} bytes",
-        )
     try:
-        return document_service.upload_file_document(
+        return await document_service.upload_file_stream(
             db,
             actor=current_user,
             record=record,
             document_type=document_type,
-            content=content,
+            reader=file,
             original_filename=file.filename,
             mime_type=file.content_type,
             label=label,

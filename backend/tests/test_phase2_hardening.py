@@ -143,14 +143,16 @@ def test_ingest_rejects_overlong_payload(
     from app.core.config import get_settings
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "max_upload_bytes", 16, raising=False)
+    # Bigger than the head peek (32 bytes) so type detection succeeds but
+    # the streaming writer still trips the size limit.
+    monkeypatch.setattr(settings, "max_upload_bytes", 48, raising=False)
 
     record = _create_record(client, auth_headers, _workflow(db_session).id)
     response = client.post(
         f"/api/records/{record['id']}/documents/upload",
         headers=auth_headers,
         data={"document_type": "photo_id"},
-        files={"file": ("big.bin", b"0" * 64, "application/octet-stream")},
+        files={"file": ("big.png", PNG_HEADER + b"X" * 256, "image/png")},
     )
     assert response.status_code == 413
 

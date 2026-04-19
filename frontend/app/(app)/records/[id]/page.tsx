@@ -336,6 +336,31 @@ export default function RecordDetailPage() {
     }
   }
 
+  async function handleDownload(doc: DocumentRead) {
+    setBusyDocId(doc.id);
+    setFlash(null);
+    try {
+      const blob = await documents.fetchContent(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        doc.original_filename ||
+        `document-${doc.id}.${(doc.mime_type ?? "application/octet-stream").split("/").pop()}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setFlash({
+        kind: "error",
+        text: err instanceof ApiError ? err.detail ?? err.message : "Download failed.",
+      });
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
   if (loading && !record) {
     return (
       <div className="space-y-6">
@@ -753,6 +778,7 @@ export default function RecordDetailPage() {
                           onReject={handleReject}
                           onDelete={handleDelete}
                           onIntegrityCheck={handleIntegrityCheck}
+                          onDownload={handleDownload}
                         />
                       )}
                     </div>
@@ -787,6 +813,7 @@ export default function RecordDetailPage() {
                       onReject={handleReject}
                       onDelete={handleDelete}
                       onIntegrityCheck={handleIntegrityCheck}
+                      onDownload={handleDownload}
                     />
                   </div>
                 ))}
@@ -828,6 +855,7 @@ function DocumentRows({
   onReject,
   onDelete,
   onIntegrityCheck,
+  onDownload,
 }: {
   docs: DocumentRead[];
   busyDocId: number | null;
@@ -836,6 +864,7 @@ function DocumentRows({
   onReject: (doc: DocumentRead) => void;
   onDelete: (doc: DocumentRead) => void;
   onIntegrityCheck: (doc: DocumentRead) => void;
+  onDownload: (doc: DocumentRead) => void;
 }) {
   return (
     <ul className="divide-y divide-surface-border">
@@ -934,6 +963,17 @@ function DocumentRows({
                   title="Compare stored bytes against the ingest hash"
                 >
                   {busy ? "…" : "Integrity check"}
+                </button>
+              ) : null}
+              {stored ? (
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={() => onDownload(doc)}
+                  disabled={busy}
+                  title="Download the stored evidence"
+                >
+                  {busy ? "…" : "Download"}
                 </button>
               ) : null}
               {doc.status !== "rejected" ? (

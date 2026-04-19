@@ -112,6 +112,11 @@ export const records = {
         expected_version: expectedVersion,
       },
     }),
+  remove: (id: number, expectedVersion: number) =>
+    request<void>(
+      `/records/${id}?expected_version=${encodeURIComponent(expectedVersion)}`,
+      { method: "DELETE" }
+    ),
 };
 
 // --- documents ----------------------------------------------------------
@@ -196,6 +201,32 @@ export const documents = {
     request<RecordIntegritySummary>(
       `/records/${recordId}/integrity-summary`
     ),
+  // The `/content` endpoint is plain HTTP because browsers handle the
+  // blob download directly. We expose a URL builder + auth header so a
+  // caller can trigger a download without inlining fetch logic.
+  contentUrl: (documentId: number) =>
+    `${API_BASE_URL}/documents/${documentId}/content`,
+  fetchContent: async (documentId: number): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const token = readToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const response = await fetch(
+      `${API_BASE_URL}/documents/${documentId}/content`,
+      { headers, cache: "no-store" }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      let detail = response.statusText;
+      try {
+        const parsed = JSON.parse(text) as { detail?: string };
+        if (parsed && typeof parsed.detail === "string") detail = parsed.detail;
+      } catch {
+        // body was not JSON
+      }
+      throw new ApiError(response.status, detail, detail);
+    }
+    return response.blob();
+  },
 };
 
 // --- audit ---------------------------------------------------------------

@@ -67,6 +67,62 @@ def compute_entry_hash(
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def verify_chain(
+    db: Session, organization_id: Optional[int]
+) -> Dict[str, Any]:
+    """Walk every audit row in the organization scope and report any
+    entries whose stored hash does not match a recomputed one, or whose
+    `previous_hash` does not match the prior row's `entry_hash`.
+
+    Returns a dict (suitable for direct JSON serialization). The check
+    is read-only; it never mutates audit rows.
+    """
+    stmt = (
+        select(AuditLog)
+        .where(AuditLog.organization_id == organization_id)
+        .order_by(AuditLog.id.asc())
+    )
+    rows = list(db.execute(stmt).scalars().all())
+    broken_entries: list[Dict[str, Any]] = []
+    broken_links: list[Dict[str, Any]] = []
+    prev_hash: Optional[str] = None
+    for row in rows:
+        recomputed = compute_entry_hash(
+            previous_hash=row.previous_hash,
+            action=row.action,
+            entity_type=row.entity_type,
+            entity_id=row.entity_id,
+            organization_id=row.organization_id,
+            actor_user_id=row.actor_user_id,
+            record_id=row.record_id,
+            payload=row.payload,
+        )
+        if recomputed != row.entry_hash:
+            broken_entries.append(
+                {
+                    "audit_id": row.id,
+                    "stored_entry_hash": row.entry_hash,
+                    "recomputed_entry_hash": recomputed,
+                }
+            )
+        if row.previous_hash != prev_hash:
+            broken_links.append(
+                {
+                    "audit_id": row.id,
+                    "stored_previous_hash": row.previous_hash,
+                    "expected_previous_hash": prev_hash,
+                }
+            )
+        prev_hash = row.entry_hash
+    return {
+        "organization_id": organization_id,
+        "checked": len(rows),
+        "ok": not broken_entries and not broken_links,
+        "broken_entries": broken_entries,
+        "broken_links": broken_links,
+    }
+
+
 def record_event(
     db: Session,
     *,

@@ -1,7 +1,11 @@
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core import evidence_storage
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.document import (
@@ -90,6 +94,49 @@ def integrity_check(
         is_match=result.is_match,
         checked_at=result.checked_at,
         message=result.message,
+    )
+
+
+_CD_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _content_disposition_filename(document) -> str:
+    """Return a safe ASCII filename suitable for Content-Disposition."""
+    raw = document.original_filename or f"document-{document.id}"
+    cleaned = _CD_SAFE.sub("_", raw).strip("._") or f"document-{document.id}"
+    return cleaned[:200]
+
+
+@router.get("/{document_id}/content")
+async def download_document_content(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        doc, _path = document_service.resolve_content_for_download(
+            db, actor=current_user, document_id=document_id
+        )
+    except document_service.DocumentNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except document_service.DocumentAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except document_service.DocumentContentMissing as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    filename = _content_disposition_filename(doc)
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+    if doc.size_bytes is not None:
+        headers["Content-Length"] = str(doc.size_bytes)
+    media_type = doc.mime_type or "application/octet-stream"
+    return StreamingResponse(
+        evidence_storage.iter_stored_chunks(doc.storage_uri),
+        media_type=media_type,
+        headers=headers,
     )
 
 

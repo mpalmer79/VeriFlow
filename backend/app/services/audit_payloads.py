@@ -149,3 +149,19 @@ def document_deleted(
         "deleted_by": deleted_by,
         "stored_content_removed": stored_content_removed,
     }
+
+
+def document_integrity_failed(
+    *,
+    document: Document,
+    expected_content_hash: str,
+    actual_content_hash: str,
+) -> Dict[str, Any]:
+    return {
+        "record_id": document.record_id,
+        "document_id": document.id,
+        "document_type": document.document_type.value,
+        "document_status": document.status.value,
+        "expected_content_hash": expected_content_hash,
+        "actual_content_hash": actual_content_hash,
+    }

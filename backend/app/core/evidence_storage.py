@@ -123,6 +123,113 @@ def store_bytes(content: bytes) -> StoredObject:
     )
 
 
+_STREAM_CHUNK = 64 * 1024
+# How many bytes we peek before committing a storage file, used for content
+# type detection. All of our current magic headers fit in 8 bytes, so 32 is
+# a generous cushion.
+_TYPE_PEEK_BYTES = 32
+
+
+async def store_stream(
+    reader,
+    *,
+    client_mime: Optional[str] = None,
+) -> tuple[StoredObject, str]:
+    """Stream an upload to disk, hashing in chunks, without loading the
+    whole payload into memory.
+
+    `reader` must be an async object with a `.read(n)` coroutine that
+    returns `bytes` (FastAPI's `UploadFile` satisfies this). The function:
+
+    - peeks the first bytes to run content-type detection before anything
+      touches the filesystem
+    - writes the rest incrementally, updating a SHA-256 accumulator and
+      tracking the total byte count
+    - aborts cleanly (deleting the partial file) on empty payload,
+      oversize payload, or any unexpected I/O error
+    - returns a `StoredObject` plus the canonical detected MIME type
+    """
+    settings = get_settings()
+    max_bytes = settings.max_upload_bytes
+
+    head = await reader.read(_TYPE_PEEK_BYTES)
+    if not head:
+        raise EmptyPayload("File payload is empty")
+
+    detected_mime = detect_content_type(head, client_mime)
+
+    root = _storage_root()
+    storage_name = f"{uuid.uuid4().hex}.bin"
+    absolute_path = root / storage_name
+    hasher = hashlib.sha256()
+    total = 0
+
+    try:
+        # `x` mode is exclusive-create; a collision on the UUID would be
+        # catastrophic but also astronomically unlikely.
+        with absolute_path.open("xb") as out:
+            hasher.update(head)
+            total += len(head)
+            if total > max_bytes:
+                raise PayloadTooLarge(
+                    f"File exceeds maximum upload size ({total} > {max_bytes} bytes)"
+                )
+            out.write(head)
+            while True:
+                chunk = await reader.read(_STREAM_CHUNK)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise PayloadTooLarge(
+                        f"File exceeds maximum upload size ({total} > {max_bytes} bytes)"
+                    )
+                hasher.update(chunk)
+                out.write(chunk)
+    except BaseException:
+        # Any failure (size exceeded, I/O error, cancellation) must leave
+        # no orphan file on disk.
+        try:
+            absolute_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    if total == 0:
+        try:
+            absolute_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise EmptyPayload("File payload is empty")
+
+    return (
+        StoredObject(
+            storage_uri=_build_local_uri(absolute_path),
+            absolute_path=absolute_path,
+            size_bytes=total,
+            content_hash=hasher.hexdigest(),
+        ),
+        detected_mime,
+    )
+
+
+async def iter_stored_chunks(storage_uri: Optional[str], chunk_size: int = _STREAM_CHUNK):
+    """Async generator yielding successive file chunks for a local storage URI.
+
+    Returns nothing if the URI is not local or the file is missing. The
+    caller is expected to verify access before iterating.
+    """
+    path = resolve_local_path(storage_uri)
+    if path is None:
+        return
+    with path.open("rb") as source:
+        while True:
+            chunk = source.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+
 def is_local_uri(storage_uri: Optional[str]) -> bool:
     return bool(storage_uri and storage_uri.startswith(LOCAL_URI_PREFIX))
 
@@ -205,6 +312,8 @@ __all__ = [
     "LOCAL_URI_PREFIX",
     "ALLOWED_CONTENT_TYPES",
     "store_bytes",
+    "store_stream",
+    "iter_stored_chunks",
     "is_local_uri",
     "resolve_local_path",
     "read_stored_bytes",
