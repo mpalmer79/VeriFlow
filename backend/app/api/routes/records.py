@@ -24,6 +24,7 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentRead,
     DocumentStatusResponse,
+    EvidenceSummaryResponse,
     IntegrityCheckResponse,
     RecordIntegritySummaryResponse,
 )
@@ -343,6 +344,24 @@ def record_integrity_summary(
             for r in results
         ],
     )
+
+
+@router.get(
+    "/{record_id}/evidence-summary",
+    response_model=EvidenceSummaryResponse,
+)
+def evidence_summary(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    summary = document_service.evidence_summary(
+        db, actor=current_user, record=record
+    )
+    return EvidenceSummaryResponse(**summary.__dict__)
 
 
 @router.get("/{record_id}/document-status", response_model=DocumentStatusResponse)

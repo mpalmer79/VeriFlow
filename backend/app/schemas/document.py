@@ -70,6 +70,18 @@ class RecordIntegritySummaryResponse(BaseModel):
     documents: List[IntegrityCheckResponse]
 
 
+class EvidenceSummaryResponse(BaseModel):
+    record_id: int
+    documents_total: int
+    upload_backed: int
+    metadata_only: int
+    verified: int
+    rejected: int
+    integrity_checkable: int
+    missing_content: int
+    stored_bytes: int
+
+
 class DocumentStatusResponse(BaseModel):
     """See `document_service.DocumentStatusSummary` for field semantics.
 

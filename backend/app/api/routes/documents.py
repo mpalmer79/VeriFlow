@@ -1,6 +1,7 @@
 import re
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -98,6 +99,11 @@ def integrity_check(
 
 
 _CD_SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+_RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+PREVIEWABLE_CONTENT_TYPES: frozenset[str] = frozenset(
+    {"application/pdf", "image/png", "image/jpeg"}
+)
 
 
 def _content_disposition_filename(document) -> str:
@@ -107,14 +113,59 @@ def _content_disposition_filename(document) -> str:
     return cleaned[:200]
 
 
+def _parse_range_header(value: str, file_size: int) -> Optional[tuple[int, int]]:
+    """Parse a single-range `Range: bytes=start-end` header.
+
+    Returns `(start, end)` inclusive on success, `None` when the header is
+    present but unusable (caller should respond 416). Multiple ranges are
+    deliberately not supported in this phase; we treat any multi-range
+    header as unusable.
+    """
+    if "," in value:
+        return None
+    match = _RANGE_RE.match(value.strip())
+    if not match:
+        return None
+    raw_start, raw_end = match.group(1), match.group(2)
+    if file_size <= 0:
+        return None
+    if raw_start == "" and raw_end == "":
+        return None
+    if raw_start == "":
+        # Suffix range: last N bytes.
+        suffix = int(raw_end)
+        if suffix <= 0:
+            return None
+        start = max(0, file_size - suffix)
+        end = file_size - 1
+    else:
+        start = int(raw_start)
+        end = int(raw_end) if raw_end else file_size - 1
+    if start < 0 or start >= file_size or end < start:
+        return None
+    if end >= file_size:
+        end = file_size - 1
+    return start, end
+
+
+_BASE_CONTENT_HEADERS: dict[str, str] = {
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store, max-age=0",
+    "Referrer-Policy": "no-referrer",
+    "Accept-Ranges": "bytes",
+}
+
+
 @router.get("/{document_id}/content")
 async def download_document_content(
     document_id: int,
+    disposition: str = Query("attachment", pattern="^(attachment|inline)$"),
+    range_header: Optional[str] = Header(default=None, alias="Range"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     try:
-        doc, _path = document_service.resolve_content_for_download(
+        doc, path = document_service.resolve_content_for_download(
             db, actor=current_user, document_id=document_id
         )
     except document_service.DocumentNotFound as exc:
@@ -126,13 +177,56 @@ async def download_document_content(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
 
+    try:
+        file_size = path.stat().st_size
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored content is missing or unreadable.",
+        ) from exc
+
     filename = _content_disposition_filename(doc)
-    headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
-    }
-    if doc.size_bytes is not None:
-        headers["Content-Length"] = str(doc.size_bytes)
     media_type = doc.mime_type or "application/octet-stream"
+
+    # Inline delivery is only offered for content types the frontend can
+    # render safely; everything else is delivered as an attachment even if
+    # the caller asked for inline.
+    effective_disposition = (
+        "inline"
+        if disposition == "inline" and media_type in PREVIEWABLE_CONTENT_TYPES
+        else "attachment"
+    )
+
+    headers = dict(_BASE_CONTENT_HEADERS)
+    headers["Content-Disposition"] = (
+        f'{effective_disposition}; filename="{filename}"'
+    )
+
+    parsed_range: Optional[tuple[int, int]] = None
+    if range_header:
+        parsed_range = _parse_range_header(range_header, file_size)
+        if parsed_range is None:
+            # Malformed or unsatisfiable range -> 416 with Content-Range: */size.
+            raise HTTPException(
+                status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+                detail="Invalid Range header",
+                headers={"Content-Range": f"bytes */{file_size}"},
+            )
+
+    if parsed_range is not None:
+        start, end = parsed_range
+        headers["Content-Range"] = f"bytes {start}-{end}/{file_size}"
+        headers["Content-Length"] = str(end - start + 1)
+        return StreamingResponse(
+            evidence_storage.iter_stored_chunks(
+                doc.storage_uri, start=start, end=end
+            ),
+            media_type=media_type,
+            headers=headers,
+            status_code=status.HTTP_206_PARTIAL_CONTENT,
+        )
+
+    headers["Content-Length"] = str(file_size)
     return StreamingResponse(
         evidence_storage.iter_stored_chunks(doc.storage_uri),
         media_type=media_type,

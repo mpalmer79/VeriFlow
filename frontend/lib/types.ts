@@ -152,6 +152,18 @@ export interface RecordIntegritySummary {
   documents: IntegrityCheckResult[];
 }
 
+export interface EvidenceSummary {
+  record_id: number;
+  documents_total: number;
+  upload_backed: number;
+  metadata_only: number;
+  verified: number;
+  rejected: number;
+  integrity_checkable: number;
+  missing_content: number;
+  stored_bytes: number;
+}
+
 export interface DocumentStatusResponse {
   required_types: DocumentType[];
   present_types: DocumentType[];

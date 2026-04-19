@@ -213,8 +213,17 @@ async def store_stream(
     )
 
 
-async def iter_stored_chunks(storage_uri: Optional[str], chunk_size: int = _STREAM_CHUNK):
+async def iter_stored_chunks(
+    storage_uri: Optional[str],
+    chunk_size: int = _STREAM_CHUNK,
+    *,
+    start: int = 0,
+    end: Optional[int] = None,
+):
     """Async generator yielding successive file chunks for a local storage URI.
+
+    `start` and `end` (inclusive) bound the slice of the file returned,
+    matching HTTP byte-range semantics. `end=None` streams to EOF.
 
     Returns nothing if the URI is not local or the file is missing. The
     caller is expected to verify access before iterating.
@@ -222,12 +231,45 @@ async def iter_stored_chunks(storage_uri: Optional[str], chunk_size: int = _STRE
     path = resolve_local_path(storage_uri)
     if path is None:
         return
+    if start < 0:
+        start = 0
     with path.open("rb") as source:
+        if start:
+            source.seek(start)
+        remaining: Optional[int] = None
+        if end is not None:
+            remaining = max(0, end - start + 1)
         while True:
-            chunk = source.read(chunk_size)
+            read_size = chunk_size if remaining is None else min(chunk_size, remaining)
+            if read_size <= 0:
+                break
+            chunk = source.read(read_size)
             if not chunk:
                 break
+            if remaining is not None:
+                remaining -= len(chunk)
             yield chunk
+
+
+def iter_managed_files():
+    """Yield `(absolute_path, size_bytes)` tuples for every managed evidence
+    file living directly under the configured storage root.
+
+    Returns an empty iterator if the storage root does not exist yet. The
+    iteration is deliberately non-recursive: `store_stream` / `store_bytes`
+    only ever write at the root level.
+    """
+    root = _storage_root()
+    if not root.exists():
+        return
+    for entry in root.iterdir():
+        if not entry.is_file():
+            continue
+        try:
+            size = entry.stat().st_size
+        except OSError:
+            continue
+        yield entry, size
 
 
 def is_local_uri(storage_uri: Optional[str]) -> bool:
@@ -314,6 +356,7 @@ __all__ = [
     "store_bytes",
     "store_stream",
     "iter_stored_chunks",
+    "iter_managed_files",
     "is_local_uri",
     "resolve_local_path",
     "read_stored_bytes",

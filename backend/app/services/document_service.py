@@ -71,6 +71,25 @@ class IntegrityCheckResult:
 
 
 @dataclass(frozen=True)
+class EvidenceSummary:
+    """Operational snapshot of a record's evidence.
+
+    Counts are small integers; totals are raw byte counts. Intended for
+    at-a-glance operational panels, not for analytics aggregations.
+    """
+
+    record_id: int
+    documents_total: int
+    upload_backed: int
+    metadata_only: int
+    verified: int
+    rejected: int
+    integrity_checkable: int
+    missing_content: int
+    stored_bytes: int
+
+
+@dataclass(frozen=True)
 class DocumentStatusSummary:
     """Explicit, non-overlapping view of a record's document evidence.
 
@@ -543,6 +562,63 @@ def resolve_content_for_download(
             f"Document {doc.id} has no resolvable stored content."
         )
     return doc, path
+
+
+def evidence_summary(
+    db: Session,
+    *,
+    actor: User,
+    record: Record,
+) -> EvidenceSummary:
+    """Compute an operational snapshot of the record's evidence state.
+
+    `stored_bytes` only counts bytes that actually exist on disk inside
+    the managed storage root; `missing_content` flags rows whose
+    `storage_uri` looks local but whose file has vanished.
+    """
+    if record.organization_id != actor.organization_id:
+        raise DocumentAccessDenied("Record does not belong to this organization")
+
+    docs = document_repository.list_for_record(db, record.id)
+    upload_backed = 0
+    metadata_only = 0
+    verified = 0
+    rejected = 0
+    integrity_checkable = 0
+    missing_content = 0
+    stored_bytes = 0
+
+    for doc in docs:
+        if doc.status == DocumentStatus.VERIFIED:
+            verified += 1
+        if doc.status == DocumentStatus.REJECTED:
+            rejected += 1
+        if doc.has_stored_content:
+            upload_backed += 1
+            resolved = evidence_storage.resolve_local_path(doc.storage_uri)
+            if resolved is None:
+                missing_content += 1
+            else:
+                if doc.content_hash is not None:
+                    integrity_checkable += 1
+                try:
+                    stored_bytes += resolved.stat().st_size
+                except OSError:
+                    missing_content += 1
+        else:
+            metadata_only += 1
+
+    return EvidenceSummary(
+        record_id=record.id,
+        documents_total=len(docs),
+        upload_backed=upload_backed,
+        metadata_only=metadata_only,
+        verified=verified,
+        rejected=rejected,
+        integrity_checkable=integrity_checkable,
+        missing_content=missing_content,
+        stored_bytes=stored_bytes,
+    )
 
 
 def record_integrity_summary(

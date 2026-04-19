@@ -12,6 +12,7 @@ import type {
   DocumentType,
   EvaluationDecision,
   EvaluationIssue,
+  EvidenceSummary,
   IntegrityCheckResult,
   RecordRead,
   RuleEvaluationRow,
@@ -74,6 +75,14 @@ export default function RecordDetailPage() {
   const [integrityResults, setIntegrityResults] = useState<
     Record<number, IntegrityCheckResult>
   >({});
+  const [evidenceSummary, setEvidenceSummary] = useState<EvidenceSummary | null>(null);
+  const [preview, setPreview] = useState<{
+    objectUrl: string;
+    mimeType: string;
+    filename: string;
+    documentId: number;
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const refreshAll = useCallback(
     async (opts: { silent?: boolean } = {}) => {
@@ -86,16 +95,18 @@ export default function RecordDetailPage() {
       setLoadError(null);
       setNotFound(false);
       try {
-        const [rec, status, auditRows, evalRows] = await Promise.all([
+        const [rec, status, auditRows, evalRows, summary] = await Promise.all([
           records.get(recordId),
           documents.status(recordId),
           audit.list(recordId, 50),
           records.evaluations(recordId),
+          records.evidenceSummary(recordId).catch(() => null),
         ]);
         setRecord(rec);
         setDocStatus(status);
         setAuditEntries(auditRows);
         setEvaluationsRaw(evalRows);
+        setEvidenceSummary(summary);
         const wf = await workflows.get(rec.workflow_id);
         setWorkflow(wf);
       } catch (err) {
@@ -340,7 +351,9 @@ export default function RecordDetailPage() {
     setBusyDocId(doc.id);
     setFlash(null);
     try {
-      const blob = await documents.fetchContent(doc.id);
+      const blob = await documents.fetchContent(doc.id, {
+        disposition: "attachment",
+      });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -360,6 +373,43 @@ export default function RecordDetailPage() {
       setBusyDocId(null);
     }
   }
+
+  async function handlePreview(doc: DocumentRead) {
+    if (!doc.has_stored_content) return;
+    setPreviewLoading(true);
+    setFlash(null);
+    try {
+      const blob = await documents.fetchContent(doc.id, {
+        disposition: "inline",
+      });
+      if (preview) URL.revokeObjectURL(preview.objectUrl);
+      const objectUrl = URL.createObjectURL(blob);
+      setPreview({
+        objectUrl,
+        mimeType: doc.mime_type ?? blob.type ?? "application/octet-stream",
+        filename: doc.original_filename ?? `document-${doc.id}`,
+        documentId: doc.id,
+      });
+    } catch (err) {
+      setFlash({
+        kind: "error",
+        text: err instanceof ApiError ? err.detail ?? err.message : "Preview failed.",
+      });
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closePreview() {
+    if (preview) URL.revokeObjectURL(preview.objectUrl);
+    setPreview(null);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview.objectUrl);
+    };
+  }, [preview]);
 
   if (loading && !record) {
     return (
@@ -660,6 +710,27 @@ export default function RecordDetailPage() {
         title="Document evidence"
         description="Requirements in scope for this record's current stage, plus any attached documents."
       >
+        {evidenceSummary ? (
+          <div className="mb-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <EvidenceSummaryCell
+              label="Upload-backed"
+              value={evidenceSummary.upload_backed}
+            />
+            <EvidenceSummaryCell
+              label="Metadata only"
+              value={evidenceSummary.metadata_only}
+            />
+            <EvidenceSummaryCell
+              label="Verified"
+              value={evidenceSummary.verified}
+            />
+            <EvidenceSummaryCell
+              label="Stored bytes"
+              value={formatBytes(evidenceSummary.stored_bytes)}
+            />
+          </div>
+        ) : null}
+
         <form
           onSubmit={handleUpload}
           className="mb-4 grid gap-3 rounded-md border border-surface-border bg-surface-muted/30 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end"
@@ -779,6 +850,7 @@ export default function RecordDetailPage() {
                           onDelete={handleDelete}
                           onIntegrityCheck={handleIntegrityCheck}
                           onDownload={handleDownload}
+                          onPreview={handlePreview}
                         />
                       )}
                     </div>
@@ -814,6 +886,7 @@ export default function RecordDetailPage() {
                       onDelete={handleDelete}
                       onIntegrityCheck={handleIntegrityCheck}
                       onDownload={handleDownload}
+                      onPreview={handlePreview}
                     />
                   </div>
                 ))}
@@ -841,11 +914,99 @@ export default function RecordDetailPage() {
           </ol>
         )}
       </Panel>
+
+      {preview ? (
+        <PreviewOverlay preview={preview} onClose={closePreview} />
+      ) : previewLoading ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 text-sm text-text-muted">
+          Loading preview…
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
+function PreviewOverlay({
+  preview,
+  onClose,
+}: {
+  preview: {
+    objectUrl: string;
+    mimeType: string;
+    filename: string;
+    documentId: number;
+  };
+  onClose: () => void;
+}) {
+  const isImage = preview.mimeType.startsWith("image/");
+  const isPdf = preview.mimeType === "application/pdf";
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-surface-border bg-surface-panel shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-center justify-between gap-3 border-b border-surface-border px-4 py-2">
+          <div className="truncate text-sm font-medium">{preview.filename}</div>
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </header>
+        <div className="flex-1 overflow-auto bg-surface-muted/60">
+          {isImage ? (
+            <div className="flex min-h-full items-center justify-center p-4">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview.objectUrl}
+                alt={preview.filename}
+                className="max-h-full max-w-full object-contain"
+              />
+            </div>
+          ) : isPdf ? (
+            <iframe
+              title={preview.filename}
+              src={preview.objectUrl}
+              className="h-full w-full"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center p-8 text-sm text-text-muted">
+              Preview is not supported for this content type. Use Download
+              instead.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
+
+const PREVIEWABLE_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/png",
+  "image/jpeg",
+]);
+
 
 function DocumentRows({
   docs,
@@ -856,6 +1017,7 @@ function DocumentRows({
   onDelete,
   onIntegrityCheck,
   onDownload,
+  onPreview,
 }: {
   docs: DocumentRead[];
   busyDocId: number | null;
@@ -865,6 +1027,7 @@ function DocumentRows({
   onDelete: (doc: DocumentRead) => void;
   onIntegrityCheck: (doc: DocumentRead) => void;
   onDownload: (doc: DocumentRead) => void;
+  onPreview: (doc: DocumentRead) => void;
 }) {
   return (
     <ul className="divide-y divide-surface-border">
@@ -965,6 +1128,17 @@ function DocumentRows({
                   {busy ? "…" : "Integrity check"}
                 </button>
               ) : null}
+              {stored && doc.mime_type && PREVIEWABLE_MIME_TYPES.has(doc.mime_type) ? (
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={() => onPreview(doc)}
+                  disabled={busy}
+                  title="Preview the stored evidence in an overlay"
+                >
+                  {busy ? "…" : "Preview"}
+                </button>
+              ) : null}
               {stored ? (
                 <button
                   type="button"
@@ -1022,6 +1196,35 @@ const AUDIT_KEYS_OF_INTEREST = [
   "rejected_by",
   "rejection_reason",
 ];
+
+function EvidenceSummaryCell({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="panel-muted p-2 text-center">
+      <div className="field-label">{label}</div>
+      <div className="mt-1 text-sm font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+
+function formatBytes(size: number): string {
+  if (!Number.isFinite(size) || size <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = size;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 
 function AuditRow({ entry }: { entry: AuditEntry }) {
   const payload = entry.payload ?? {};
