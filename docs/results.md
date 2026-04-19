@@ -1,65 +1,54 @@
-Phase 2 hardening committed (`81680ff`) and pushed. **99 backend tests passing**, frontend build succeeds, Alembic boots clean.
+Phase 3 hardening committed (`b62d5f0`) and pushed. **118 backend tests passing**, frontend build succeeds, and **no new migration was required** — `has_stored_content` is derived from `storage_uri` at read time, not a new column.
 
 ## Summary
 
-**A. Real file hashing at ingest.** New `core/evidence_storage.py` owns local-disk persistence; files are written under `EVIDENCE_STORAGE_DIR` with server-generated UUID names, and `storage_uri` is persisted as `file:<absolute-path>`. New multipart route `POST /api/records/{id}/documents/upload` reads the uploaded bytes, computes SHA-256 and byte count from the payload itself, sanitizes client filenames, and persists through `document_service.upload_file_document`. The legacy JSON `POST /api/records/{id}/documents` is now explicitly a metadata-only registration (`register_document_metadata`) and cannot claim a server-owned storage URI.
+**A. Frontend: real document upload.** Record detail page gains a multipart upload form that POSTs to `/api/records/{id}/documents/upload`. A new `documents.upload` helper in `lib/api.ts` builds `FormData`, injects the bearer token, and shares `ApiError` handling with the rest of the client.
 
-**B. Real verification-time re-hash.** `verify_document` no longer accepts nor defaults `verified_content_hash`. It reads the stored bytes, recomputes SHA-256, writes `verified_content_hash` only when it matches the persisted `content_hash`. On mismatch the document is rejected with a diagnostic `rejection_reason`, a `document.integrity_failed` audit event is emitted, and the route returns 409. Missing stored content or missing ingest hash → 400 (`DocumentContentMissing`).
+**B. Frontend: integrity check.** Per-document "Integrity check" button hits `/api/documents/{id}/integrity-check`, caches the result in local state, and displays match / mismatch / missing-content inline without reloading. Verify and Integrity-check buttons are disabled for metadata-only documents and show an explicit "Metadata only" chip so the UI never offers an action that can only fail.
 
-**C. Integrity-check capability.** `POST /api/documents/{id}/integrity-check` returns a structured `IntegrityCheckResponse` (`has_stored_content`, `expected_content_hash`, `actual_content_hash`, `is_match`, `checked_at`, `message`). Read-only — never mutates the document row.
+**C. Evidence deletion.** New `DELETE /api/documents/{id}` with service-level `delete_document`: drops the row, runs `evidence_storage.delete_local_object` (which re-validates the path is inside the configured root), tolerates already-missing files, and emits a canonical `document.deleted` audit payload. Frontend adds a "Delete" button with a confirm prompt and clears any cached integrity result for the removed doc.
 
-**D. Phase 1 concurrency-semantics leak fixed.** `evaluation_service.evaluate_and_persist` gains `apply_to_record: bool = True`. `workflow_service.transition_record` calls it with `apply_to_record=False` so a **blocked** transition no longer mutates `record.risk_score` / `risk_band`. On success, the workflow service applies stage + risk + version together as a single atomic mutation and emits `record.risk_recalculated`; on block, nothing on the record row changes. The caller still gets the decision payload with the computed risk for UI display.
+**D. File validation at ingest.** `evidence_storage.detect_content_type` sniffs magic bytes for PDF / PNG / JPEG and falls back to an allowlisted client-mime. Detected type always wins over a spoofed client header — a PNG payload sent as `application/pdf` is persisted as `image/png`. Unsupported content returns 415; empty payloads still return 400 (checked first).
 
-**E. Alembic bootstrap.** `backend/alembic.ini`, `backend/migrations/env.py` (wires `Base.metadata` and resolves `DATABASE_URL` from settings), `script.py.mako`, and `versions/0001_initial_schema.py` (a baseline that calls `Base.metadata.create_all` / `drop_all`). `alembic==1.13.3` added to requirements. Verified with `alembic upgrade head` / `alembic current`. Future schema changes go on top of this baseline as proper incremental migrations; tests keep using `create_all` for speed and share the same metadata.
+**E. API contract cleanup.** `DocumentRead` now exposes `has_stored_content: bool` derived from an ORM `@property` (`is_local_uri(storage_uri)`) — no DB column, no migration. `storage_uri` is no longer in the response; server paths stay server-internal.
 
-**F. Config.** New settings `evidence_storage_dir` (default `./evidence`) and `max_upload_bytes` (default 25 MB). `.env.example` updated. `.gitignore` now ignores `backend/evidence/` and `evidence/`. The pytest conftest pins storage to a per-session tempdir and cleans blobs between tests.
+**F. Admin/debug tool.** Read-only `GET /api/records/{id}/integrity-summary` runs the integrity check against every document on the record and returns the structured results.
 
-## Exact files modified
-- `backend/.env.example`
-- `backend/app/api/routes/documents.py`
-- `backend/app/api/routes/records.py`
-- `backend/app/core/config.py`
-- `backend/app/schemas/document.py`
-- `backend/app/services/document_service.py`
-- `backend/app/services/evaluation_service.py`
-- `backend/app/services/workflow_service.py`
-- `backend/requirements.txt`
-- `backend/tests/conftest.py`
-- `backend/tests/test_documents.py`
-- `backend/tests/test_hardening.py`
-- `backend/tests/test_phase1_hardening.py`
-- `docs/migrations.md`
-- `.gitignore`
-
-## Exact files added
-- `backend/alembic.ini`
+## Files modified
+- `backend/app/api/routes/documents.py` · `backend/app/api/routes/records.py`
 - `backend/app/core/evidence_storage.py`
-- `backend/migrations/env.py`
-- `backend/migrations/script.py.mako`
-- `backend/migrations/versions/0001_initial_schema.py`
-- `backend/migrations/versions/.gitkeep`
-- `backend/tests/test_phase2_hardening.py`
+- `backend/app/models/document.py`
+- `backend/app/schemas/document.py`
+- `backend/app/services/audit_payloads.py` · `backend/app/services/document_service.py`
+- `backend/tests/test_documents.py` · `test_hardening.py` · `test_phase1_hardening.py` · `test_phase2_hardening.py` (updated to use real magic bytes + fetch storage paths via the ORM)
+- `frontend/app/(app)/records/[id]/page.tsx`
+- `frontend/lib/api.ts` · `frontend/lib/types.ts`
+
+## Files added
+- `backend/tests/test_phase3_hardening.py`
 
 ## Migration files added
-- `backend/migrations/versions/0001_initial_schema.py` — honest baseline that applies `Base.metadata.create_all` against the bound engine. All Phase 0–2 schema (including Phase 1 additive columns) is included in this baseline.
+**No new migration required.** `has_stored_content` is a derived attribute, not a persisted column; no other schema changes were made this phase. The baseline `0001_initial_schema.py` remains untouched.
 
 ## Tests added / updated
-- **Added** `tests/test_phase2_hardening.py` (17 tests):
-  - ingest computes SHA-256 and `size_bytes` from bytes; persists filename/mime; rejects empty and oversize payloads; sanitizes `../../etc/passwd` and keeps storage inside the configured root
-  - verification recomputes from stored bytes and succeeds on untouched content; fails and re-rejects on tampering; fails cleanly on missing stored bytes; fails for metadata-only registrations
-  - integrity-check returns match / mismatch / missing-content and never mutates the row
-  - blocked transitions do not mutate `risk_score` / `risk_band` / `version`; successful transitions apply stage + risk + version atomically
-  - Alembic env and baseline migration load cleanly against the app's metadata
-- **Updated**: `test_documents.py`, `test_hardening.py`, and `test_phase1_hardening.py` to use the multipart upload path so their verify flows exercise real bytes. Rewrote `test_verification_records_verified_content_hash` to assert the server-recomputed hash rather than the old client-attested default.
+- **Added** `tests/test_phase3_hardening.py` (19 tests):
+  - upload accepts PDF / PNG / JPEG; rejects unsupported types with 415
+  - magic-byte detection overrides spoofed client mime
+  - metadata registration has `has_stored_content=False`; real upload `True`
+  - responses never expose `storage_uri`
+  - DELETE removes DB row + file, tolerates missing files, works on metadata-only rows, emits an audit event, 404s on unknown ids
+  - per-record integrity summary returns structured per-document results including mismatch when bytes are tampered
+  - `detect_content_type` contract (magic-over-client, allowlisted fallback, rejection)
+- **Updated**: existing upload-based tests now send real magic-byte payloads; `test_phase2_hardening` tests fetch storage paths via the ORM because responses no longer carry `storage_uri`.
 
-**Full suite: 99 passed.** Frontend build still succeeds.
+## Remaining limitations after Phase 3
 
-## Known limitations after Phase 2
-- **Frontend does not yet expose the upload path.** The existing detail page's Verify/Reject buttons work for documents registered via the legacy JSON path only when content is absent — verify now fails cleanly with a 400 for those rows. Wiring a real drag-and-drop upload to `POST /documents/upload` and calling `/integrity-check` from the UI is the natural Phase-3 frontend pass.
-- **Evidence storage is local-only.** No S3/GCS. `storage_uri` has a scheme-based contract so a future storage backend can live behind the same interface without schema changes.
-- **No anti-virus / content-type enforcement.** `mime_type` comes from the client's multipart header; we persist it but do not validate the bytes match. A later hardening step could add magic-byte sniffing.
-- **Seed documents remain metadata-only.** Demo records created by `seed_data.py` still use direct `Document()` instantiation without real bytes; their `verify` path would now fail. That's intentional — the seed represents pre-integrity-era data — but a future pass could rewrite seed to drop real bytes into the evidence dir.
-- **No quota or retention policy.** `max_upload_bytes` guards a single payload; there's no aggregate per-record or per-org quota and nothing purges stored bytes when the document row is deleted (FK cascades remove the row but orphan the file). A future pass would add a storage cleanup hook.
-- **`verified_content_hash` semantics are "bytes on disk match ingest hash"**, not "bytes on disk match what a second verifier scanned externally". If a human reviewer is supposed to attest against an out-of-band source of truth, a separate workflow is needed; in this phase, we deliberately refuse client-supplied verified hashes.
-- **Audit chain for `document.integrity_failed`** uses an ad-hoc payload rather than going through `audit_payloads.py`. Routing it through a canonical builder would be a trivial Phase-3 cleanup.
-- **Alembic is not invoked at app startup.** `Base.metadata.create_all` still runs in `seed_data.run()` for local demo convenience. Production deployments should run `alembic upgrade head` before starting the app; this is documented in `docs/migrations.md`.
+- **No content delivery endpoint.** There's no way to download the stored bytes from the UI yet. Adding a streamed `GET /api/documents/{id}/content` with appropriate access control is the natural Phase 4 add.
+- **Content-type allowlist is tight (PDF/PNG/JPEG).** Expanding to TIFF, HEIC, DOCX, etc. is a policy change — add magic signatures in `_MAGIC_SIGNATURES` and an entry in `ALLOWED_CONTENT_TYPES`.
+- **No aggregate / quota / retention.** `max_upload_bytes` guards a single payload; there's no per-record or per-org quota, and no sweeper for files orphaned when a record is cascade-deleted.
+- **Multipart streaming.** The route reads the whole payload with `await file.read()` into memory before hashing. Fine up to `max_upload_bytes`, but a streaming hasher would scale further.
+- **Magic-byte detection is header-only.** A determined attacker could prefix a PNG header onto arbitrary bytes and the server would accept it. Stronger validation would require full-format parsing — out of scope for this pass.
+- **No AV / secret scanning of uploads.** Worth adding before hosting.
+- **Frontend upload form does not validate client-side magic bytes**; it relies entirely on the server's 415 response. A future polish can peek at the first few bytes in the browser before uploading.
+- **Audit chain's `document.integrity_failed` payload** (from Phase 2) is still ad-hoc rather than routed through `audit_payloads.py`. Untouched here; small future cleanup.
+- **Alembic is not invoked at app startup.** Production deployments must run `alembic upgrade head` before starting the app; documented in `docs/migrations.md`.
