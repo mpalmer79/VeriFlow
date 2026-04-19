@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     jwt_issuer: str = "veriflow"
     jwt_audience: str = "veriflow-api"
 
+    evidence_storage_dir: str = "./evidence"
+    max_upload_bytes: int = 25 * 1024 * 1024
+
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
     @field_validator("cors_origins", mode="before")

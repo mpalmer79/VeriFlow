@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core import evidence_storage
 from app.models.document import Document
 from app.models.enums import DocumentStatus, DocumentType
 from app.models.record import Record
@@ -37,6 +38,33 @@ class DocumentNotFound(DocumentServiceError):
 
 class DocumentAccessDenied(DocumentServiceError):
     pass
+
+
+class DocumentContentMissing(DocumentServiceError):
+    """Raised when a document has no resolvable stored content."""
+
+
+class DocumentIntegrityFailure(DocumentServiceError):
+    """Raised when a recomputed hash does not match the persisted `content_hash`."""
+
+    def __init__(self, document_id: int, expected: str, actual: str) -> None:
+        super().__init__(
+            f"Document {document_id} integrity mismatch: expected {expected}, actual {actual}"
+        )
+        self.document_id = document_id
+        self.expected = expected
+        self.actual = actual
+
+
+@dataclass(frozen=True)
+class IntegrityCheckResult:
+    document_id: int
+    has_stored_content: bool
+    expected_content_hash: Optional[str]
+    actual_content_hash: Optional[str]
+    is_match: bool
+    checked_at: datetime
+    message: str
 
 
 @dataclass(frozen=True)
@@ -79,7 +107,7 @@ def list_for_record(db: Session, actor: User, record: Record) -> List[Document]:
     return document_repository.list_for_record(db, record.id)
 
 
-def upload_document(
+def register_document_metadata(
     db: Session,
     *,
     actor: User,
@@ -94,20 +122,86 @@ def upload_document(
     content_hash: Optional[str] = None,
     expires_at: Optional[datetime] = None,
 ) -> Document:
+    """Register a document without persisting actual bytes.
+
+    Legacy/metadata-only path. Rows created this way cannot be verified
+    against stored content; verification for them will fail with
+    `DocumentContentMissing` until a corresponding upload lands.
+    """
     if record.organization_id != actor.organization_id:
         raise DocumentAccessDenied("Record does not belong to this organization")
+
+    # A metadata-only path must never claim a server-owned storage URI.
+    safe_uri = None if evidence_storage.is_local_uri(storage_uri) else storage_uri
 
     doc = Document(
         record_id=record.id,
         document_type=document_type,
         label=label,
-        storage_uri=storage_uri,
+        storage_uri=safe_uri,
         notes=notes,
         status=DocumentStatus.UPLOADED,
-        original_filename=original_filename,
+        original_filename=evidence_storage.safe_filename(original_filename),
         mime_type=mime_type,
         size_bytes=size_bytes,
         content_hash=content_hash,
+        expires_at=expires_at,
+    )
+    db.add(doc)
+    db.flush()
+
+    audit_service.record_event(
+        db,
+        action="document.registered",
+        entity_type="document",
+        entity_id=doc.id,
+        organization_id=record.organization_id,
+        actor_user_id=actor.id,
+        record_id=record.id,
+        payload=document_uploaded(document=doc),
+    )
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+# Backward-compatible alias used by the existing JSON registration route.
+upload_document = register_document_metadata
+
+
+def upload_file_document(
+    db: Session,
+    *,
+    actor: User,
+    record: Record,
+    document_type: DocumentType,
+    content: bytes,
+    original_filename: Optional[str] = None,
+    mime_type: Optional[str] = None,
+    label: Optional[str] = None,
+    notes: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
+) -> Document:
+    """Ingest real bytes: compute size + SHA-256 from the payload, store
+    locally, and persist a Document whose content_hash reflects the
+    persisted content.
+    """
+    if record.organization_id != actor.organization_id:
+        raise DocumentAccessDenied("Record does not belong to this organization")
+
+    stored = evidence_storage.store_bytes(content)
+
+    doc = Document(
+        record_id=record.id,
+        document_type=document_type,
+        label=label,
+        storage_uri=stored.storage_uri,
+        notes=notes,
+        status=DocumentStatus.UPLOADED,
+        original_filename=evidence_storage.safe_filename(original_filename),
+        mime_type=mime_type,
+        size_bytes=stored.size_bytes,
+        content_hash=stored.content_hash,
         expires_at=expires_at,
     )
     db.add(doc)
@@ -139,7 +233,9 @@ def verify_document(
     actor: User,
     document_id: int,
     notes: Optional[str] = None,
-    verified_content_hash: Optional[str] = None,
+    # `verified_content_hash` is intentionally not accepted here. The
+    # verified hash is derived from a re-read of stored bytes so a client
+    # cannot attest to content it has not supplied.
 ) -> Document:
     doc = document_repository.get(db, document_id)
     if doc is None:
@@ -147,21 +243,63 @@ def verify_document(
     record = doc.record
     _require_access(doc, record, actor)
 
+    if doc.content_hash is None:
+        raise DocumentContentMissing(
+            f"Document {doc.id} has no ingest-time content_hash; nothing to verify against."
+        )
+    stored_bytes = evidence_storage.read_stored_bytes(doc.storage_uri)
+    if stored_bytes is None:
+        raise DocumentContentMissing(
+            f"Document {doc.id} has no resolvable stored content to verify."
+        )
+
+    recomputed = evidence_storage.hash_bytes(stored_bytes)
+    if recomputed != doc.content_hash:
+        # Treat integrity failure as a domain-specific rejection so the
+        # document row does not linger in a misleading VERIFIED state.
+        doc.status = DocumentStatus.REJECTED
+        doc.rejected_by_user_id = actor.id
+        doc.rejected_at = datetime.now(timezone.utc)
+        doc.rejection_reason = (
+            f"Integrity mismatch at verification: expected {doc.content_hash}, "
+            f"actual {recomputed}."
+        )
+        doc.verified_by_user_id = None
+        doc.verified_at = None
+        db.flush()
+        audit_service.record_event(
+            db,
+            action="document.integrity_failed",
+            entity_type="document",
+            entity_id=doc.id,
+            organization_id=record.organization_id,
+            actor_user_id=actor.id,
+            record_id=record.id,
+            payload={
+                "record_id": record.id,
+                "document_id": doc.id,
+                "document_type": doc.document_type.value,
+                "document_status": doc.status.value,
+                "expected_content_hash": doc.content_hash,
+                "actual_content_hash": recomputed,
+            },
+        )
+        db.commit()
+        raise DocumentIntegrityFailure(
+            document_id=doc.id,
+            expected=doc.content_hash,
+            actual=recomputed,
+        )
+
     doc.status = DocumentStatus.VERIFIED
     doc.verified_by_user_id = actor.id
     doc.verified_at = datetime.now(timezone.utc)
     doc.rejected_by_user_id = None
     doc.rejected_at = None
     doc.rejection_reason = None
+    doc.verified_content_hash = recomputed
     if notes is not None:
         doc.notes = notes
-    if verified_content_hash is not None:
-        doc.verified_content_hash = verified_content_hash
-    elif doc.content_hash is not None and doc.verified_content_hash is None:
-        # Default the verified hash to the ingest-time hash so a row
-        # verified without an explicit re-check still carries a
-        # non-null value to compare against later.
-        doc.verified_content_hash = doc.content_hash
     db.flush()
 
     audit_service.record_event(
@@ -177,6 +315,55 @@ def verify_document(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def check_integrity(
+    db: Session,
+    *,
+    actor: User,
+    document_id: int,
+) -> IntegrityCheckResult:
+    """Read-only integrity check. Never mutates the document row."""
+    doc = document_repository.get(db, document_id)
+    if doc is None:
+        raise DocumentNotFound(f"Document {document_id} not found")
+    record = doc.record
+    _require_access(doc, record, actor)
+
+    stored_bytes = evidence_storage.read_stored_bytes(doc.storage_uri)
+    checked_at = datetime.now(timezone.utc)
+
+    if doc.content_hash is None and stored_bytes is None:
+        return IntegrityCheckResult(
+            document_id=doc.id,
+            has_stored_content=False,
+            expected_content_hash=None,
+            actual_content_hash=None,
+            is_match=False,
+            checked_at=checked_at,
+            message="Document is metadata-only; nothing to verify.",
+        )
+    if stored_bytes is None:
+        return IntegrityCheckResult(
+            document_id=doc.id,
+            has_stored_content=False,
+            expected_content_hash=doc.content_hash,
+            actual_content_hash=None,
+            is_match=False,
+            checked_at=checked_at,
+            message="Stored content is missing or unreadable.",
+        )
+    actual = evidence_storage.hash_bytes(stored_bytes)
+    is_match = doc.content_hash is not None and actual == doc.content_hash
+    return IntegrityCheckResult(
+        document_id=doc.id,
+        has_stored_content=True,
+        expected_content_hash=doc.content_hash,
+        actual_content_hash=actual,
+        is_match=is_match,
+        checked_at=checked_at,
+        message="Match" if is_match else "Integrity mismatch between stored bytes and ingest hash.",
+    )
 
 
 def reject_document(

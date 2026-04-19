@@ -44,12 +44,24 @@ class DocumentCreate(BaseModel):
 
 
 class DocumentVerifyRequest(BaseModel):
+    # `verified_content_hash` is not accepted here. The verified hash is
+    # recomputed server-side from the stored bytes; a client cannot attest
+    # to content it has not supplied.
     notes: Optional[str] = Field(default=None, max_length=1000)
-    verified_content_hash: Optional[str] = Field(default=None, max_length=128)
 
 
 class DocumentRejectRequest(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=1000)
+
+
+class IntegrityCheckResponse(BaseModel):
+    document_id: int
+    has_stored_content: bool
+    expected_content_hash: Optional[str]
+    actual_content_hash: Optional[str]
+    is_match: bool
+    checked_at: datetime
+    message: str
 
 
 class DocumentStatusResponse(BaseModel):

@@ -1,5 +1,7 @@
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 # Ensure the backend package is importable when pytest is run from any cwd.
@@ -7,11 +9,14 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-# Use an isolated SQLite database for tests, and set predictable secrets
-# before any application module imports its settings.
+# Use an isolated SQLite database, predictable JWT secret, and a tempdir
+# for local evidence storage. All three need to be set before any
+# application module imports its settings.
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 os.environ.setdefault("JWT_SECRET", "test-secret")
 os.environ.setdefault("JWT_EXPIRES_MINUTES", "60")
+_EVIDENCE_TMP = Path(tempfile.mkdtemp(prefix="veriflow-tests-evidence-"))
+os.environ.setdefault("EVIDENCE_STORAGE_DIR", str(_EVIDENCE_TMP))
 
 import pytest
 from fastapi.testclient import TestClient
@@ -47,6 +52,13 @@ def session_factory(engine):
 def _reset_database(engine, session_factory, monkeypatch):
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+    # Clear any evidence blobs persisted by the previous test so integrity
+    # checks see a clean slate per test.
+    if _EVIDENCE_TMP.exists():
+        for entry in _EVIDENCE_TMP.iterdir():
+            if entry.is_file():
+                entry.unlink()
 
     monkeypatch.setattr(db_module, "engine", engine, raising=True)
     monkeypatch.setattr(db_module, "SessionLocal", session_factory, raising=True)

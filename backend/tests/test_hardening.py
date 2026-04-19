@@ -77,9 +77,14 @@ def _create_record(client, auth_headers, workflow_id, *, stage_slug, **overrides
 
 
 def _upload(client, auth_headers, record_id, document_type, **extras):
-    body = {"document_type": document_type, **extras}
+    content = extras.pop("content", f"hardening-{document_type}".encode())
+    filename = extras.pop("filename", f"{document_type}.bin")
+    data = {"document_type": document_type, **extras}
     response = client.post(
-        f"/api/records/{record_id}/documents", headers=auth_headers, json=body
+        f"/api/records/{record_id}/documents/upload",
+        headers=auth_headers,
+        data=data,
+        files={"file": (filename, content, "application/octet-stream")},
     )
     assert response.status_code == 201, response.text
     return response.json()
