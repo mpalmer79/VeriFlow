@@ -203,6 +203,7 @@ def document_status(
         required_types=summary.required_types,
         present_types=summary.present_types,
         verified_types=summary.verified_types,
+        satisfied_types=summary.satisfied_types,
         missing_types=summary.missing_types,
         rejected_types=summary.rejected_types,
         documents=summary.documents,

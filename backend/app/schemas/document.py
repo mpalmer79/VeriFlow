@@ -41,9 +41,16 @@ class DocumentRejectRequest(BaseModel):
 
 
 class DocumentStatusResponse(BaseModel):
+    """See `document_service.DocumentStatusSummary` for field semantics.
+
+    `required_types = satisfied_types + missing_types` always holds.
+    `rejected_types` is historical and can overlap with either.
+    """
+
     required_types: List[DocumentType]
     present_types: List[DocumentType]
     verified_types: List[DocumentType]
+    satisfied_types: List[DocumentType]
     missing_types: List[DocumentType]
     rejected_types: List[DocumentType]
     documents: List[DocumentRead]

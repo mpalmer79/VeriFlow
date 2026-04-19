@@ -41,9 +41,33 @@ class DocumentAccessDenied(DocumentServiceError):
 
 @dataclass(frozen=True)
 class DocumentStatusSummary:
+    """Explicit, non-overlapping view of a record's document evidence.
+
+    - `required_types`: document types required at the record's current
+      stage (driven by `DocumentRequirement`).
+    - `present_types`: types that have at least one non-rejected document
+      attached. Present does not imply verified.
+    - `verified_types`: types that have at least one verified document.
+    - `rejected_types`: types that have at least one rejected document.
+      This is historical information; a type can appear here alongside
+      `verified_types` if a record has both a rejected and a later
+      verified document.
+    - `satisfied_types`: `required_types` intersected with
+      `verified_types`. A requirement is **only** satisfied by a
+      verified document; uploaded-but-not-yet-verified does not count.
+    - `missing_types`: `required_types` minus `satisfied_types`. A
+      requirement whose only evidence is uploaded-but-not-verified, or
+      rejected, is `missing` until a verified document is attached.
+
+    The invariants `required_types = satisfied_types + missing_types`
+    and `missing_types ⊆ required_types` both hold, so API callers can
+    rely on these sets as a partition of the requirement surface.
+    """
+
     required_types: List[str]
     present_types: List[str]
     verified_types: List[str]
+    satisfied_types: List[str]
     missing_types: List[str]
     rejected_types: List[str]
     documents: List[Document]
@@ -214,10 +238,12 @@ def document_status(db: Session, record: Record) -> DocumentStatusSummary:
             present_types.append(document_type)
         if any(d.status == DocumentStatus.VERIFIED for d in docs):
             verified_types.append(document_type)
-        if all(d.status == DocumentStatus.REJECTED for d in docs):
+        if any(d.status == DocumentStatus.REJECTED for d in docs):
             rejected_types.append(document_type)
 
-    missing_types = [t for t in required_types if t not in present_types]
+    verified_set = set(verified_types)
+    satisfied_types = [t for t in required_types if t in verified_set]
+    missing_types = [t for t in required_types if t not in verified_set]
 
     def _values(items: List[DocumentType]) -> List[str]:
         return [item.value for item in items]
@@ -226,6 +252,7 @@ def document_status(db: Session, record: Record) -> DocumentStatusSummary:
         required_types=_values(required_types),
         present_types=_values(present_types),
         verified_types=_values(verified_types),
+        satisfied_types=_values(satisfied_types),
         missing_types=_values(missing_types),
         rejected_types=_values(rejected_types),
         documents=documents,

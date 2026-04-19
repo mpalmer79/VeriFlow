@@ -137,11 +137,48 @@ Documents are first-class evidence, not just metadata. `Document`
 carries a verification lifecycle (`uploaded`, `verified`, `rejected`)
 with verifier identity, timestamps, and rejection reason.
 `DocumentRequirement` declares which document types a workflow needs,
-optionally scoped to a stage. Required-vs-present-vs-verified status is
-computed per record by `document_service`. Rules consume evidence via
-small helpers in `document_repository`; hybrid rule logic keeps records
-without documents meaningful while promoting document evidence as the
-primary signal.
+optionally scoped to a stage. Rules consume evidence via small helpers
+in `document_repository`; hybrid rule logic keeps records without
+documents meaningful while promoting document evidence as the primary
+signal.
+
+**Document status is an explicit partition, not a heuristic.**
+`document_service.document_status` returns, for a given record:
+
+- `required_types` — types required at the record's current stage
+- `present_types` — types with at least one non-rejected document
+- `verified_types` — types with at least one verified document
+- `satisfied_types` — required types whose requirement is met (i.e.
+  required ∩ verified)
+- `missing_types` — required types whose requirement is not met
+  (required − verified)
+- `rejected_types` — types with at least one rejected document
+  (historical; can overlap with the others)
+
+The invariant `required_types = satisfied_types + missing_types` holds
+so callers can rely on these sets as a partition of the requirement
+surface. A requirement is satisfied **only** by a verified document;
+uploaded-but-not-yet-verified evidence does not count.
+
+### Document requirement uniqueness
+
+`DocumentRequirement.stage_id` is nullable (workflow-global
+requirements). A single composite unique constraint over
+`(workflow_id, stage_id, document_type)` would not catch duplicate
+workflow-global rows in PostgreSQL because NULLs are treated as
+distinct. The model therefore enforces uniqueness with **two partial
+unique indexes**:
+
+- `uq_doc_req_workflow_global_type` — when `stage_id IS NULL`, unique on
+  `(workflow_id, document_type)`
+- `uq_doc_req_workflow_stage_type` — when `stage_id IS NOT NULL`,
+  unique on `(workflow_id, stage_id, document_type)`
+
+Both indexes are emitted with `postgresql_where` and `sqlite_where`
+predicates so the invariant is enforced in production PostgreSQL and in
+the SQLite-based test suite. Service-layer validation is not required
+for this invariant; the database rejects duplicates with an
+`IntegrityError`.
 
 ## Service Architecture
 
@@ -293,6 +330,47 @@ every service that mutates state. Append-only by contract.
   history is captured in the append-only audit log. This avoids ambiguity
   about which rows represent the "current" outcome and keeps the
   explainability API simple.
+
+## Known Tradeoffs
+
+These are deliberate decisions, documented here so a reviewer can see
+the shape of the project without reading every service.
+
+- **Hybrid rule evaluation.** Five of the seven Healthcare Intake rules
+  pass when either a verified document is attached *or* the legacy flag
+  on `Record` is set (`identity_verified`,
+  `guardian_authorization_signed`, etc.). This is an intentional
+  transition path: the flag columns existed before the document
+  evidence layer and still make seeded demo records meaningful. A later
+  phase can tighten any specific rule to document-only by dropping the
+  flag fallback — no other part of the system assumes both signals
+  exist.
+- **Code-driven rules, no DSL.** Rules live in `Rule` rows for
+  visibility and toggling, but evaluation logic is Python registered
+  against the rule's `code`. A runtime DSL or visual rule builder is
+  explicitly out of scope until the engine has proven itself against
+  more workflows. This keeps evaluation ordering and explanation
+  formatting easy to reason about.
+- **Conditional document requirements are reserved, not active.**
+  `DocumentRequirement.applies_when_code` is persisted (e.g. the
+  `guardian_authorization` requirement is seeded with
+  `applies_when_code = "subject_is_minor"`) but not interpreted. The
+  minor check currently lives in the evaluator. Introducing a tiny,
+  controlled resolver for these codes is cheap when it is genuinely
+  needed; inventing one pre-emptively is not.
+- **Current-state evaluation persistence.** `rule_evaluations` is
+  replaced on every run rather than appended. Long-term history lives
+  in the audit log. This is documented alongside the evaluation flow
+  and is relied on by the `/records/{id}/evaluations` endpoint.
+- **Canonical audit payloads.** `app/services/audit_payloads.py`
+  centralizes payload shapes so every event of a given action has the
+  same keys. Callers should route new audit events through this module
+  rather than constructing ad-hoc dicts.
+- **In-memory SQLite in tests.** The suite uses SQLite with the schema
+  recreated per test. Partial unique indexes, FK cascades, and enum
+  columns all work, but edge cases specific to PostgreSQL (e.g. native
+  enum types, transactional DDL) are not exercised automatically. A
+  PostgreSQL CI matrix is a stated future addition.
 
 ## Future Extensions
 
