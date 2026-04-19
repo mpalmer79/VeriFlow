@@ -1,369 +1,406 @@
-You are acting as a staff-level backend engineer performing Phase 1 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL project named VeriFlow.
+You are acting as a staff-level backend engineer performing Phase 2 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL project named VeriFlow.
 
-Your job is to implement the Phase 1 integrity upgrades carefully, completely, and with minimal collateral damage. Do not guess. Inspect the repository first, reconcile naming and structure with what actually exists, and then make the changes in the correct files. If file names, import paths, or model names differ from what is expected, adapt intelligently while preserving current architecture and conventions.
+Phase 1 already landed. It introduced:
+- optimistic concurrency on records
+- tamper-evident audit chaining
+- stronger document metadata
+- stronger JWT claims and validation
 
-This is not a greenfield rewrite. This is a targeted hardening pass on an existing modular monolith.
+Your job in Phase 2 is to upgrade the evidence pipeline, integrity model, and migration foundation without destabilizing the current architecture.
+
+This is not a rewrite. This is a targeted hardening and production-readiness pass.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Implement the following Phase 1 upgrades:
+Implement the following Phase 2 upgrades:
 
-1. Optimistic concurrency protection for records
-2. Tamper-evident audit chaining
-3. Stronger document integrity metadata
-4. Stronger JWT claim structure and validation
-5. API/schema updates required to support the above
-6. Database migration support for the new columns if migration tooling already exists
-7. If migration tooling does not exist, add the safest minimal bootstrap path and document it clearly
+1. Real file hashing at ingest
+2. Real verification-time re-hash against stored content
+3. Integrity-check capability for documents
+4. Alembic bootstrap and initial migration support
+5. Fix the Phase 1 concurrency semantics leak around risk persistence during blocked transitions
+6. Add or update tests to prove correctness
 
-Do not stop at partial implementation. Ensure imports, schemas, routes, services, models, and persistence are all consistent.
+Do not stop at analysis. Inspect the repository, reconcile with what actually exists, and perform the implementation fully.
 
 ==================================================
 NON-NEGOTIABLE EXECUTION RULES
 ==================================================
 
-1. Inspect the repo before editing anything.
-   - Read the backend structure fully.
-   - Identify actual paths for:
+1. Inspect the repo first.
+   - Read the current backend structure fully.
+   - Identify actual file paths for:
+     - config
      - models
      - schemas
      - services
      - repositories
      - routes
-     - auth/security
-     - database/session config
-     - migration tooling, if any
-   - Confirm naming of record, document, audit, workflow, and user models.
+     - db/session/base
+     - tests
+     - startup/bootstrap
+     - existing docs
+   - Confirm how documents are currently created, stored, verified, and exposed.
 
-2. Do not blindly create duplicate files.
-   - Prefer modifying existing files.
-   - Only add new files when necessary.
+2. Preserve current architecture.
+   - Keep the modular monolith.
+   - Do not introduce microservices.
+   - Do not add background jobs, queues, Redis, Celery, S3 SDK integration, or unrelated infra unless already present.
+   - Do not replace auth architecture.
+   - Do not redesign the frontend beyond what is required for API alignment.
 
-3. Preserve the existing architecture.
-   - Keep the modular monolith approach.
-   - Do not introduce microservices, event buses, Celery, Redis, or unrelated infrastructure.
-   - Do not redesign the whole auth system.
-   - Do not replace the rule engine.
+3. Prefer modifying existing files.
+   - Add files only when needed.
+   - Avoid duplicating service logic.
 
-4. Make the code production-minded.
-   - Strong typing
-   - Clean imports
-   - No dead code
-   - No placeholder comments
-   - No AI-style verbose comments
-   - Minimal natural comments only where necessary
+4. Keep implementation consistent across layers.
+   - model
+   - schema
+   - service
+   - route
+   - test
+   - migration
 
-5. Make the implementation internally consistent.
-   - If a schema requires a field, ensure service and route layers support it.
-   - If a model changes, ensure serialization still works.
-   - If a token decoder changes, ensure auth dependency behavior still works.
+5. No fake integrity.
+   - Do not claim a file is verified unless the system actually recomputes its hash from stored bytes or from a deterministic local storage source.
+   - Do not continue trusting ingest metadata as if it were proof.
 
-6. Do not break existing behavior unless required for correctness.
-   - If backward compatibility is feasible, preserve it.
-   - If not feasible, update affected callers in the repo.
+6. No half-configured migration system.
+   - If Alembic is added, it must be complete and usable.
+   - If the repo already has Alembic, use it properly.
+   - Do not leave broken env.py, script.py.mako, or config.
 
-7. Add or update tests if the repo already has a test suite.
-   - At minimum cover:
-     - record version conflict
-     - audit chain creation
-     - token issuance/validation
-     - document metadata persistence
+7. Minimal comments.
+   - No AI-style comments
+   - No tutorial comments
+   - Only concise human comments where needed
 
 8. At the end, provide:
-   - a concise implementation summary
+   - concise summary
    - exact files changed
-   - any migrations added
-   - any follow-up risks or known limitations
-
-Do not claim success unless the code is actually consistent.
+   - exact files added
+   - migration files added
+   - test files added/updated
+   - known limitations remaining
 
 ==================================================
-PHASE 1 REQUIREMENTS
+PHASE 2 REQUIREMENTS
 ==================================================
 
 ----------------------------------------
-A. OPTIMISTIC CONCURRENCY FOR RECORDS
+A. REAL FILE HASHING AT INGEST
 ----------------------------------------
 
 Goal:
-Prevent silent last-write-wins corruption on records and stage transitions.
+When a document is ingested or uploaded, compute a real SHA-256 hash from actual content and persist it as content_hash.
+
+You must first inspect how the project currently handles documents.
+
+Possible current states:
+- metadata-only document registration
+- local file path or storage_uri registration
+- actual multipart upload route
+- stubbed demo flow
+
+Your implementation must adapt to the current repo.
 
 Required behavior:
-- Add a version column to the primary record entity.
-- Default version = 1.
-- Every successful record update increments version.
-- Every successful stage transition increments version.
-- Record update requests must require expected_version.
-- Transition requests must require expected_version.
-- If expected_version does not match current persisted version, return a conflict error.
+1. If the repo already supports actual file upload:
+   - compute SHA-256 from uploaded bytes at ingest
+   - persist original_filename, mime_type, size_bytes, and content_hash
+   - store file content using the repo’s existing local storage approach or safest compatible local approach
+   - do not add cloud storage in this phase
 
-Implementation details:
-- Add version column on the record model.
-- Update record update schema to include expected_version.
-- Update transition request schema to include expected_version.
-- Update service layer to compare expected_version against persisted version before mutation.
-- Raise a specific domain/service exception for version conflict.
-- Route layer should map version conflict to HTTP 409.
-- Ensure the returned record includes the new version.
-- Do not implement pessimistic locking unless already idiomatic in repo.
-- Keep this as optimistic concurrency only.
+2. If the repo currently only supports storage_uri/metadata registration:
+   - introduce the smallest correct local-file ingest flow that fits current architecture
+   - do not break existing metadata registration unless intentionally deprecating it with safe compatibility
+   - preserve current route behavior where feasible
 
-Edge cases:
-- Missing expected_version should fail validation at schema layer.
-- Current version must be returned in record read schema.
-- Transition attempts that fail due to blocking rules should not increment version unless a persisted state mutation actually occurs.
-- If evaluation persistence already occurs during transition attempts, preserve intended behavior, but do not accidentally increment record version on a blocked transition unless current code semantics require that.
+3. Hashing requirements:
+   - use SHA-256
+   - hash the exact bytes stored
+   - content_hash must always reflect the persisted content for newly ingested files
 
-----------------------------------------
-B. TAMPER-EVIDENT AUDIT CHAINING
-----------------------------------------
+4. Storage requirements:
+   - prefer a local evidence storage directory configured via settings
+   - use deterministic server-controlled storage paths
+   - do not trust client-provided storage_uri as the source of truth for new uploads
+   - if legacy storage_uri path remains for backward compatibility, keep its semantics explicit
 
-Goal:
-Strengthen audit events so they are no longer merely append-only by convention.
-
-Required behavior:
-- Add previous_hash and entry_hash to audit log model.
-- Each new audit event should compute entry_hash using a deterministic hash over:
-  - previous_hash
-  - action
-  - entity_type
-  - entity_id
-  - organization_id
-  - actor_user_id
-  - record_id
-  - canonicalized payload
-- Canonicalization must be stable.
-- Use SHA-256.
-- previous_hash should be taken from the most recent audit event in the relevant scope.
-- If no prior event exists in scope, previous_hash should be empty or null consistently.
-- entry_hash must be stored on each audit row.
-- entry_hash should be unique if practical within current design.
-
-Scope:
-- Use organization-scoped chaining unless the repo already has a stronger existing pattern.
-- Do not invent a distributed/global ledger.
-- Keep implementation simple and correct.
-
-Implementation details:
-- Update audit model.
-- Update audit service or equivalent event writer.
-- Ensure every audit event written through the central audit service now generates hashes.
-- Use stable JSON serialization for payload canonicalization:
-  - sort keys
-  - compact separators
-  - deterministic string conversion where necessary
+5. Validation:
+   - reject empty file payloads
+   - reject missing content when content hash is expected
+   - set size_bytes from actual bytes, not from client metadata
 
 Do not:
-- add third-party blockchain libraries
-- add signing infrastructure
-- claim immutability
-- change every caller manually if there is already a central audit helper
+- add object storage/S3 integration
+- fake hashing from filename or URI
+- rely only on client-provided hashes
 
-Preferred design:
-- one central function handles audit persistence
-- all routes/services continue using that helper
+Preferred outcome:
+- a real upload/ingest path exists
+- content_hash is server-computed from stored bytes
 
 ----------------------------------------
-C. STRONGER DOCUMENT INTEGRITY METADATA
+B. REAL VERIFICATION-TIME RE-HASH
 ----------------------------------------
 
 Goal:
-Move documents closer to evidence objects rather than loose references.
+Verification must prove that stored content still matches what was ingested.
 
-Required new fields on the document model:
-- original_filename
-- mime_type
-- size_bytes
-- content_hash
-- verified_content_hash
-- expires_at
+Required behavior:
+- verification path must retrieve the stored content
+- recompute SHA-256 from the stored file bytes
+- compare recomputed hash against persisted content_hash
+- write verified_content_hash from the recomputed value
+- mark verification success only if recomputed hash matches expected integrity conditions
 
-Interpretation:
-- content_hash = hash captured at ingest or registration time
-- verified_content_hash = hash observed/confirmed at verification time
-- expires_at = optional evidence validity boundary
+Verification rules:
+1. If stored content is missing:
+   - verification must fail cleanly
+   - do not mark verified
+
+2. If recomputed hash does not match content_hash:
+   - verification must fail
+   - document should not be marked verified
+   - ideally mark a clear error/rejection reason or integrity mismatch result consistent with current domain model
+
+3. If recomputed hash matches:
+   - verified_content_hash = recomputed hash
+   - verified_at and verified_by fields updated as current model supports
+   - status updated appropriately
+
+4. If the current service supports reject flows:
+   - preserve them
+   - ensure integrity mismatch can route through that logic or equivalent clear failure semantics
+
+Do not:
+- default verified_content_hash from content_hash during verification
+- trust client-supplied verified_content_hash as proof
+- verify metadata without verifying actual file bytes
+
+----------------------------------------
+C. DOCUMENT INTEGRITY CHECK CAPABILITY
+----------------------------------------
+
+Goal:
+Add a way to check whether a document still matches its stored ingest hash.
+
+Implement one or both depending on repo fit:
+- service function for integrity validation
+- API endpoint for integrity check
+- optionally a lightweight admin/debug route if current architecture supports it
+
+Required behavior:
+- fetch document by id
+- resolve stored file path/content source
+- recompute SHA-256
+- compare against content_hash
+- return a structured result
+
+Suggested response shape:
+- document_id
+- has_stored_content
+- expected_content_hash
+- actual_content_hash
+- is_match
+- checked_at
+- status/message
+
+If current route conventions support nested resource routes, prefer something like:
+- POST or GET /documents/{id}/integrity-check
+
+Choose the method that best matches existing route style.
+
+Do not expose raw file contents.
+
+----------------------------------------
+D. FIX PHASE 1 CONCURRENCY SEMANTICS LEAK
+----------------------------------------
+
+Goal:
+Remove the inconsistency where blocked transitions mutate record risk fields without bumping record version.
+
+This must be fixed now.
+
+Preferred fix:
+- blocked transition evaluation should not persist risk_score/risk_band changes to the record
+- evaluation may still persist rule evaluation rows if that is part of current design
+- transition should remain the state-changing operation
+- record.version semantics should remain clean
+
+Required behavior:
+1. Inspect evaluation_service.evaluate_and_persist and related workflow logic
+2. Separate:
+   - decision computation
+   - evaluation row persistence
+   - record mutation
+3. Ensure blocked transitions do not mutate record row state unless the design clearly and intentionally requires it
+4. Keep version semantics clean:
+   - no persisted record state mutation without appropriate version handling
+5. If a successful transition still updates record risk fields, that is acceptable as part of the successful mutation path
+
+If the repo structure makes the above difficult, use the next-cleanest approach:
+- if evaluation must persist record risk changes, then version must increment there
+But this is second choice.
+Prefer keeping blocked evaluation non-mutating at the record-row level.
+
+----------------------------------------
+E. ALEMBIC BOOTSTRAP
+----------------------------------------
+
+Goal:
+Move the project off ad hoc schema evolution.
+
+You must inspect whether Alembic already exists.
+
+Case 1: Alembic already exists
+- use it properly
+- generate or write migrations for Phase 1 and Phase 2 schema changes as needed
+- ensure env.py is wired to current SQLAlchemy metadata
+
+Case 2: Alembic does not exist
+- initialize Alembic correctly
+- configure alembic.ini
+- configure env.py
+- wire target_metadata to the actual declarative base metadata
+- ensure migration scripts can run against the current database configuration
+- create an initial migration or a baseline migration strategy appropriate to the repo
 
 Requirements:
-- Add fields to model.
-- Add fields to read schema.
-- Add fields to create/update schema only where appropriate.
-- Preserve compatibility with current document registration flow if the system currently stores metadata without binary uploads.
-- Do not force binary upload support in Phase 1 if the repo does not already support it.
-- However, the data model must be ready for real evidence handling.
+1. Alembic config must be complete
+2. Migration folder structure must be valid
+3. Metadata import must resolve
+4. Existing schema changes from Phase 1 and Phase 2 must be represented appropriately
 
-Behavior:
-- Existing upload/register flow should still work.
-- New metadata fields should be accepted and persisted if supplied.
-- Verification logic should be able to record verified_content_hash when documents are verified, if such a verification function already exists.
-- Do not invent a fake file-processing subsystem in this phase.
-
-Constraints:
-- If current routes only support logical document registration, extend them safely rather than redesigning into multipart upload.
-- Avoid breaking existing clients.
-
-----------------------------------------
-D. STRONGER JWT CLAIMS AND VALIDATION
-----------------------------------------
-
-Goal:
-Make token structure less fragile and closer to production practice without replacing current auth architecture.
-
-Required issued claims:
-- sub
-- iat
-- nbf
-- exp
-- iss
-- aud
-- typ
-- jti
-
-Required values:
-- typ should be "access"
-- iss should be app-specific and sourced from config when possible
-- aud should be app-specific and sourced from config when possible
-- jti should be a UUID string
-
-Required validation behavior:
-- token decode should validate:
-  - signature
-  - expiration
-  - issuer
-  - audience
-- token type must be checked explicitly
-- invalid token type should fail auth
-- preserve current dependency injection pattern for current user resolution
-
-Implementation details:
-- Update token creation helper.
-- Update token decode helper.
-- Update auth dependency if required.
-- Use existing config/settings module if present.
-- If settings lack app_name or token audience/issuer config, add the smallest correct config extension.
+Migration strategy guidance:
+- because the repo has already been using create_all for demo/test bootstrapping, choose a practical strategy
+- if safest, create:
+  - one baseline migration representing current schema for fresh environments
+  - then one incremental migration for Phase 2 if needed
+- or create one initial migration representing the current intended schema if the repo is still effectively greenfield/demo
+Choose the strategy that best fits the repo state and explain it clearly.
 
 Do not:
-- replace JWT with sessions
-- introduce refresh tokens
-- add OAuth/OIDC login flow in this phase
+- leave both create_all startup bootstrapping and Alembic fighting each other in production semantics without clear separation
+- break tests that rely on ephemeral schema setup unless necessary
+
+Preferred behavior:
+- keep tests lightweight if they currently use metadata.create_all
+- but production/dev schema evolution should now clearly point to Alembic
 
 ----------------------------------------
-E. ROUTE AND SCHEMA ALIGNMENT
+F. CONFIG AND STORAGE SETTINGS
 ----------------------------------------
 
-You must ensure the API layer matches the model and service changes.
+Add only the minimum necessary configuration for local evidence storage and integrity handling.
+
+Expected settings if not already present:
+- evidence_storage_dir
+- possibly max upload size if repo already supports validation patterns
+- any feature flag only if necessary
+
+Requirements:
+- safe defaults for local dev
+- paths derived from settings, not hardcoded random locations
+- directory creation should be handled safely where appropriate
+
+Do not add a giant config explosion.
+
+----------------------------------------
+G. ROUTE AND SCHEMA ALIGNMENT
+----------------------------------------
+
+You must update the API contract to match the new real evidence flow.
 
 Required:
-- Record read schema includes version
-- Record update schema includes expected_version
-- Transition request schema includes expected_version
-- Transition response remains stable unless improvement is required
-- Document read schema includes new metadata fields
-- Document create/update schemas align with actual registration flow
-- Route handlers map service exceptions to correct HTTP status codes
+- document create/upload schema and route must align with actual ingest design
+- document read schema must expose integrity-relevant fields
+- verification request schema must not imply trust in client-provided verified hash
+- integrity-check response schema must be explicit and typed
+- existing routes should remain compatible where reasonable
 
-Preferred status mapping:
-- not found -> 404
-- bad workflow/stage mismatch or invalid domain action -> 400
-- version conflict -> 409
-- auth issues -> preserve existing pattern
+If multipart upload is introduced:
+- use FastAPI UploadFile idiomatically
+- keep route naming consistent with repo conventions
+- ensure service layer receives bytes or stream safely
 
 ----------------------------------------
-F. PERSISTENCE / MIGRATIONS
-----------------------------------------
-
-You must inspect the repo and determine current persistence strategy.
-
-Case 1: Alembic or another migration system already exists
-- Add a proper migration for all new columns.
-- Do not rely on metadata.create_all for production changes.
-- Ensure downgrade exists if project conventions require it.
-
-Case 2: No migration tooling exists
-- Do not fake a full migration system unless it is practical and consistent with the repo.
-- Add the model changes safely.
-- If the app currently uses metadata.create_all at startup or seed time, preserve runtime behavior.
-- Add a minimal migration/bootstrap note in docs or implementation summary stating that schema evolution is now required.
-- If adding Alembic is low-risk and fits the repo, you may add it, but only if you can do it completely and correctly in one pass.
-- Do not leave a half-configured migration system.
-
-Priority:
-Correctness over ambition.
-
-----------------------------------------
-G. TESTING
+H. TESTING
 ----------------------------------------
 
 If tests exist, extend them.
 
-Add or update tests for:
-1. record update with matching expected_version succeeds and increments version
-2. record update with stale expected_version fails with conflict
-3. transition with stale expected_version fails with conflict
-4. audit chain writes previous_hash and entry_hash consistently across two or more events
-5. token create/decode enforces issuer, audience, and typ
-6. document metadata persists and serializes
+At minimum add/update tests for:
+1. ingest computes content_hash from actual bytes
+2. ingest stores correct size_bytes and filename metadata
+3. verification re-hashes stored content and succeeds when bytes match
+4. verification fails when stored content is altered or missing
+5. integrity-check endpoint/service returns mismatch when bytes differ
+6. blocked transition no longer mutates persisted record risk fields without intended semantics
+7. Alembic config at least imports metadata cleanly if repo test style can support it
 
-If the repo lacks tests in these areas:
-- add focused tests in existing test style
-- do not create a massive new testing framework
+Use existing test style and fixtures.
+Do not build an entirely new testing framework.
 
 ==================================================
 IMPLEMENTATION DISCOVERY STEPS
 ==================================================
 
 Before editing:
-1. List backend directories and identify actual paths.
-2. Open existing files for:
-   - record model
+1. List backend structure and find actual files for models, schemas, services, routes, db config, and tests.
+2. Read current:
    - document model
-   - audit model
-   - security/auth helper
-   - record schemas
-   - document schemas
-   - evaluation/transition schemas
-   - record service
+   - document schema
+   - document service
+   - document routes
+   - evaluation service
    - workflow service
-   - audit service/helper
-   - records route
-3. Determine whether repositories exist for data access and whether to update them.
-4. Determine whether audit payload helper files exist and preserve them if possible.
-5. Determine migration tooling status.
-6. Determine test framework and current test layout.
+   - record model/schema if affected
+   - config/settings
+   - database/bootstrap logic
+3. Determine whether current document flow is:
+   - metadata only
+   - multipart upload
+   - local path storage
+4. Determine whether Alembic exists.
+5. Determine current tests and fixtures.
 
-Then implement changes.
+Then implement the changes.
 
 ==================================================
 DESIGN GUIDANCE
 ==================================================
 
-Use this logic unless the existing repo clearly requires a close variation:
+Use these design preferences unless the existing repo requires a close variation:
 
-1. Record version:
-- integer
-- starts at 1
-- increments on successful mutation
+1. Content hashing
+- hashlib.sha256(file_bytes).hexdigest()
 
-2. Audit hash chain:
-- canonical payload string via json.dumps(sort_keys=True, separators=(",", ":"), default=str)
-- material concatenation in a stable order
-- sha256 hex digest
-- previous hash from latest audit row in scope
+2. Local evidence storage
+- server-controlled directory from config
+- subdirectories okay if needed
+- deterministic filenameing preferred
+- avoid path traversal risks
+- do not use original filename as the storage filename directly unless sanitized and uniquely wrapped
 
-3. JWT:
-- use existing jose/pyjwt library already in repo
-- do not introduce unnecessary auth libraries
+3. Verification
+- recompute hash from stored bytes
+- compare to persisted content_hash
+- verified_content_hash set only from recomputed bytes
+- never trust client verified hash as proof
 
-4. Exceptions:
-- prefer existing service exception style if present
-- otherwise add small, focused exception classes
+4. Integrity check
+- read-only operation
+- returns structured result
+- does not change verification status unless explicitly designed to
 
-5. Code style:
-- no bash instructions
-- no pseudo-code
-- no placeholder TODOs
-- no giant explanatory comments
+5. Alembic
+- use actual project metadata
+- choose a clean baseline strategy
+- keep it runnable
 
 ==================================================
 ACCEPTANCE CRITERIA
@@ -371,20 +408,17 @@ ACCEPTANCE CRITERIA
 
 Do not consider the task complete unless all of the following are true:
 
-- record model has versioning support
-- stale version updates fail safely
-- stale version transitions fail safely
-- audit logs store previous_hash and entry_hash
-- audit events are chained by the central audit writer
-- documents have stronger integrity metadata fields
-- document schemas expose relevant metadata
-- JWT creation includes iss/aud/typ/jti/nbf
-- JWT decode validates issuer and audience
-- routes and schemas compile consistently with services
+- new ingested documents get content_hash from real bytes
+- size_bytes comes from actual content
+- verification re-hashes stored content
+- verified_content_hash comes from recomputed bytes, not trust fallback
+- integrity check capability exists
+- blocked transition no longer causes hidden record-row mutation without coherent version semantics
+- Alembic is fully bootstrapped or properly extended if already present
+- routes, schemas, services, and models are internally consistent
+- tests cover the critical paths
 - imports are clean
 - no obvious runtime mismatch remains
-- migration situation is handled appropriately for this repo
-- tests are updated if the repo has tests
 
 ==================================================
 OUTPUT FORMAT
@@ -395,10 +429,10 @@ After implementation, provide:
 1. Summary of what changed
 2. Exact files modified
 3. Exact files added
-4. Migration files added, if any
+4. Migration files added
 5. Tests added or updated
-6. Known limitations that remain after Phase 1
+6. Known limitations that remain after Phase 2
 
-Do not stop after analysis. Perform the implementation.
+Do not stop at planning. Perform the implementation.
 
-Now begin by inspecting the repository structure and identifying the exact backend files that correspond to these concerns.
+Now begin by inspecting the repository structure and identifying the exact files that must be changed.
