@@ -128,21 +128,16 @@ function LoginPageInner() {
         </div>
 
         <div className="panel-muted p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <div className="field-label">Local demo access</div>
-            <div className="text-[11px] text-text-subtle">
-              Password: <span className="font-mono">{DEMO_PASSWORD}</span>
-            </div>
-          </div>
+          <div className="mb-1 field-label">Local demo access</div>
           <p className="mb-3 text-xs text-text-subtle">
-            For local walkthroughs only. Click &quot;Use this&quot; to populate
-            the email field.
+            Seeded accounts, one per role. Available only when the backend
+            has been seeded locally.
           </p>
-          <ul className="space-y-1.5">
+          <ul className="divide-y divide-surface-border">
             {DEMO_ACCOUNTS.map((account) => (
               <li
                 key={account.email}
-                className="flex items-center justify-between gap-2 text-sm"
+                className="flex items-center justify-between gap-2 py-2 first:pt-0 last:pb-0 text-sm"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-mono text-xs text-text">
@@ -158,11 +153,15 @@ function LoginPageInner() {
                   onClick={() => setEmail(account.email)}
                   disabled={submitting}
                 >
-                  Use this
+                  Use email
                 </button>
               </li>
             ))}
           </ul>
+          <div className="mt-3 border-t border-surface-border pt-3 text-[11px] text-text-subtle">
+            Shared demo password:{" "}
+            <span className="font-mono text-text">{DEMO_PASSWORD}</span>
+          </div>
         </div>
       </div>
     </div>

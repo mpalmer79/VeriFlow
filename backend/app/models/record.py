@@ -88,3 +88,7 @@ class Record(Base, TimestampMixin):
         back_populates="record", cascade="all, delete-orphan"
     )
 
+    @property
+    def assigned_user_name(self) -> Optional[str]:
+        return self.assigned_user.full_name if self.assigned_user else None
+

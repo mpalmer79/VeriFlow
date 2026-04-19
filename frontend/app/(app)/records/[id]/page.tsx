@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, audit, documents, records, workflows } from "@/lib/api";
@@ -28,6 +28,8 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
+import { SeverityPanel } from "@/components/SeverityPanel";
+import { StageBadge } from "@/components/StageBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 
 interface WorkflowData {
@@ -46,7 +48,6 @@ interface Flash {
 
 export default function RecordDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
   const recordId = Number(params.id);
 
   const [record, setRecord] = useState<RecordRead | null>(null);
@@ -126,9 +127,8 @@ export default function RecordDetailPage() {
     const warnings: EvaluationIssue[] = [];
     for (const row of evaluationsRaw) {
       if (row.passed) continue;
-      const ruleCode = `rule#${row.rule_id}`;
       const issue: EvaluationIssue = {
-        rule_code: ruleCode,
+        rule_code: row.rule_code,
         message: row.explanation ?? "No explanation recorded.",
         risk_applied: row.risk_applied,
       };
@@ -143,9 +143,9 @@ export default function RecordDetailPage() {
       warnings,
       summary:
         violations.length > 0
-          ? `${violations.length} blocking issue(s); ${warnings.length} warning(s).`
+          ? `${violations.length} blocking issue${violations.length === 1 ? "" : "s"}, ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`
           : warnings.length > 0
-          ? `No blocking issues; ${warnings.length} warning(s).`
+          ? `No blocking issues. ${warnings.length} warning${warnings.length === 1 ? "" : "s"} outstanding.`
           : "All active rules passed in the last evaluation.",
     };
   }, [decision, evaluationsRaw, record]);
@@ -331,11 +331,18 @@ export default function RecordDetailPage() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-          <div>
-            <span className="field-label mr-2">Stage</span>
-            <span className="font-medium">
-              {currentStage?.name ?? `Stage #${record.current_stage_id}`}
-            </span>
+          <div className="flex items-center gap-2">
+            <span className="field-label">Stage</span>
+            {currentStage ? (
+              <StageBadge
+                name={currentStage.name}
+                orderIndex={currentStage.order_index}
+                tone="current"
+                size="md"
+              />
+            ) : (
+              <span className="font-medium">Stage #{record.current_stage_id}</span>
+            )}
           </div>
           <div>
             <span className="field-label mr-2">Status</span>
@@ -346,11 +353,9 @@ export default function RecordDetailPage() {
             <RiskBadge band={record.risk_band} score={record.risk_score} size="md" />
           </div>
           <div>
-            <span className="field-label mr-2">Assigned</span>
+            <span className="field-label mr-2">Assigned to</span>
             <span className="font-medium">
-              {record.assigned_user_id !== null
-                ? `User #${record.assigned_user_id}`
-                : "Unassigned"}
+              {record.assigned_user_name ?? "Unassigned"}
             </span>
           </div>
           <div>
@@ -430,11 +435,11 @@ export default function RecordDetailPage() {
       {/* Evaluation summary */}
       <Panel
         title="Evaluation"
-        description="Most recent decision for this record."
+        description="Latest rule decision and risk. Replaced on every run."
       >
         {!derivedDecision ? (
           <EmptyState
-            title="No evaluation yet"
+            title="No evaluation on file"
             description="Run evaluation to see which rules pass, warn, or block right now."
           >
             <button
@@ -480,15 +485,15 @@ export default function RecordDetailPage() {
             </div>
             <p className="text-sm text-text-muted">{derivedDecision.summary}</p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <IssueList
-                title="Blocking issues"
+              <SeverityPanel
                 tone="critical"
-                emptyLabel="No blocking issues."
+                title="Blocking issues"
+                emptyLabel="No blocking issues. All block-level rules passed."
                 issues={derivedDecision.violations}
               />
-              <IssueList
-                title="Warnings"
+              <SeverityPanel
                 tone="warning"
+                title="Warnings"
                 emptyLabel="No active warnings."
                 issues={derivedDecision.warnings}
               />
@@ -499,8 +504,8 @@ export default function RecordDetailPage() {
 
       {/* Workflow timeline */}
       <Panel
-        title="Workflow"
-        description={workflow?.name ?? "Workflow stages in order."}
+        title="Workflow progress"
+        description={workflow?.name ?? "Stages in order, current stage highlighted."}
       >
         {workflow ? (
           <ol className="flex flex-wrap items-center gap-2">
@@ -512,21 +517,18 @@ export default function RecordDetailPage() {
                 const isPast =
                   currentStage !== undefined &&
                   stage.order_index < currentStage.order_index;
-                const pillCls = isCurrent
-                  ? "border-accent bg-accent/10 text-accent"
+                const tone: "current" | "past" | "future" = isCurrent
+                  ? "current"
                   : isPast
-                  ? "border-surface-border bg-surface-muted/50 text-text-muted"
-                  : "border-surface-border bg-transparent text-text";
+                  ? "past"
+                  : "future";
                 return (
                   <li key={stage.id} className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${pillCls}`}
-                    >
-                      <span className="mr-1.5 text-[0.65rem] uppercase tracking-wide opacity-70">
-                        {stage.order_index + 1}
-                      </span>
-                      {stage.name}
-                    </span>
+                    <StageBadge
+                      name={stage.name}
+                      orderIndex={stage.order_index}
+                      tone={tone}
+                    />
                     {idx < arr.length - 1 ? (
                       <span className="text-text-subtle">›</span>
                     ) : null}
@@ -542,7 +544,7 @@ export default function RecordDetailPage() {
       {/* Document evidence */}
       <Panel
         title="Document evidence"
-        description="Required documents for this record's current stage and their status."
+        description="Requirements in scope for this record's current stage, plus any attached documents."
       >
         {!docStatus ? (
           <LoadingSkeleton rows={3} />
@@ -560,7 +562,10 @@ export default function RecordDetailPage() {
             </div>
 
             {requiredList.length === 0 ? (
-              <EmptyState title="No document requirements at this stage." />
+              <EmptyState
+                title="No documents required at this stage"
+                description="Requirements apply at later stages in this workflow."
+              />
             ) : (
               <div className="space-y-3">
                 {requiredList.map((type) => {
@@ -647,10 +652,13 @@ export default function RecordDetailPage() {
       {/* Audit trail */}
       <Panel
         title="Audit trail"
-        description="Most recent first. Canonical event payloads."
+        description="Append-only. Most recent events first."
       >
         {auditEntries.length === 0 ? (
-          <EmptyState title="No audit entries yet." />
+          <EmptyState
+            title="No audit history yet"
+            description="Audit events will appear here after the first evaluation, transition, or document change."
+          />
         ) : (
           <ol className="space-y-2">
             {auditEntries.map((entry) => (
@@ -664,53 +672,6 @@ export default function RecordDetailPage() {
 }
 
 // ---------------------------------------------------------------------------
-
-function IssueList({
-  title,
-  tone,
-  emptyLabel,
-  issues,
-}: {
-  title: string;
-  tone: "critical" | "warning";
-  emptyLabel: string;
-  issues: EvaluationIssue[];
-}) {
-  const wrapperCls =
-    tone === "critical"
-      ? "border-severity-critical/30 bg-severity-critical/5"
-      : "border-severity-high/30 bg-severity-high/5";
-  const chipCls =
-    tone === "critical"
-      ? "border-severity-critical/40 bg-severity-critical/15 text-severity-critical"
-      : "border-severity-high/40 bg-severity-high/15 text-severity-high";
-  return (
-    <div className={`rounded-md border ${wrapperCls}`}>
-      <div className="border-b border-surface-border px-3 py-2 text-sm font-semibold">
-        {title}
-      </div>
-      {issues.length === 0 ? (
-        <div className="px-3 py-2 text-sm text-text-muted">{emptyLabel}</div>
-      ) : (
-        <ul className="divide-y divide-surface-border">
-          {issues.map((issue, idx) => (
-            <li key={`${issue.rule_code}-${idx}`} className="flex items-start gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <div className="font-mono text-xs text-text">
-                  {issue.rule_code}
-                </div>
-                <div className="text-sm text-text-muted">{issue.message}</div>
-              </div>
-              {issue.risk_applied > 0 ? (
-                <span className={`chip ${chipCls}`}>+{issue.risk_applied}</span>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 function DocumentRows({
   docs,

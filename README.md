@@ -107,7 +107,10 @@ Phase 4 ships a working frontend that demonstrates the backend
 capabilities end-to-end: authentication, an operational dashboard, a
 records table with filters, and a detail page that shows evaluation
 outcomes, document evidence, workflow stage progress, and the audit
-trail. See [`frontend/README.md`](./frontend/README.md) for details.
+trail. Record responses include `assigned_user_name` and persisted
+evaluations carry `rule_code` and `rule_name`, so the UI always shows
+human-readable labels rather than raw foreign-key ids. See
+[`frontend/README.md`](./frontend/README.md) for details.
 
 ### Tests
 

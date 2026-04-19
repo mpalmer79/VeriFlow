@@ -57,6 +57,7 @@ class RecordRead(BaseModel):
     workflow_id: int
     current_stage_id: int
     assigned_user_id: Optional[int]
+    assigned_user_name: Optional[str]
     external_reference: Optional[str]
     subject_full_name: str
     subject_dob: Optional[date]

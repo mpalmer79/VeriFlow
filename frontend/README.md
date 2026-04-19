@@ -84,12 +84,16 @@ intelligence end-to-end:
 
 - Current stage and progress across the nine-stage workflow timeline.
 - Risk score, risk band, and decision summary.
-- Blocking violations and warnings, each tied to a named rule with its
-  human explanation.
+- Blocking violations and warnings, each tied to a named rule code
+  (`identity_required`, `consent_required`, …) plus its human
+  explanation — shown the same way before and after the user runs
+  evaluation manually.
 - Document evidence: required types, satisfied vs missing, plus the
   per-document verification lifecycle with verify / reject actions.
 - Audit trail with canonical payloads for evaluation, risk
   recalculation, transitions, and document lifecycle events.
+- Assignees are rendered by name (`assigned_user_name`) across the
+  dashboard, records list, and detail view.
 
 The UI is intentionally restrained. It exists to make the backend's
 decisions explainable, not to sell a brand.

@@ -1,7 +1,7 @@
 from typing import List, Optional
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.record import Record
 
@@ -15,6 +15,7 @@ def list_for_organization(
     stmt = (
         select(Record)
         .where(Record.organization_id == organization_id)
+        .options(selectinload(Record.assigned_user))
         .order_by(Record.created_at.desc())
         .limit(limit)
         .offset(offset)
@@ -23,7 +24,12 @@ def list_for_organization(
 
 
 def get(db: Session, record_id: int) -> Optional[Record]:
-    return db.get(Record, record_id)
+    stmt = (
+        select(Record)
+        .where(Record.id == record_id)
+        .options(selectinload(Record.assigned_user))
+    )
+    return db.execute(stmt).scalar_one_or_none()
 
 
 def add(db: Session, record: Record) -> Record:

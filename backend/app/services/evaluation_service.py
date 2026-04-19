@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.enums import RiskBand, RuleActionApplied
 from app.models.record import Record
@@ -193,6 +193,7 @@ def current_evaluations(db: Session, record: Record) -> List[RuleEvaluation]:
     stmt = (
         select(RuleEvaluation)
         .where(RuleEvaluation.record_id == record.id)
+        .options(selectinload(RuleEvaluation.rule))
         .order_by(RuleEvaluation.id.asc())
     )
     return list(db.execute(stmt).scalars().all())

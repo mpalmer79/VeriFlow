@@ -8,11 +8,12 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
+import { StageBadge } from "@/components/StageBadge";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ApiError, records as recordsApi } from "@/lib/api";
+import { ApiError, records as recordsApi, workflows as workflowsApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import type { RecordRead } from "@/lib/types";
+import type { RecordRead, WorkflowStage } from "@/lib/types";
 
 function formatClockTime(date: Date | null): string {
   if (!date) return "—";
@@ -41,6 +42,9 @@ function sortRecent(a: RecordRead, b: RecordRead): number {
 
 export default function DashboardPage() {
   const [data, setData] = useState<RecordRead[] | null>(null);
+  const [stagesById, setStagesById] = useState<Map<number, WorkflowStage>>(
+    new Map()
+  );
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -52,6 +56,17 @@ export default function DashboardPage() {
       const result = await recordsApi.list({ limit: 200 });
       setData(result);
       setLastRefreshed(new Date());
+      const firstWorkflowId = result[0]?.workflow_id;
+      if (firstWorkflowId !== undefined) {
+        try {
+          const wf = await workflowsApi.get(firstWorkflowId);
+          const map = new Map<number, WorkflowStage>();
+          wf.stages.forEach((s) => map.set(s.id, s));
+          setStagesById(map);
+        } catch {
+          // Non-fatal — the dashboard still renders without stage names.
+        }
+      }
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -114,7 +129,7 @@ export default function DashboardPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-text">
-            Operational Overview
+            Operations overview
           </h1>
           <p className="mt-1 text-sm text-text-muted">
             Live summary of records moving through the active workflow.
@@ -155,7 +170,7 @@ export default function DashboardPage() {
           sublabel={
             data
               ? stats.inProgress > 0
-                ? "actively moving"
+                ? "moving through stages"
                 : "nothing in flight"
               : "loading…"
           }
@@ -167,14 +182,14 @@ export default function DashboardPage() {
           sublabel={
             data
               ? stats.blocked > 0
-                ? "needs resolution"
-                : "no blocks"
+                ? "resolution required"
+                : "no active blocks"
               : "loading…"
           }
           tone="critical"
         />
         <StatCard
-          label="High / Critical risk"
+          label="High or critical risk"
           value={loading || !data ? "—" : stats.highRisk}
           sublabel={
             data
@@ -190,13 +205,13 @@ export default function DashboardPage() {
       {loading && !error ? (
         <div className="grid gap-6 lg:grid-cols-3">
           <Panel
-            title="Records needing attention"
-            description="Blocked or high-risk records first"
+            title="Needs attention"
+            description="Blocked and high-risk records, highest risk first."
             className="lg:col-span-2"
           >
             <LoadingSkeleton rows={6} />
           </Panel>
-          <Panel title="Recent records" className="lg:col-span-1">
+          <Panel title="Recently updated" className="lg:col-span-1">
             <LoadingSkeleton rows={6} />
           </Panel>
         </div>
@@ -205,22 +220,22 @@ export default function DashboardPage() {
       {showPanels ? (
         <div className="grid gap-6 lg:grid-cols-3">
           <Panel
-            title="Records needing attention"
-            description="Blocked or high-risk records first"
+            title="Needs attention"
+            description="Blocked and high-risk records, highest risk first."
             className="lg:col-span-2"
             actions={
               <Link
                 href="/records"
                 className="text-xs font-medium text-accent hover:underline"
               >
-                View all
+                View all records
               </Link>
             }
           >
             {attentionRows.length === 0 ? (
               <EmptyState
-                title="No records need attention"
-                description="Nothing is blocked and no records are in the high or critical risk bands."
+                title="Nothing needs attention"
+                description="No records are blocked and no records are in the high or critical risk bands."
               />
             ) : (
               <div className="overflow-x-auto">
@@ -231,42 +246,59 @@ export default function DashboardPage() {
                       <th className="py-2 pr-4 font-medium">Stage</th>
                       <th className="py-2 pr-4 font-medium">Status</th>
                       <th className="py-2 pr-4 font-medium">Risk</th>
+                      <th className="py-2 pr-4 font-medium">Assigned to</th>
                       <th className="py-2 font-medium">Updated</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {attentionRows.map((r) => (
-                      <tr
-                        key={r.id}
-                        className="border-t border-surface-border align-middle"
-                      >
-                        <td className="py-2 pr-4">
-                          <Link
-                            href={`/records/${r.id}`}
-                            className="font-medium text-text hover:text-accent hover:underline"
-                          >
-                            {r.subject_full_name}
-                          </Link>
-                          {r.external_reference ? (
-                            <div className="text-xs text-text-subtle">
-                              {r.external_reference}
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className="py-2 pr-4 text-text-muted">
-                          Stage #{r.current_stage_id}
-                        </td>
-                        <td className="py-2 pr-4">
-                          <StatusBadge status={r.status} />
-                        </td>
-                        <td className="py-2 pr-4">
-                          <RiskBadge band={r.risk_band} score={r.risk_score} />
-                        </td>
-                        <td className="py-2 text-xs text-text-muted">
-                          {formatDateTime(r.updated_at)}
-                        </td>
-                      </tr>
-                    ))}
+                    {attentionRows.map((r) => {
+                      const stage = stagesById.get(r.current_stage_id);
+                      return (
+                        <tr
+                          key={r.id}
+                          className="border-t border-surface-border align-middle"
+                        >
+                          <td className="py-2 pr-4">
+                            <Link
+                              href={`/records/${r.id}`}
+                              className="font-medium text-text hover:text-accent hover:underline"
+                            >
+                              {r.subject_full_name}
+                            </Link>
+                            {r.external_reference ? (
+                              <div className="text-xs text-text-subtle">
+                                {r.external_reference}
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-4">
+                            {stage ? (
+                              <StageBadge
+                                name={stage.name}
+                                orderIndex={stage.order_index}
+                                tone="neutral"
+                              />
+                            ) : (
+                              <span className="text-text-muted">
+                                Stage #{r.current_stage_id}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <StatusBadge status={r.status} />
+                          </td>
+                          <td className="py-2 pr-4">
+                            <RiskBadge band={r.risk_band} score={r.risk_score} />
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-text-muted">
+                            {r.assigned_user_name ?? "Unassigned"}
+                          </td>
+                          <td className="py-2 text-xs text-text-muted">
+                            {formatDateTime(r.updated_at)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -274,8 +306,8 @@ export default function DashboardPage() {
           </Panel>
 
           <Panel
-            title="Recent records"
-            description="Most recently updated"
+            title="Recently updated"
+            description="Latest activity across all records."
             className="lg:col-span-1"
           >
             {recentRows.length === 0 ? (

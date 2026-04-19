@@ -80,3 +80,11 @@ class RuleEvaluation(Base):
 
     record: Mapped["Record"] = relationship(back_populates="rule_evaluations")  # noqa: F821
     rule: Mapped["Rule"] = relationship()
+
+    @property
+    def rule_code(self) -> str:
+        return self.rule.code if self.rule else ""
+
+    @property
+    def rule_name(self) -> str:
+        return self.rule.name if self.rule else ""
