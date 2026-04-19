@@ -1,34 +1,39 @@
-Phase 4 committed (`351a39d`) and pushed. Frontend build succeeds, all 62 backend tests still pass.
+Polish pass committed (`7642c8f`) and pushed. **66 backend tests passing** (4 new). Frontend build succeeds.
 
 ## Summary
 
-### Pages built
-- **`/login`** — working auth form, includes a local demo-access helper that lists the four seeded accounts with "Use this" buttons. Redirect-aware via `?next=`.
-- **`/dashboard`** — four stat cards (total, in-progress, blocked, high/critical risk) plus a "records needing attention" table and a recent-records panel.
-- **`/records`** — records table with search (name/reference), stage filter, risk-band filter, and status filter. Blocked rows carry a left severity accent.
-- **`/records/[id]`** — the centerpiece. Header with stage/status/risk, action bar (run evaluation, attempt transition, refresh), decision summary with blocking vs warning panels, workflow stage timeline, document evidence panel (required/satisfied/present/missing/rejected counts plus per-type sub-panels with inline **Verify** / **Reject** buttons), and audit trail rendered from canonical event payloads.
+### What was polished
 
-### Auth
-- `lib/auth.ts` stores the JWT in `localStorage` (keyed `veriflow.token`, user cached at `veriflow.user`).
-- `lib/api.ts` injects the bearer token on every request and throws `ApiError(status, detail)`.
-- `AppShell` client component guards the `(app)` route group: on mount it reads the token, redirects to `/login?next=…` if absent, and renders the header with signed-in user + sign-out.
-- README explicitly labels this as MVP-safe and notes to switch to HTTP-only cookies before hosting.
+**Backend response quality (the foundation):**
+- `RecordRead` now includes `assigned_user_name` — sourced from a small `@property` on the `Record` model that reads `assigned_user.full_name`. `record_repository` uses `selectinload(Record.assigned_user)` so list endpoints stay single-query.
+- `RuleEvaluationRead` now includes `rule_code` and `rule_name` — sourced from properties on `RuleEvaluation` that read from the related `Rule`. `evaluation_service.current_evaluations` preloads `RuleEvaluation.rule`.
+- Both payloads handle null cases cleanly (unassigned records emit `assigned_user_name: null`).
 
-### Actions on the detail page
-- **Run evaluation** — `POST /records/{id}/evaluate`, updates decision and refreshes all panels.
-- **Attempt transition** — choose a target stage, `POST /records/{id}/transition`. Shows blocked vs completed feedback with the new stage name.
-- **Verify document** — `POST /documents/{id}/verify`, refetches status.
-- **Reject document** — prompts for a reason, `POST /documents/{id}/reject`, refetches.
-- Every action emits a status banner and refreshes record, document-status, audit, and evaluations together.
+**Frontend consistency:**
+- New shared `StageBadge` (with current/past/future/neutral tones) and `SeverityPanel` components. The inline stage pill on the detail page and the inline `IssueList` subcomponent were replaced so every page renders the same concepts identically.
+- Dashboard "Needs attention" now fetches the workflow once to render stage names via `StageBadge`, and adds an "Assigned to" column using `assigned_user_name`.
+- Records list shows `assigned_user_name` ("Unassigned" when null) instead of `User #N`.
+- Record detail header renders `assigned_user_name` and the current stage via the shared `StageBadge`.
+- Persisted evaluation rows now drive the initial decision view using the real `rule_code`/`rule_name`, so the detail page labels are identical before and after clicking **Run evaluation**.
 
-### Minimal backend additions (justified)
-- `GET /api/workflows/{id}` so the detail page can show stage names in the timeline.
-- `GET /api/records/{id}/audit` so the audit trail panel is real, not mocked.
+**Copy and empty-state polish:**
+- Dashboard titles and sublabels tightened ("Operations overview", "Needs attention", "Recently updated", "resolution required", "review recommended").
+- Record detail: "Evaluation", "Workflow progress", and "Audit trail" panel descriptions rewritten; empty states made specific (e.g. "No audit history yet" with an explanation of when events will appear).
+- Severity empty labels sharpened.
 
-### Known limitations left for future polish
-- **`assigned_user_id` is rendered as `User #{id}`** — a `/api/users` listing or embedded `assigned_user_name` on `RecordRead` would make this readable.
-- **Document upload UI is not built**. The backend supports `POST /records/{id}/documents` (metadata), but with no file-storage integration behind it, adding an upload form would be theatre. Verify/reject of existing seeded documents is sufficient to demonstrate the lifecycle.
-- **Audit trail is per-record only** — no global audit view.
-- **No pagination yet** on the records list (fetches `limit=500`); adequate for the demo-scale dataset.
-- **No frontend tests**. The build check and type check are the guardrails; adding Playwright or Vitest was out of scope for this phase.
-- **Rule codes on the detail page derive from `RuleEvaluationRow.rule_id`** (as `rule#N`) when shown from the persisted rows (first page load). After the user clicks **Run evaluation**, the fresh `EvaluationDecision` gives the real rule codes. A one-line backend addition (embed `rule_code` on `RuleEvaluationRead`) would remove that asymmetry.
+**Login helper presentation:**
+- "Local demo access" now reads as a practical affordance: clear scope caveat, divided account list, neutral button copy ("Use email"), and the shared password relegated to a bottom-of-panel footer rather than shouted in the header.
+
+### How assignee names are now exposed
+`RecordRead.assigned_user_name: Optional[str]`. The detail header, dashboard "Needs attention" table, and records list all render this string directly, with `"Unassigned"` as the null fallback.
+
+### How rule codes are now exposed
+`RuleEvaluationRead.rule_code: str` and `rule_name: str`. The frontend's `RuleEvaluationRow` type carries both; the record detail page uses them when deriving the initial decision view from persisted rows, so there's no more `rule#N` fallback anywhere in the UI.
+
+### Remaining presentation limitations before deployment/showcase
+- **Document upload UI** is still not built. The backend accepts `POST /records/{id}/documents` (metadata), but no file-storage integration is wired, so adding an upload form without real storage would be theatre. Verify/reject of seeded documents already demonstrates the lifecycle.
+- **No global audit view** — audit is per-record only.
+- **No pagination** on the records list (fetches `limit=500`); fine for demo-scale data, worth adding before a real dataset.
+- **No frontend test harness**. The build check and type check are the only guardrails.
+- **Session is localStorage-backed**. Fine for local walkthrough, but switch to HTTP-only cookies before any hosted deployment.
+- **Roles are authenticated but not authorized per route.** `require_roles` exists server-side but no route uses it; verify/reject currently accept any authenticated user from the org.
