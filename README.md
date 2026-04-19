@@ -103,9 +103,11 @@ npm install
 npm run dev
 ```
 
-The frontend in this phase is a structural scaffold with placeholder
-pages at `/`, `/login`, and `/dashboard`. The API contracts in this
-repository drive the upcoming UI work.
+Phase 4 ships a working frontend that demonstrates the backend
+capabilities end-to-end: authentication, an operational dashboard, a
+records table with filters, and a detail page that shows evaluation
+outcomes, document evidence, workflow stage progress, and the audit
+trail. See [`frontend/README.md`](./frontend/README.md) for details.
 
 ### Tests
 
@@ -140,9 +142,11 @@ shared environment.
 
 ## Status
 
-Phases 0 through 3 are complete. The backend runs a code-driven rule
+Phases 0 through 4 are complete. The backend runs a code-driven rule
 engine, computes risk scores, persists evaluation outcomes, enforces
 stage-gated transitions, and treats documents as first-class evidence.
+Phase 4 adds a Next.js frontend that exposes that capability through a
+focused operational UI.
 
 Representative API surface:
 
@@ -152,7 +156,9 @@ Representative API surface:
 - `POST /api/records/{id}/transition`
 - `GET|POST /api/records/{id}/documents`
 - `GET /api/records/{id}/document-status`
+- `GET /api/records/{id}/audit`
 - `POST /api/documents/{id}/verify` · `POST /api/documents/{id}/reject`
+- `GET /api/workflows/{id}`
 
 For architecture, rule catalogue, and document evidence details, see:
 

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.audit import AuditEntryRead
 from app.schemas.document import (
     DocumentCreate,
     DocumentRead,
@@ -187,6 +188,30 @@ def upload_document(
         storage_uri=payload.storage_uri,
         notes=payload.notes,
     )
+
+
+@router.get("/{record_id}/audit", response_model=List[AuditEntryRead])
+def list_audit(
+    record_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    from sqlalchemy import select as sa_select
+
+    from app.models.audit import AuditLog
+
+    stmt = (
+        sa_select(AuditLog)
+        .where(AuditLog.record_id == record_id)
+        .order_by(AuditLog.id.desc())
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 @router.get("/{record_id}/document-status", response_model=DocumentStatusResponse)

@@ -1,0 +1,49 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background-color: #0b1220;
+    color: #e6edf3;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  button {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-lg border border-surface-border bg-surface-panel;
+  }
+  .panel-muted {
+    @apply rounded-lg border border-surface-border bg-surface-muted;
+  }
+  .field-label {
+    @apply text-xs font-medium uppercase tracking-wide text-text-subtle;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium
+           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-strong;
+  }
+  .btn-secondary {
+    @apply btn border border-surface-border bg-surface-muted text-text hover:border-text-subtle;
+  }
+  .btn-danger {
+    @apply btn bg-severity-critical/90 text-white hover:bg-severity-critical;
+  }
+  .input {
+    @apply w-full rounded-md border border-surface-border bg-surface-muted px-3 py-2
+           text-sm text-text placeholder:text-text-subtle focus:outline-none
+           focus:ring-1 focus:ring-accent;
+  }
+  .chip {
+    @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium;
+  }
+}
