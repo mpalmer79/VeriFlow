@@ -1,69 +1,79 @@
 # VeriFlow — Schema evolution
 
-VeriFlow does not currently bundle Alembic. The local demo bootstraps
-its schema via `Base.metadata.create_all` inside `seed_data.run()` and
-the test suite recreates the schema per test against an in-memory
-SQLite database. This keeps local development and CI friction-free.
+Schema evolution is now managed by **Alembic**, rooted at
+`backend/migrations/`. The test suite still uses
+`Base.metadata.create_all` against an in-memory SQLite database so
+tests stay fast; production and long-lived development databases
+should use Alembic.
 
-Phase 1 hardening introduced additive columns. If you are running
-against an **existing** database rather than starting fresh, you need
-to evolve the schema out-of-band. This document summarizes the
-columns that were added so you can craft a migration.
-
-## Phase 1 additive changes
-
-### `records`
-
-- `version INTEGER NOT NULL DEFAULT 1` — optimistic-concurrency token.
-
-### `audit_logs`
-
-- `previous_hash VARCHAR(64) NULL` — SHA-256 hex of the chain's prior
-  entry in the same organization scope.
-- `entry_hash VARCHAR(64) NOT NULL` — SHA-256 hex of this entry's
-  canonicalized material.
-- Add a non-unique index on `entry_hash` for lookups.
-
-Existing rows written before this change have neither hash. Running
-the chain is append-from-now-on; the earliest row with a computed
-`entry_hash` will simply have `previous_hash` equal to the last row's
-previous hash column (or `NULL` if none existed) — the chain is only
-trusted forward from the first hashed row.
-
-### `documents`
-
-All six columns are nullable so existing rows continue to satisfy
-`NOT NULL` constraints with no backfill:
-
-- `original_filename VARCHAR(255)`
-- `mime_type VARCHAR(120)`
-- `size_bytes BIGINT`
-- `content_hash VARCHAR(128)` *(indexed)*
-- `verified_content_hash VARCHAR(128)`
-- `expires_at TIMESTAMPTZ`
-
-## Recommended path for a real environment
-
-For any environment that needs schema evolution beyond "drop and
-recreate", introduce Alembic in a dedicated pass:
+## Layout
 
 ```
-cd backend
-pip install alembic
-alembic init migrations
+backend/
+├── alembic.ini
+└── migrations/
+    ├── env.py               # wires Alembic to app.models.Base.metadata
+    ├── script.py.mako       # revision template
+    └── versions/
+        └── 0001_initial_schema.py
 ```
 
-Wire `migrations/env.py` to `app.models.Base.metadata` and the
-`DATABASE_URL` in settings, generate an initial "baseline" migration
-that captures the current schema, then commit a second migration that
-applies the Phase 1 additions above. Do not half-configure Alembic —
-either do it fully in one pass or keep the current
-`Base.metadata.create_all` bootstrap.
+`env.py` resolves the database URL from `app.core.config.Settings`, so
+running Alembic commands respects the same `DATABASE_URL` the app uses.
 
-Until Alembic lands, the only supported evolution paths are:
+## Baseline strategy
 
-- **Fresh databases** — `python -m app.seed.seed_data` runs
-  `Base.metadata.create_all` and seeds.
-- **Existing databases** — apply the column additions listed above
-  manually via `ALTER TABLE` statements. Defaults and nullability are
-  chosen so none of the existing rows need a backfill.
+`0001_initial_schema.py` is an honest baseline of the current schema
+(Phases 0–2). Because the project previously bootstrapped via
+`Base.metadata.create_all`, the baseline migration calls the same
+method against `op.get_bind()` rather than duplicating every model as
+an `op.create_table` call (which would drift from the SQLAlchemy
+metadata over time).
+
+Every **future** schema change must be a proper incremental migration
+built on top of this baseline — `op.add_column`, `op.alter_column`,
+`op.create_index`, etc. — so we get both the "revision history"
+benefit and a clear upgrade/downgrade path.
+
+## Common commands
+
+```bash
+# From backend/ (with Python env active and DATABASE_URL set):
+alembic upgrade head                 # apply all migrations
+alembic current                       # show current revision
+alembic history                       # show revision chain
+alembic revision -m "add some column" # create a new (empty) migration
+alembic revision --autogenerate -m "…" # autogenerate from metadata diff
+alembic downgrade -1                  # roll back one revision
+```
+
+## Stamping an existing database
+
+If you already have a VeriFlow schema in a database (created by an
+earlier `create_all` bootstrap) and you just want Alembic to start
+tracking it:
+
+```bash
+alembic stamp head
+```
+
+This records the baseline revision without running its DDL.
+
+## Tests vs Alembic
+
+The pytest suite (`backend/conftest.py`) deliberately calls
+`Base.metadata.create_all` on an in-memory SQLite database per test so
+we get fast, isolated runs without the Alembic boot time. Production
+evolution goes through Alembic. The two paths share the same
+`Base.metadata` so they cannot drift.
+
+## Phase 2 additions covered by the baseline
+
+- All Phase 0–1 tables and columns, including the Phase 1 optimistic
+  concurrency (`records.version`), audit chain hashes
+  (`audit_logs.previous_hash`, `audit_logs.entry_hash`), and document
+  integrity metadata (`documents.original_filename`, `mime_type`,
+  `size_bytes`, `content_hash`, `verified_content_hash`, `expires_at`).
+- No DDL changes in Phase 2 itself — the Phase 2 work is in services,
+  routes, and storage rather than schema, so the initial revision is
+  the only one needed today.

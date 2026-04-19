@@ -120,19 +120,23 @@ def evaluate_and_persist(
     actor: User,
     record: Record,
     stage_context: Optional[WorkflowStage] = None,
+    apply_to_record: bool = True,
     commit: bool = True,
 ) -> EvaluationDecision:
-    """Run evaluation, persist results, recalculate risk, and audit.
+    """Run evaluation, persist the evaluation rows, and optionally mutate
+    the record's risk fields.
 
-    `stage_context` selects which rules apply (see
-    `rule_engine_service.applicable_rules`). Defaults to the record's
-    current stage; `workflow_service.transition_record` passes the target
-    stage so the transition is evaluated against where the record is
-    trying to go.
+    `stage_context` selects which rules apply. Defaults to the record's
+    current stage; transitions pass the target stage so rules for stages
+    the record is about to enter come into scope.
 
-    When `commit` is False the caller is responsible for committing; this
-    is used by `workflow_service.transition_record` so evaluation and
-    transition land in the same transaction.
+    `apply_to_record=False` (used by `workflow_service.transition_record`)
+    computes the decision and refreshes `rule_evaluations`, but leaves
+    `record.risk_score` / `record.risk_band` unchanged. This avoids the
+    Phase 1 leak where blocked transitions silently mutated record row
+    state without touching `record.version`.
+
+    When `commit=False` the caller is responsible for committing.
     """
     # Import locally to avoid a circular import through rule_engine_service.
     from app.services.audit_payloads import record_evaluated, risk_recalculated
@@ -145,8 +149,9 @@ def evaluate_and_persist(
     _replace_evaluations(db, record, results)
 
     prior_risk_score = record.risk_score
-    record.risk_score = decision.risk_score
-    record.risk_band = RiskBand(decision.risk_band)
+    if apply_to_record:
+        record.risk_score = decision.risk_score
+        record.risk_band = RiskBand(decision.risk_band)
     db.flush()
 
     effective_context = stage_context or record.current_stage
@@ -166,21 +171,22 @@ def evaluate_and_persist(
             decision=decision,
         ),
     )
-    audit_service.record_event(
-        db,
-        action="record.risk_recalculated",
-        entity_type="record",
-        entity_id=record.id,
-        organization_id=record.organization_id,
-        actor_user_id=actor.id,
-        record_id=record.id,
-        payload=risk_recalculated(
+    if apply_to_record:
+        audit_service.record_event(
+            db,
+            action="record.risk_recalculated",
+            entity_type="record",
+            entity_id=record.id,
+            organization_id=record.organization_id,
+            actor_user_id=actor.id,
             record_id=record.id,
-            prior_risk_score=prior_risk_score,
-            new_risk_score=decision.risk_score,
-            risk_band=decision.risk_band,
-        ),
-    )
+            payload=risk_recalculated(
+                record_id=record.id,
+                prior_risk_score=prior_risk_score,
+                new_risk_score=decision.risk_score,
+                risk_band=decision.risk_band,
+            ),
+        )
 
     if commit:
         db.commit()

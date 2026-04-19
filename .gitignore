@@ -12,6 +12,10 @@ htmlcov/
 *.sqlite3
 *.db
 
+# Local evidence storage (never commit uploaded bytes)
+backend/evidence/
+evidence/
+
 # Node / Next.js
 node_modules/
 .next/

@@ -414,28 +414,26 @@ def test_document_metadata_persists_and_serializes(
 def test_verification_records_verified_content_hash(
     client, auth_headers, db_session
 ):
-    record = _create_record(client, auth_headers, _workflow(db_session).id)
-    upload = client.post(
-        f"/api/records/{record['id']}/documents",
-        headers=auth_headers,
-        json={
-            "document_type": "photo_id",
-            "content_hash": "b" * 64,
-        },
-    ).json()
+    # Phase 2: the verified hash is recomputed from stored bytes, never
+    # defaulted from ingest metadata. Use the multipart upload path so
+    # the server owns real bytes to re-hash at verify time.
+    import hashlib
 
-    # Default: verify without an explicit observed hash falls back to content_hash.
+    record = _create_record(client, auth_headers, _workflow(db_session).id)
+    content = b"verified-content-hash-test-bytes"
+    expected = hashlib.sha256(content).hexdigest()
+    upload = client.post(
+        f"/api/records/{record['id']}/documents/upload",
+        headers=auth_headers,
+        data={"document_type": "photo_id"},
+        files={"file": ("doc.bin", content, "application/octet-stream")},
+    ).json()
+    assert upload["content_hash"] == expected
+
     verify = client.post(
         f"/api/documents/{upload['id']}/verify",
         headers=auth_headers,
         json={},
     ).json()
-    assert verify["verified_content_hash"] == "b" * 64
-
-    # Explicit: a later re-verification can record an independent observed hash.
-    verify_explicit = client.post(
-        f"/api/documents/{upload['id']}/verify",
-        headers=auth_headers,
-        json={"verified_content_hash": "c" * 64},
-    ).json()
-    assert verify_explicit["verified_content_hash"] == "c" * 64
+    assert verify["verified_content_hash"] == expected
+    assert verify["status"] == "verified"

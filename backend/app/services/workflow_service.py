@@ -14,11 +14,13 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.enums import RiskBand
 from app.models.record import Record
 from app.models.user import User
 from app.repositories import record_repository, workflow_repository
 from app.services import audit_service, evaluation_service
 from app.services.audit_payloads import (
+    risk_recalculated,
     transition_attempted,
     transition_blocked,
     transition_completed,
@@ -96,18 +98,21 @@ def transition_record(
         ),
     )
 
+    # Blocked evaluations must not silently mutate the record row: compute
+    # the decision and refresh the persisted evaluation set, but leave
+    # `record.risk_score` / `record.risk_band` untouched here. Risk fields
+    # are only applied on the successful path below, where a version bump
+    # accompanies them.
     decision = evaluation_service.evaluate_and_persist(
         db,
         actor=actor,
         record=record,
         stage_context=target_stage,
+        apply_to_record=False,
         commit=False,
     )
 
     if not decision.can_progress:
-        # Risk fields may have been recomputed during evaluation; that is a
-        # system-driven side effect, not a caller-visible mutation, so the
-        # version is deliberately left unchanged on a blocked transition.
         audit_service.record_event(
             db,
             action="record.transition_blocked",
@@ -136,9 +141,29 @@ def transition_record(
             message=decision.summary,
         )
 
+    # Successful path: apply stage + risk + version in a single mutation.
+    prior_risk_score = record.risk_score
     record.current_stage_id = target_stage.id
+    record.risk_score = decision.risk_score
+    record.risk_band = RiskBand(decision.risk_band)
     record.version = record.version + 1
     record_repository.save(db, record)
+
+    audit_service.record_event(
+        db,
+        action="record.risk_recalculated",
+        entity_type="record",
+        entity_id=record.id,
+        organization_id=record.organization_id,
+        actor_user_id=actor.id,
+        record_id=record.id,
+        payload=risk_recalculated(
+            record_id=record.id,
+            prior_risk_score=prior_risk_score,
+            new_risk_score=decision.risk_score,
+            risk_band=decision.risk_band,
+        ),
+    )
 
     audit_service.record_event(
         db,

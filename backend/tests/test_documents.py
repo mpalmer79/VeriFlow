@@ -88,9 +88,15 @@ def _current_version(client, auth_headers, record_id: int) -> int:
 
 
 def _upload(client, auth_headers, record_id, document_type, **extras):
-    body = {"document_type": document_type, **extras}
+    # Use the real upload path so verify/reject flows exercise stored bytes.
+    content = extras.pop("content", f"demo-bytes-for-{document_type}".encode())
+    filename = extras.pop("filename", f"{document_type}.bin")
+    data = {"document_type": document_type, **extras}
     response = client.post(
-        f"/api/records/{record_id}/documents", headers=auth_headers, json=body
+        f"/api/records/{record_id}/documents/upload",
+        headers=auth_headers,
+        data=data,
+        files={"file": (filename, content, "application/octet-stream")},
     )
     assert response.status_code == 201, response.text
     return response.json()
