@@ -1,13 +1,23 @@
 import re
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core import evidence_storage
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.security import (
+    CONTENT_ACCESS_DEFAULT_TTL_SECONDS,
+    TokenValidationError,
+    create_content_access_token,
+    decode_content_access_token,
+)
+from app.models.document import Document
 from app.models.user import User
 from app.schemas.document import (
     DocumentRead,
@@ -156,27 +166,27 @@ _BASE_CONTENT_HEADERS: dict[str, str] = {
 }
 
 
-@router.get("/{document_id}/content")
-async def download_document_content(
-    document_id: int,
-    disposition: str = Query("attachment", pattern="^(attachment|inline)$"),
-    range_header: Optional[str] = Header(default=None, alias="Range"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    try:
-        doc, path = document_service.resolve_content_for_download(
-            db, actor=current_user, document_id=document_id
-        )
-    except document_service.DocumentNotFound as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except document_service.DocumentAccessDenied as exc:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    except document_service.DocumentContentMissing as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+class SignedAccessRequest(BaseModel):
+    disposition: str = Field(default="inline", pattern="^(attachment|inline)$")
+    ttl_seconds: Optional[int] = Field(default=None, ge=10, le=600)
 
+
+class SignedAccessResponse(BaseModel):
+    token: str
+    expires_at: datetime
+    ttl_seconds: int
+    document_id: int
+    disposition: str
+    url: str
+
+
+def _serve_document_content(
+    doc,
+    path,
+    *,
+    disposition: str,
+    range_header: Optional[str],
+):
     try:
         file_size = path.stat().st_size
     except OSError as exc:
@@ -188,9 +198,6 @@ async def download_document_content(
     filename = _content_disposition_filename(doc)
     media_type = doc.mime_type or "application/octet-stream"
 
-    # Inline delivery is only offered for content types the frontend can
-    # render safely; everything else is delivered as an attachment even if
-    # the caller asked for inline.
     effective_disposition = (
         "inline"
         if disposition == "inline" and media_type in PREVIEWABLE_CONTENT_TYPES
@@ -206,7 +213,6 @@ async def download_document_content(
     if range_header:
         parsed_range = _parse_range_header(range_header, file_size)
         if parsed_range is None:
-            # Malformed or unsatisfiable range -> 416 with Content-Range: */size.
             raise HTTPException(
                 status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
                 detail="Invalid Range header",
@@ -231,6 +237,131 @@ async def download_document_content(
         evidence_storage.iter_stored_chunks(doc.storage_uri),
         media_type=media_type,
         headers=headers,
+    )
+
+
+@router.get("/{document_id}/content")
+async def download_document_content(
+    document_id: int,
+    disposition: str = Query("attachment", pattern="^(attachment|inline)$"),
+    range_header: Optional[str] = Header(default=None, alias="Range"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        doc, path = document_service.resolve_content_for_download(
+            db, actor=current_user, document_id=document_id
+        )
+    except document_service.DocumentNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except document_service.DocumentAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except document_service.DocumentContentMissing as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    return _serve_document_content(
+        doc, path, disposition=disposition, range_header=range_header
+    )
+
+
+@router.post(
+    "/{document_id}/signed-access",
+    response_model=SignedAccessResponse,
+)
+def issue_signed_content_access(
+    document_id: int,
+    payload: SignedAccessRequest | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Mint a short-lived signed token a browser can use in a plain URL
+    (without an Authorization header) to fetch one document's content
+    once. Only upload-backed documents are eligible.
+    """
+    try:
+        doc, _path = document_service.resolve_content_for_download(
+            db, actor=current_user, document_id=document_id
+        )
+    except document_service.DocumentNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except document_service.DocumentAccessDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except document_service.DocumentContentMissing as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+
+    disposition = payload.disposition if payload else "inline"
+    ttl_seconds = (
+        payload.ttl_seconds
+        if payload and payload.ttl_seconds is not None
+        else get_settings().content_access_ttl_seconds
+    )
+    token, expires_at = create_content_access_token(
+        document_id=doc.id,
+        organization_id=doc.record.organization_id,
+        user_id=current_user.id,
+        disposition=disposition,
+        ttl_seconds=ttl_seconds,
+    )
+    # The url is a path relative to the API prefix; the frontend composes
+    # the full URL using its own API base so we don't bake an absolute
+    # host into the response.
+    url = f"/documents/content/signed?token={token}"
+    return SignedAccessResponse(
+        token=token,
+        expires_at=expires_at,
+        ttl_seconds=ttl_seconds,
+        document_id=doc.id,
+        disposition=disposition,
+        url=url,
+    )
+
+
+@router.get("/content/signed")
+async def download_signed_content(
+    token: str = Query(...),
+    range_header: Optional[str] = Header(default=None, alias="Range"),
+    db: Session = Depends(get_db),
+):
+    """Serve one document's content for a caller that presents a valid
+    short-lived content-access token. No Authorization header required —
+    the token itself is the authorization. Scope is verified against the
+    token claims (document id + organization id).
+    """
+    try:
+        claims = decode_content_access_token(token)
+    except TokenValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
+        ) from exc
+
+    document_id = int(claims["doc"])
+    organization_id = int(claims["org"])
+    disposition = str(claims.get("disp", "inline"))
+
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+    if doc.record is None or doc.record.organization_id != organization_id:
+        # Org association changed since the token was minted; refuse.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Token is no longer valid for this document",
+        )
+
+    path = evidence_storage.resolve_local_path(doc.storage_uri)
+    if path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Stored content is missing or unreadable.",
+        )
+    return _serve_document_content(
+        doc, path, disposition=disposition, range_header=range_header
     )
 
 

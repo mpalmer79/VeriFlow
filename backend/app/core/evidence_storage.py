@@ -272,6 +272,33 @@ def iter_managed_files():
         yield entry, size
 
 
+def _is_inside_root(path: Path) -> bool:
+    root = _storage_root()
+    try:
+        path.resolve().relative_to(root)
+    except (ValueError, OSError):
+        return False
+    return True
+
+
+def delete_file_inside_root(path: Path) -> bool:
+    """Delete a file that lives strictly inside the managed storage root.
+
+    Returns True iff the file was removed. Any attempt to delete outside
+    the root is refused. Tolerates TOCTOU races where the file vanished
+    after being enumerated.
+    """
+    if not _is_inside_root(path):
+        return False
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+    return True
+
+
 def is_local_uri(storage_uri: Optional[str]) -> bool:
     return bool(storage_uri and storage_uri.startswith(LOCAL_URI_PREFIX))
 
@@ -357,6 +384,7 @@ __all__ = [
     "store_stream",
     "iter_stored_chunks",
     "iter_managed_files",
+    "delete_file_inside_root",
     "is_local_uri",
     "resolve_local_path",
     "read_stored_bytes",
