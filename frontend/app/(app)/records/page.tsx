@@ -258,10 +258,8 @@ export default function RecordsPage() {
                             score={record.risk_score}
                           />
                         </td>
-                        <td className="px-4 py-3 align-top tabular-nums text-text-muted">
-                          {record.assigned_user_id !== null
-                            ? `User #${record.assigned_user_id}`
-                            : "—"}
+                        <td className="px-4 py-3 align-top text-text-muted">
+                          {record.assigned_user_name ?? "Unassigned"}
                         </td>
                         <td className="px-4 py-3 align-top tabular-nums text-text-muted">
                           {formatDateTime(record.updated_at)}

@@ -26,6 +26,8 @@ class RuleEvaluationRead(BaseModel):
 
     id: int
     rule_id: int
+    rule_code: str
+    rule_name: str
     passed: bool
     action_applied: RuleActionApplied
     risk_applied: int

@@ -56,6 +56,7 @@ export interface RecordRead {
   workflow_id: number;
   current_stage_id: number;
   assigned_user_id: number | null;
+  assigned_user_name: string | null;
   external_reference: string | null;
   subject_full_name: string;
   subject_dob: string | null;
@@ -92,6 +93,8 @@ export interface EvaluationDecision {
 export interface RuleEvaluationRow {
   id: number;
   rule_id: number;
+  rule_code: string;
+  rule_name: string;
   passed: boolean;
   action_applied: RuleActionApplied;
   risk_applied: number;
