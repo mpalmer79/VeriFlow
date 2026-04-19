@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"
     jwt_expires_minutes: int = 60
+    jwt_issuer: str = "veriflow"
+    jwt_audience: str = "veriflow-api"
 
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

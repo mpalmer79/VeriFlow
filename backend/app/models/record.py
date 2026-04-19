@@ -75,6 +75,8 @@ class Record(Base, TimestampMixin):
         default=RiskBand.LOW,
     )
 
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
     notes: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="records")  # noqa: F821

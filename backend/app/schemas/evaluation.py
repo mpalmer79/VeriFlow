@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.enums import RiskBand, RuleActionApplied
 
@@ -37,6 +37,7 @@ class RuleEvaluationRead(BaseModel):
 
 class TransitionRequest(BaseModel):
     target_stage_id: int
+    expected_version: int = Field(ge=1)
 
 
 class TransitionResponse(BaseModel):
@@ -44,5 +45,6 @@ class TransitionResponse(BaseModel):
     from_stage_id: int
     target_stage_id: int
     updated_stage_id: int
+    record_version: int
     decision: EvaluationDecisionRead
     message: str

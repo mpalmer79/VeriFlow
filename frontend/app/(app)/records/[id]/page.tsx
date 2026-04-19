@@ -179,7 +179,11 @@ export default function RecordDetailPage() {
     setTransitioning(true);
     setFlash(null);
     try {
-      const result = await records.transition(record.id, Number(targetStageId));
+      const result = await records.transition(
+        record.id,
+        Number(targetStageId),
+        record.version
+      );
       setDecision(result.decision);
       await refreshAll({ silent: true });
       if (result.success) {

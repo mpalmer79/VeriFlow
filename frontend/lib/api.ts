@@ -102,10 +102,13 @@ export const records = {
     request<EvaluationDecision>(`/records/${id}/evaluate`, { method: "POST" }),
   evaluations: (id: number) =>
     request<RuleEvaluationRow[]>(`/records/${id}/evaluations`),
-  transition: (id: number, targetStageId: number) =>
+  transition: (id: number, targetStageId: number, expectedVersion: number) =>
     request<TransitionResponse>(`/records/${id}/transition`, {
       method: "POST",
-      body: { target_stage_id: targetStageId },
+      body: {
+        target_stage_id: targetStageId,
+        expected_version: expectedVersion,
+      },
     }),
 };
 

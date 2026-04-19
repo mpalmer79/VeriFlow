@@ -14,6 +14,12 @@ class DocumentRead(BaseModel):
     document_type: DocumentType
     label: Optional[str]
     storage_uri: Optional[str]
+    original_filename: Optional[str]
+    mime_type: Optional[str]
+    size_bytes: Optional[int]
+    content_hash: Optional[str]
+    verified_content_hash: Optional[str]
+    expires_at: Optional[datetime]
     status: DocumentStatus
     notes: Optional[str]
     verified_by_user_id: Optional[int]
@@ -30,10 +36,16 @@ class DocumentCreate(BaseModel):
     label: Optional[str] = Field(default=None, max_length=200)
     storage_uri: Optional[str] = Field(default=None, max_length=500)
     notes: Optional[str] = Field(default=None, max_length=1000)
+    original_filename: Optional[str] = Field(default=None, max_length=255)
+    mime_type: Optional[str] = Field(default=None, max_length=120)
+    size_bytes: Optional[int] = Field(default=None, ge=0)
+    content_hash: Optional[str] = Field(default=None, max_length=128)
+    expires_at: Optional[datetime] = None
 
 
 class DocumentVerifyRequest(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=1000)
+    verified_content_hash: Optional[str] = Field(default=None, max_length=128)
 
 
 class DocumentRejectRequest(BaseModel):

@@ -88,6 +88,8 @@ def update_record(
         record = record_service.update_record(db, current_user, record_id, payload)
     except (record_service.StageNotFound, record_service.StageWorkflowMismatch) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except record_service.VersionConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
@@ -136,9 +138,12 @@ def transition_record(
             actor=current_user,
             record_id=record_id,
             target_stage_id=payload.target_stage_id,
+            expected_version=payload.expected_version,
         )
     except (record_service.StageNotFound, record_service.StageWorkflowMismatch) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except record_service.VersionConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
@@ -148,6 +153,7 @@ def transition_record(
         from_stage_id=result.from_stage_id,
         target_stage_id=result.target_stage_id,
         updated_stage_id=result.updated_stage_id,
+        record_version=result.record_version,
         decision=_decision_to_schema(result.decision),
         message=result.message,
     )
@@ -187,6 +193,11 @@ def upload_document(
         label=payload.label,
         storage_uri=payload.storage_uri,
         notes=payload.notes,
+        original_filename=payload.original_filename,
+        mime_type=payload.mime_type,
+        size_bytes=payload.size_bytes,
+        content_hash=payload.content_hash,
+        expires_at=payload.expires_at,
     )
 
 

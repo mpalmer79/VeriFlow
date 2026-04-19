@@ -68,12 +68,14 @@ def test_get_record_not_found(client, auth_headers):
 
 def test_update_record_changes_notes(client, auth_headers):
     listing = client.get("/api/records", headers=auth_headers).json()
-    record_id = listing[0]["id"]
+    record = listing[0]
 
     response = client.patch(
-        f"/api/records/{record_id}",
-        json={"notes": "Updated by test."},
+        f"/api/records/{record['id']}",
+        json={"notes": "Updated by test.", "expected_version": record["version"]},
         headers=auth_headers,
     )
     assert response.status_code == 200
-    assert response.json()["notes"] == "Updated by test."
+    body = response.json()
+    assert body["notes"] == "Updated by test."
+    assert body["version"] == record["version"] + 1

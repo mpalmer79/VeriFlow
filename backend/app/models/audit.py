@@ -26,6 +26,9 @@ class AuditLog(Base):
     entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
+    previous_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    entry_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

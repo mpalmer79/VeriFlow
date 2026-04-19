@@ -27,6 +27,7 @@ from app.services.evaluation_service import EvaluationDecision
 from app.services.record_service import (
     StageNotFound,
     StageWorkflowMismatch,
+    VersionConflict,
     get_record,
 )
 
@@ -42,6 +43,7 @@ class TransitionResult:
     from_stage_id: int
     target_stage_id: int
     updated_stage_id: int
+    record_version: int
     decision: EvaluationDecision
     message: str
 
@@ -63,10 +65,18 @@ def transition_record(
     actor: User,
     record_id: int,
     target_stage_id: int,
+    expected_version: int,
 ) -> Optional[TransitionResult]:
     record = get_record(db, actor, record_id)
     if record is None:
         return None
+
+    if record.version != expected_version:
+        raise VersionConflict(
+            record_id=record.id,
+            expected=expected_version,
+            current=record.version,
+        )
 
     target_stage = _load_target_stage(db, record.workflow_id, target_stage_id)
     from_stage_id = record.current_stage_id
@@ -95,6 +105,9 @@ def transition_record(
     )
 
     if not decision.can_progress:
+        # Risk fields may have been recomputed during evaluation; that is a
+        # system-driven side effect, not a caller-visible mutation, so the
+        # version is deliberately left unchanged on a blocked transition.
         audit_service.record_event(
             db,
             action="record.transition_blocked",
@@ -118,11 +131,13 @@ def transition_record(
             from_stage_id=from_stage_id,
             target_stage_id=target_stage.id,
             updated_stage_id=record.current_stage_id,
+            record_version=record.version,
             decision=decision,
             message=decision.summary,
         )
 
     record.current_stage_id = target_stage.id
+    record.version = record.version + 1
     record_repository.save(db, record)
 
     audit_service.record_event(
@@ -149,6 +164,7 @@ def transition_record(
         from_stage_id=from_stage_id,
         target_stage_id=target_stage.id,
         updated_stage_id=record.current_stage_id,
+        record_version=record.version,
         decision=decision,
         message=decision.summary,
     )

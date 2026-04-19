@@ -71,12 +71,20 @@ def _create_record(
     if record["current_stage_id"] != target:
         patch = client.patch(
             f"/api/records/{record['id']}",
-            json={"current_stage_id": target},
+            json={
+                "current_stage_id": target,
+                "expected_version": record["version"],
+            },
             headers=auth_headers,
         )
         assert patch.status_code == 200, patch.text
         record = patch.json()
     return record
+
+
+def _current_version(client, auth_headers, record_id: int) -> int:
+    body = client.get(f"/api/records/{record_id}", headers=auth_headers).json()
+    return int(body["version"])
 
 
 def _upload(client, auth_headers, record_id, document_type, **extras):
@@ -235,7 +243,7 @@ def test_verifying_required_document_unblocks_progression(
     blocked = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": stages["provider_triage"]},
+        json={"target_stage_id": stages["provider_triage"], "expected_version": _current_version(client, auth_headers, record["id"])},
     ).json()
     assert blocked["success"] is False
     assert any(
@@ -248,7 +256,7 @@ def test_verifying_required_document_unblocks_progression(
     ok = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": stages["provider_triage"]},
+        json={"target_stage_id": stages["provider_triage"], "expected_version": _current_version(client, auth_headers, record["id"])},
     ).json()
     assert ok["success"] is True
     assert ok["updated_stage_id"] == stages["provider_triage"]
@@ -314,7 +322,7 @@ def test_transition_uses_target_stage_context_not_current(
     response = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": stages["insurance_review"]},
+        json={"target_stage_id": stages["insurance_review"], "expected_version": _current_version(client, auth_headers, record["id"])},
     )
     body = response.json()
     assert response.status_code == 200
