@@ -65,7 +65,10 @@ def _create_record(client, auth_headers, workflow_id, *, stage_slug, **overrides
     if record["current_stage_id"] != target:
         patch = client.patch(
             f"/api/records/{record['id']}",
-            json={"current_stage_id": target},
+            json={
+                "current_stage_id": target,
+                "expected_version": record["version"],
+            },
             headers=auth_headers,
         )
         assert patch.status_code == 200, patch.text

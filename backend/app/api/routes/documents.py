@@ -27,6 +27,7 @@ def verify_document(
             actor=current_user,
             document_id=document_id,
             notes=payload.notes if payload else None,
+            verified_content_hash=payload.verified_content_hash if payload else None,
         )
     except document_service.DocumentNotFound as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

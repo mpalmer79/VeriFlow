@@ -70,6 +70,7 @@ export interface RecordRead {
   insurance_in_network: boolean | null;
   risk_score: number;
   risk_band: RiskBand;
+  version: number;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -107,6 +108,7 @@ export interface TransitionResponse {
   from_stage_id: number;
   target_stage_id: number;
   updated_stage_id: number;
+  record_version: number;
   decision: EvaluationDecision;
   message: string;
 }
@@ -117,6 +119,12 @@ export interface DocumentRead {
   document_type: DocumentType;
   label: string | null;
   storage_uri: string | null;
+  original_filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  content_hash: string | null;
+  verified_content_hash: string | null;
+  expires_at: string | null;
   status: DocumentStatus;
   notes: string | null;
   verified_by_user_id: number | null;

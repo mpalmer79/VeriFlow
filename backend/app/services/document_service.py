@@ -88,6 +88,11 @@ def upload_document(
     label: Optional[str] = None,
     storage_uri: Optional[str] = None,
     notes: Optional[str] = None,
+    original_filename: Optional[str] = None,
+    mime_type: Optional[str] = None,
+    size_bytes: Optional[int] = None,
+    content_hash: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
 ) -> Document:
     if record.organization_id != actor.organization_id:
         raise DocumentAccessDenied("Record does not belong to this organization")
@@ -99,6 +104,11 @@ def upload_document(
         storage_uri=storage_uri,
         notes=notes,
         status=DocumentStatus.UPLOADED,
+        original_filename=original_filename,
+        mime_type=mime_type,
+        size_bytes=size_bytes,
+        content_hash=content_hash,
+        expires_at=expires_at,
     )
     db.add(doc)
     db.flush()
@@ -129,6 +139,7 @@ def verify_document(
     actor: User,
     document_id: int,
     notes: Optional[str] = None,
+    verified_content_hash: Optional[str] = None,
 ) -> Document:
     doc = document_repository.get(db, document_id)
     if doc is None:
@@ -144,6 +155,13 @@ def verify_document(
     doc.rejection_reason = None
     if notes is not None:
         doc.notes = notes
+    if verified_content_hash is not None:
+        doc.verified_content_hash = verified_content_hash
+    elif doc.content_hash is not None and doc.verified_content_hash is None:
+        # Default the verified hash to the ingest-time hash so a row
+        # verified without an explicit re-check still carries a
+        # non-null value to compare against later.
+        doc.verified_content_hash = doc.content_hash
     db.flush()
 
     audit_service.record_event(

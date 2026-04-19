@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -22,6 +22,14 @@ class Document(Base, TimestampMixin):
     )
     label: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     storage_uri: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    original_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    size_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    content_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    verified_content_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     status: Mapped[DocumentStatus] = mapped_column(
         Enum(DocumentStatus, name="document_status", native_enum=True, validate_strings=True),
         nullable=False,

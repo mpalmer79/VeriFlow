@@ -78,7 +78,10 @@ def _create_record(client, auth_headers, workflow_id, **overrides):
     if target is not None and record["current_stage_id"] != target:
         patch = client.patch(
             f"/api/records/{record['id']}",
-            json={"current_stage_id": target},
+            json={
+                "current_stage_id": target,
+                "expected_version": record["version"],
+            },
             headers=auth_headers,
         )
         assert patch.status_code == 200, patch.text
@@ -86,7 +89,28 @@ def _create_record(client, auth_headers, workflow_id, **overrides):
     return record
 
 
+def _current_version(client, auth_headers, record_id: int) -> int:
+    body = client.get(f"/api/records/{record_id}", headers=auth_headers).json()
+    return int(body["version"])
+
+
+def _transition(client, auth_headers, record_id: int, target_stage_id: int):
+    return client.post(
+        f"/api/records/{record_id}/transition",
+        headers=auth_headers,
+        json={
+            "target_stage_id": target_stage_id,
+            "expected_version": _current_version(client, auth_headers, record_id),
+        },
+    )
+
+
 def _patch_record(client, auth_headers, record_id, **fields):
+    if "expected_version" not in fields:
+        fields = {
+            **fields,
+            "expected_version": _current_version(client, auth_headers, record_id),
+        }
     response = client.patch(f"/api/records/{record_id}", json=fields, headers=auth_headers)
     assert response.status_code == 200, response.text
     return response.json()
@@ -327,7 +351,7 @@ def test_transition_fails_when_blocking_rules_present(
     response = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": target},
+        json={"target_stage_id": target, "expected_version": _current_version(client, auth_headers, record["id"])},
     )
     assert response.status_code == 200
     body = response.json()
@@ -356,7 +380,7 @@ def test_transition_succeeds_when_only_warnings_present(
     response = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": target},
+        json={"target_stage_id": target, "expected_version": _current_version(client, auth_headers, record["id"])},
     )
     assert response.status_code == 200
     body = response.json()
@@ -386,7 +410,7 @@ def test_transition_succeeds_when_all_requirements_met(
     response = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": target},
+        json={"target_stage_id": target, "expected_version": _current_version(client, auth_headers, record["id"])},
     )
     assert response.status_code == 200
     body = response.json()
@@ -428,7 +452,7 @@ def test_transition_rejects_stage_from_other_workflow(
     response = client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": other_stage.id},
+        json={"target_stage_id": other_stage.id, "expected_version": _current_version(client, auth_headers, record["id"])},
     )
     assert response.status_code == 400
 
@@ -455,7 +479,7 @@ def test_transition_produces_audit_trail(client, auth_headers, db_session):
     client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": target},
+        json={"target_stage_id": target, "expected_version": _current_version(client, auth_headers, record["id"])},
     )
 
     actions = [
@@ -479,7 +503,7 @@ def test_blocked_transition_produces_blocked_audit_event(
     client.post(
         f"/api/records/{record['id']}/transition",
         headers=auth_headers,
-        json={"target_stage_id": target},
+        json={"target_stage_id": target, "expected_version": _current_version(client, auth_headers, record["id"])},
     )
 
     actions = [

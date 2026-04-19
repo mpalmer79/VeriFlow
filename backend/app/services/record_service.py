@@ -27,6 +27,18 @@ class StageWorkflowMismatch(RecordServiceError):
     """Raised when a stage does not belong to the target workflow."""
 
 
+class VersionConflict(RecordServiceError):
+    """Raised when a mutation's `expected_version` does not match the persisted row."""
+
+    def __init__(self, record_id: int, expected: int, current: int) -> None:
+        super().__init__(
+            f"Record {record_id} version mismatch: expected {expected}, current {current}"
+        )
+        self.record_id = record_id
+        self.expected_version = expected
+        self.current_version = current
+
+
 def _load_stage_for_workflow(
     db: Session, workflow_id: int, stage_id: int
 ) -> WorkflowStage:
@@ -107,7 +119,14 @@ def update_record(
     if record is None:
         return None
 
-    changes = payload.model_dump(exclude_unset=True)
+    if record.version != payload.expected_version:
+        raise VersionConflict(
+            record_id=record.id,
+            expected=payload.expected_version,
+            current=record.version,
+        )
+
+    changes = payload.model_dump(exclude_unset=True, exclude={"expected_version"})
 
     new_stage_id = changes.get("current_stage_id")
     if new_stage_id is not None:
@@ -116,6 +135,7 @@ def update_record(
     for field, value in changes.items():
         setattr(record, field, value)
 
+    record.version = record.version + 1
     record = record_repository.save(db, record)
     audit_service.record_event(
         db,
@@ -125,7 +145,10 @@ def update_record(
         organization_id=actor.organization_id,
         actor_user_id=actor.id,
         record_id=record.id,
-        payload={"changes": list(changes.keys())},
+        payload={
+            "changes": list(changes.keys()),
+            "new_version": record.version,
+        },
     )
     db.commit()
     db.refresh(record)

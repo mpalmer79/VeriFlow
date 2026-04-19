@@ -33,6 +33,7 @@ class RecordCreate(RecordBase):
 
 
 class RecordUpdate(BaseModel):
+    expected_version: int = Field(ge=1)
     subject_full_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     subject_dob: Optional[date] = None
     external_reference: Optional[str] = Field(default=None, max_length=80)
@@ -71,6 +72,7 @@ class RecordRead(BaseModel):
     insurance_in_network: Optional[bool]
     risk_score: int
     risk_band: RiskBand
+    version: int
     notes: Optional[str]
     created_at: datetime
     updated_at: datetime

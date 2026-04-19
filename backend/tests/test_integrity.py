@@ -97,12 +97,15 @@ def test_update_record_rejects_stage_from_other_workflow(
     ).scalar_one().id
 
     listing = client.get("/api/records", headers=auth_headers).json()
-    record_id = listing[0]["id"]
+    record = listing[0]
 
     response = client.patch(
-        f"/api/records/{record_id}",
+        f"/api/records/{record['id']}",
         headers=auth_headers,
-        json={"current_stage_id": other_stage_id},
+        json={
+            "current_stage_id": other_stage_id,
+            "expected_version": record["version"],
+        },
     )
     assert response.status_code == 400
     assert "does not belong" in response.json()["detail"].lower()
@@ -118,12 +121,15 @@ def test_update_record_accepts_same_workflow_stage(client, auth_headers, db_sess
     target_stage_id = stages[1].id
 
     listing = client.get("/api/records", headers=auth_headers).json()
-    record_id = listing[0]["id"]
+    record = listing[0]
 
     response = client.patch(
-        f"/api/records/{record_id}",
+        f"/api/records/{record['id']}",
         headers=auth_headers,
-        json={"current_stage_id": target_stage_id},
+        json={
+            "current_stage_id": target_stage_id,
+            "expected_version": record["version"],
+        },
     )
     assert response.status_code == 200
     assert response.json()["current_stage_id"] == target_stage_id
@@ -131,12 +137,15 @@ def test_update_record_accepts_same_workflow_stage(client, auth_headers, db_sess
 
 def test_update_record_rejects_unknown_stage(client, auth_headers):
     listing = client.get("/api/records", headers=auth_headers).json()
-    record_id = listing[0]["id"]
+    record = listing[0]
 
     response = client.patch(
-        f"/api/records/{record_id}",
+        f"/api/records/{record['id']}",
         headers=auth_headers,
-        json={"current_stage_id": 999999},
+        json={
+            "current_stage_id": 999999,
+            "expected_version": record["version"],
+        },
     )
     assert response.status_code == 400
 
