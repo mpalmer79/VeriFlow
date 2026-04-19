@@ -133,3 +133,19 @@ def document_rejected(
         "rejected_by": rejected_by,
         "rejection_reason": rejection_reason,
     }
+
+
+def document_deleted(
+    *,
+    document: Document,
+    deleted_by: int,
+    stored_content_removed: bool,
+) -> Dict[str, Any]:
+    return {
+        "record_id": document.record_id,
+        "document_id": document.id,
+        "document_type": document.document_type.value,
+        "document_status": document.status.value,
+        "deleted_by": deleted_by,
+        "stored_content_removed": stored_content_removed,
+    }

@@ -25,6 +25,8 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentRead,
     DocumentStatusResponse,
+    IntegrityCheckResponse,
+    RecordIntegritySummaryResponse,
 )
 from app.schemas.evaluation import (
     EvaluationDecisionRead,
@@ -258,6 +260,11 @@ async def upload_document_file(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
         ) from exc
+    except evidence_storage.UnsupportedContentType as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
+        ) from exc
     except evidence_storage.PayloadTooLarge as exc:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -287,6 +294,41 @@ def list_audit(
         .limit(limit)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+@router.get(
+    "/{record_id}/integrity-summary",
+    response_model=RecordIntegritySummaryResponse,
+)
+def record_integrity_summary(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    results = document_service.record_integrity_summary(
+        db, actor=current_user, record=record
+    )
+    checked_at = datetime.now()
+    return RecordIntegritySummaryResponse(
+        record_id=record.id,
+        checked_at=checked_at,
+        documents=[
+            IntegrityCheckResponse(
+                document_id=r.document_id,
+                has_stored_content=r.has_stored_content,
+                expected_content_hash=r.expected_content_hash,
+                actual_content_hash=r.actual_content_hash,
+                is_match=r.is_match,
+                checked_at=r.checked_at,
+                message=r.message,
+            )
+            for r in results
+        ],
+    )
 
 
 @router.get("/{record_id}/document-status", response_model=DocumentStatusResponse)

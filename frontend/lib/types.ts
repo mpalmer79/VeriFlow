@@ -118,7 +118,7 @@ export interface DocumentRead {
   record_id: number;
   document_type: DocumentType;
   label: string | null;
-  storage_uri: string | null;
+  has_stored_content: boolean;
   original_filename: string | null;
   mime_type: string | null;
   size_bytes: number | null;
@@ -134,6 +134,22 @@ export interface DocumentRead {
   rejection_reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface IntegrityCheckResult {
+  document_id: number;
+  has_stored_content: boolean;
+  expected_content_hash: string | null;
+  actual_content_hash: string | null;
+  is_match: boolean;
+  checked_at: string;
+  message: string;
+}
+
+export interface RecordIntegritySummary {
+  record_id: number;
+  checked_at: string;
+  documents: IntegrityCheckResult[];
 }
 
 export interface DocumentStatusResponse {

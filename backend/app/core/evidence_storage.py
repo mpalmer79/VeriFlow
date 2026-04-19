@@ -39,6 +39,51 @@ class EmptyPayload(StorageError):
     pass
 
 
+class UnsupportedContentType(StorageError):
+    def __init__(self, detected: Optional[str], client: Optional[str]) -> None:
+        super().__init__(
+            f"Content type not allowed (detected={detected!r}, client={client!r})"
+        )
+        self.detected = detected
+        self.client = client
+
+
+# Evidence types accepted at ingest. Keep this tight — expanding it is a
+# policy change, not a perf tweak.
+ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
+    {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+    }
+)
+
+
+_MAGIC_SIGNATURES: tuple[tuple[bytes, str], ...] = (
+    (b"%PDF-", "application/pdf"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+)
+
+
+def detect_content_type(content: bytes, client_mime: Optional[str] = None) -> str:
+    """Return the canonical MIME type inferred from magic bytes.
+
+    Falls back to the client-provided type only when the payload has no
+    recognized signature *and* the client type is in the allowlist. Any
+    mismatch between a recognized signature and an allowed client type
+    resolves to the signature-detected type so we never trust the
+    extension or header alone.
+    """
+    for signature, mime in _MAGIC_SIGNATURES:
+        if content.startswith(signature):
+            return mime
+    normalized_client = (client_mime or "").split(";", 1)[0].strip().lower() or None
+    if normalized_client and normalized_client in ALLOWED_CONTENT_TYPES:
+        return normalized_client
+    raise UnsupportedContentType(detected=None, client=normalized_client)
+
+
 @dataclass(frozen=True)
 class StoredObject:
     storage_uri: str
@@ -114,6 +159,22 @@ def read_stored_bytes(storage_uri: Optional[str]) -> Optional[bytes]:
         return None
 
 
+def delete_local_object(storage_uri: Optional[str]) -> bool:
+    """Delete the stored file for a local URI if it exists inside the
+    configured evidence root. Returns True iff a file was deleted.
+    """
+    path = resolve_local_path(storage_uri)
+    if path is None:
+        return False
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+    return True
+
+
 def hash_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
@@ -139,12 +200,16 @@ __all__ = [
     "StorageError",
     "PayloadTooLarge",
     "EmptyPayload",
+    "UnsupportedContentType",
     "StoredObject",
     "LOCAL_URI_PREFIX",
+    "ALLOWED_CONTENT_TYPES",
     "store_bytes",
     "is_local_uri",
     "resolve_local_path",
     "read_stored_bytes",
     "hash_bytes",
     "safe_filename",
+    "detect_content_type",
+    "delete_local_object",
 ]

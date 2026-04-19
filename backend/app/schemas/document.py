@@ -13,7 +13,7 @@ class DocumentRead(BaseModel):
     record_id: int
     document_type: DocumentType
     label: Optional[str]
-    storage_uri: Optional[str]
+    has_stored_content: bool
     original_filename: Optional[str]
     mime_type: Optional[str]
     size_bytes: Optional[int]
@@ -62,6 +62,12 @@ class IntegrityCheckResponse(BaseModel):
     is_match: bool
     checked_at: datetime
     message: str
+
+
+class RecordIntegritySummaryResponse(BaseModel):
+    record_id: int
+    checked_at: datetime
+    documents: List[IntegrityCheckResponse]
 
 
 class DocumentStatusResponse(BaseModel):

@@ -58,3 +58,12 @@ class Document(Base, TimestampMixin):
     rejected_by: Mapped[Optional["User"]] = relationship(  # noqa: F821
         foreign_keys=[rejected_by_user_id]
     )
+
+    @property
+    def has_stored_content(self) -> bool:
+        # Derived from storage_uri: a row that carries a server-managed
+        # `file:` URI is backed by real bytes on disk. Metadata-only
+        # registrations never set a local URI so this stays False.
+        from app.core.evidence_storage import is_local_uri
+
+        return is_local_uri(self.storage_uri)

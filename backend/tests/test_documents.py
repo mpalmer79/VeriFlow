@@ -87,16 +87,21 @@ def _current_version(client, auth_headers, record_id: int) -> int:
     return int(body["version"])
 
 
+PNG_HEADER = b"\x89PNG\r\n\x1a\n"
+
+
 def _upload(client, auth_headers, record_id, document_type, **extras):
     # Use the real upload path so verify/reject flows exercise stored bytes.
-    content = extras.pop("content", f"demo-bytes-for-{document_type}".encode())
-    filename = extras.pop("filename", f"{document_type}.bin")
+    # Payload starts with the PNG magic header so the ingest content-type
+    # validation treats the body as a recognized image.
+    content = extras.pop("content", PNG_HEADER + f"demo-{document_type}".encode())
+    filename = extras.pop("filename", f"{document_type}.png")
     data = {"document_type": document_type, **extras}
     response = client.post(
         f"/api/records/{record_id}/documents/upload",
         headers=auth_headers,
         data=data,
-        files={"file": (filename, content, "application/octet-stream")},
+        files={"file": (filename, content, "image/png")},
     )
     assert response.status_code == 201, response.text
     return response.json()

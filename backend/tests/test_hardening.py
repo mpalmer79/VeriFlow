@@ -76,15 +76,18 @@ def _create_record(client, auth_headers, workflow_id, *, stage_slug, **overrides
     return record
 
 
+_PNG_HEADER = b"\x89PNG\r\n\x1a\n"
+
+
 def _upload(client, auth_headers, record_id, document_type, **extras):
-    content = extras.pop("content", f"hardening-{document_type}".encode())
-    filename = extras.pop("filename", f"{document_type}.bin")
+    content = extras.pop("content", _PNG_HEADER + f"hardening-{document_type}".encode())
+    filename = extras.pop("filename", f"{document_type}.png")
     data = {"document_type": document_type, **extras}
     response = client.post(
         f"/api/records/{record_id}/documents/upload",
         headers=auth_headers,
         data=data,
-        files={"file": (filename, content, "application/octet-stream")},
+        files={"file": (filename, content, "image/png")},
     )
     assert response.status_code == 201, response.text
     return response.json()

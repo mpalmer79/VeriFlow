@@ -22,6 +22,7 @@ from app.models.user import User
 from app.repositories import document_repository
 from app.services import audit_service
 from app.services.audit_payloads import (
+    document_deleted,
     document_rejected,
     document_uploaded,
     document_verified,
@@ -182,12 +183,22 @@ def upload_file_document(
     notes: Optional[str] = None,
     expires_at: Optional[datetime] = None,
 ) -> Document:
-    """Ingest real bytes: compute size + SHA-256 from the payload, store
-    locally, and persist a Document whose content_hash reflects the
-    persisted content.
+    """Ingest real bytes: detect and validate the content type, compute
+    size + SHA-256 from the payload, store locally, and persist a
+    Document whose content_hash and mime_type reflect the persisted
+    content. Raises `UnsupportedContentType` before anything is written
+    to disk if the payload is not in the evidence allowlist.
     """
     if record.organization_id != actor.organization_id:
         raise DocumentAccessDenied("Record does not belong to this organization")
+
+    # Empty payload is a request-shape problem (400), not a content-type
+    # problem (415): check it before content-type detection so the caller
+    # gets an accurate status code.
+    if not content:
+        raise evidence_storage.EmptyPayload("File payload is empty")
+
+    resolved_mime = evidence_storage.detect_content_type(content, mime_type)
 
     stored = evidence_storage.store_bytes(content)
 
@@ -199,7 +210,7 @@ def upload_file_document(
         notes=notes,
         status=DocumentStatus.UPLOADED,
         original_filename=evidence_storage.safe_filename(original_filename),
-        mime_type=mime_type,
+        mime_type=resolved_mime,
         size_bytes=stored.size_bytes,
         content_hash=stored.content_hash,
         expires_at=expires_at,
@@ -402,6 +413,63 @@ def reject_document(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def delete_document(
+    db: Session,
+    *,
+    actor: User,
+    document_id: int,
+) -> None:
+    """Remove a document row and its stored content, if any.
+
+    File cleanup goes through `evidence_storage.delete_local_object`
+    which validates that the path lives inside the configured storage
+    root; a URI that points outside or a missing file is tolerated.
+    """
+    doc = document_repository.get(db, document_id)
+    if doc is None:
+        raise DocumentNotFound(f"Document {document_id} not found")
+    record = doc.record
+    _require_access(doc, record, actor)
+
+    stored_removed = evidence_storage.delete_local_object(doc.storage_uri)
+
+    audit_service.record_event(
+        db,
+        action="document.deleted",
+        entity_type="document",
+        entity_id=doc.id,
+        organization_id=record.organization_id,
+        actor_user_id=actor.id,
+        record_id=record.id,
+        payload=document_deleted(
+            document=doc,
+            deleted_by=actor.id,
+            stored_content_removed=stored_removed,
+        ),
+    )
+
+    db.delete(doc)
+    db.commit()
+
+
+def record_integrity_summary(
+    db: Session,
+    *,
+    actor: User,
+    record: Record,
+) -> List[IntegrityCheckResult]:
+    """Run the read-only integrity check against every document on a
+    record and return the collected results in insertion order.
+    """
+    if record.organization_id != actor.organization_id:
+        raise DocumentAccessDenied("Record does not belong to this organization")
+
+    documents = document_repository.list_for_record(db, record.id)
+    return [
+        check_integrity(db, actor=actor, document_id=doc.id) for doc in documents
+    ]
 
 
 def required_document_types(db: Session, record: Record) -> List[DocumentType]:
