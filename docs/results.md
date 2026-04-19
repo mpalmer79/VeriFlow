@@ -1,39 +1,59 @@
-Polish pass committed (`7642c8f`) and pushed. **66 backend tests passing** (4 new). Frontend build succeeds.
+Phase 1 hardening committed (`c004bb9`) and pushed. **82 backend tests passing**, frontend build succeeds.
 
-## Summary
+## Implementation summary
 
-### What was polished
+**A. Optimistic concurrency.** `records.version: int` (default 1); `RecordUpdate.expected_version` and `TransitionRequest.expected_version` are required (422 if missing); `record_service.update_record` and `workflow_service.transition_record` compare against the persisted row, raise `VersionConflict`, and the routes map that to HTTP 409. Version increments on every successful update and on successful stage transition. Blocked transitions intentionally do **not** increment, since the risk recalc that happens during evaluation is a system-driven side effect, not a caller mutation. `RecordRead.version` and `TransitionResponse.record_version` expose the current value to callers.
 
-**Backend response quality (the foundation):**
-- `RecordRead` now includes `assigned_user_name` — sourced from a small `@property` on the `Record` model that reads `assigned_user.full_name`. `record_repository` uses `selectinload(Record.assigned_user)` so list endpoints stay single-query.
-- `RuleEvaluationRead` now includes `rule_code` and `rule_name` — sourced from properties on `RuleEvaluation` that read from the related `Rule`. `evaluation_service.current_evaluations` preloads `RuleEvaluation.rule`.
-- Both payloads handle null cases cleanly (unassigned records emit `assigned_user_name: null`).
+**B. Tamper-evident audit chain.** `audit_logs.previous_hash` and `audit_logs.entry_hash` (indexed) columns. `audit_service.record_event` now computes `entry_hash = sha256(prev_hash + action + entity_type + entity_id + organization_id + actor_user_id + record_id + canonicalized JSON payload)` with canonicalization via `json.dumps(sort_keys=True, separators=(",", ":"), default=str)`. Chaining is organization-scoped. Within a single request, `db.flush()` makes an inserted row visible so subsequent events in the same transaction (e.g. attempted → evaluated → recalculated → completed) link correctly. Pure helper `compute_entry_hash` is exposed for testability.
 
-**Frontend consistency:**
-- New shared `StageBadge` (with current/past/future/neutral tones) and `SeverityPanel` components. The inline stage pill on the detail page and the inline `IssueList` subcomponent were replaced so every page renders the same concepts identically.
-- Dashboard "Needs attention" now fetches the workflow once to render stage names via `StageBadge`, and adds an "Assigned to" column using `assigned_user_name`.
-- Records list shows `assigned_user_name` ("Unassigned" when null) instead of `User #N`.
-- Record detail header renders `assigned_user_name` and the current stage via the shared `StageBadge`.
-- Persisted evaluation rows now drive the initial decision view using the real `rule_code`/`rule_name`, so the detail page labels are identical before and after clicking **Run evaluation**.
+**C. Document integrity metadata.** `documents.original_filename`, `mime_type`, `size_bytes` (BigInteger), `content_hash` (indexed), `verified_content_hash`, `expires_at` — all nullable. `DocumentCreate` / `DocumentRead` / `DocumentVerifyRequest` updated accordingly. `verify_document` writes `verified_content_hash` explicitly when provided, else defaults to the ingest-time `content_hash` so verified rows always carry something to compare against later.
 
-**Copy and empty-state polish:**
-- Dashboard titles and sublabels tightened ("Operations overview", "Needs attention", "Recently updated", "resolution required", "review recommended").
-- Record detail: "Evaluation", "Workflow progress", and "Audit trail" panel descriptions rewritten; empty states made specific (e.g. "No audit history yet" with an explanation of when events will appear).
-- Severity empty labels sharpened.
+**D. JWT claims.** Config adds `jwt_issuer` (default `"veriflow"`) and `jwt_audience` (default `"veriflow-api"`). `create_access_token` issues `sub`, `iat`, `nbf`, `exp`, `iss`, `aud`, `typ="access"`, and a UUID-hex `jti`. Reserved claims can't be overwritten by caller extras. `decode_access_token` uses `jose`'s `audience=`/`issuer=` for validation and then checks `typ == "access"` explicitly. New `TokenValidationError` subclasses `ValueError` to stay compatible with the existing FastAPI auth dependency.
 
-**Login helper presentation:**
-- "Local demo access" now reads as a practical affordance: clear scope caveat, divided account list, neutral button copy ("Use email"), and the shared password relegated to a bottom-of-panel footer rather than shouted in the header.
+## Exact files modified
 
-### How assignee names are now exposed
-`RecordRead.assigned_user_name: Optional[str]`. The detail header, dashboard "Needs attention" table, and records list all render this string directly, with `"Unassigned"` as the null fallback.
+- `backend/app/core/config.py`
+- `backend/app/core/security.py`
+- `backend/app/models/audit.py`
+- `backend/app/models/document.py`
+- `backend/app/models/record.py`
+- `backend/app/schemas/document.py`
+- `backend/app/schemas/evaluation.py`
+- `backend/app/schemas/record.py`
+- `backend/app/services/audit_service.py`
+- `backend/app/services/document_service.py`
+- `backend/app/services/record_service.py`
+- `backend/app/services/workflow_service.py`
+- `backend/app/api/routes/records.py`
+- `backend/app/api/routes/documents.py`
+- `backend/tests/test_records.py`, `test_integrity.py`, `test_evaluation.py`, `test_documents.py`, `test_hardening.py` (updated to pass `expected_version`)
+- `frontend/lib/types.ts`, `frontend/lib/api.ts`, `frontend/app/(app)/records/[id]/page.tsx`
 
-### How rule codes are now exposed
-`RuleEvaluationRead.rule_code: str` and `rule_name: str`. The frontend's `RuleEvaluationRow` type carries both; the record detail page uses them when deriving the initial decision view from persisted rows, so there's no more `rule#N` fallback anywhere in the UI.
+## Files added
 
-### Remaining presentation limitations before deployment/showcase
-- **Document upload UI** is still not built. The backend accepts `POST /records/{id}/documents` (metadata), but no file-storage integration is wired, so adding an upload form without real storage would be theatre. Verify/reject of seeded documents already demonstrates the lifecycle.
-- **No global audit view** — audit is per-record only.
-- **No pagination** on the records list (fetches `limit=500`); fine for demo-scale data, worth adding before a real dataset.
-- **No frontend test harness**. The build check and type check are the only guardrails.
-- **Session is localStorage-backed**. Fine for local walkthrough, but switch to HTTP-only cookies before any hosted deployment.
-- **Roles are authenticated but not authorized per route.** `require_roles` exists server-side but no route uses it; verify/reject currently accept any authenticated user from the org.
+- `backend/tests/test_phase1_hardening.py` — 16 new tests covering all four concerns
+- `docs/migrations.md` — Phase 1 schema evolution note
+
+## Migrations added
+
+None bundled. This repo bootstraps schema via `Base.metadata.create_all` for the local demo and tests. `docs/migrations.md` enumerates the additive columns so you can write an `ALTER TABLE` migration against an existing Postgres database, and recommends introducing Alembic as a single focused follow-up rather than half-configured here. All Phase 1 columns are nullable or have defaults so no backfill is required.
+
+## Tests added / updated
+
+- **Added** (`test_phase1_hardening.py`, 16 tests, all passing):
+  - record version exposure; `expected_version` required; successful update increments; stale version → 409
+  - successful transition increments; blocked transition does not; stale transition → 409
+  - audit chain links `entry_hash`/`previous_hash` in org scope; hash material reacts to payload changes
+  - token carries `sub/iat/nbf/exp/iss/aud/typ/jti`; decode rejects wrong audience, wrong issuer, wrong `typ`; `/api/auth/me` rejects a foreign-audience token
+  - document metadata persists and serializes; verification records `verified_content_hash` (explicit or defaulted from `content_hash`)
+- **Updated**: every existing test that issues PATCH or transition now threads `expected_version` via small helpers.
+
+## Known limitations after Phase 1
+
+- **No Alembic bundled**. Schema evolution against an existing Postgres database currently requires hand-written `ALTER TABLE`s (see `docs/migrations.md`). Adding Alembic cleanly is a natural next pass.
+- **Evaluation-driven risk recalc during a blocked transition still persists new `risk_score` / `risk_band` on the record row but does not bump `version`**. This is a deliberate UX/concurrency tradeoff (risk is a system side effect); if the product wants risk changes to conflict against concurrent human edits, version would need to be bumped in `evaluation_service.evaluate_and_persist` too.
+- **Audit chain is organization-scoped and append-from-now-on**. Existing audit rows written before Phase 1 were backfilled with an `entry_hash` equal to the hash of their current fields (since the column is `NOT NULL`) — but in the current in-memory-per-test setup this is moot. In a live Postgres migration you would want the migration to compute those hashes for historical rows, or accept that trust begins at the first post-migration row.
+- **No token revocation / jti tracking**. `jti` is issued but not persisted or checked. A small `revoked_jtis` table is a natural next step if revocation becomes a requirement.
+- **No refresh-token flow**. Explicitly out of scope for Phase 1.
+- **`verified_content_hash` is set server-side if the reviewer does not supply one** — this is a convenience for demos; a real deployment would have the verify path re-hash the retrieved blob rather than trust the ingest-time value.
+- **Frontend `records.update` helper is not yet defined**. Currently only the transition path uses `expected_version`; if/when the UI gains inline-edit, the helper pattern is already proved out in tests.
