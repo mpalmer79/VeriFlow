@@ -1,30 +1,14 @@
-import Link from "next/link";
+"use client";
 
-export default function HomePage() {
-  return (
-    <main style={{ maxWidth: 720, margin: "80px auto", padding: "0 24px" }}>
-      <h1 style={{ fontSize: 36, marginBottom: 12 }}>VeriFlow</h1>
-      <p style={{ fontSize: 18, lineHeight: 1.5, color: "#b6c2cf" }}>
-        Workflow intelligence for process compliance, operational risk, and explainable
-        decisions. The first scenario is a healthcare intake and compliance workflow.
-      </p>
-      <nav style={{ marginTop: 32, display: "flex", gap: 16 }}>
-        <Link href="/login" style={linkStyle}>
-          Sign in
-        </Link>
-        <Link href="/dashboard" style={linkStyle}>
-          Dashboard
-        </Link>
-      </nav>
-    </main>
-  );
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+import { readToken } from "@/lib/auth";
+
+export default function Index() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(readToken() ? "/dashboard" : "/login");
+  }, [router]);
+  return null;
 }
-
-const linkStyle: React.CSSProperties = {
-  padding: "10px 16px",
-  borderRadius: 6,
-  background: "#1f6feb",
-  color: "white",
-  textDecoration: "none",
-  fontWeight: 500,
-};

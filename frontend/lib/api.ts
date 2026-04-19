@@ -1,0 +1,165 @@
+// Thin, typed HTTP client for the VeriFlow API.
+// All calls go through `request` so auth, base URL, and error handling are
+// consistent. Components should import the typed wrappers below rather than
+// calling `fetch` directly.
+
+import type {
+  AuditEntry,
+  DocumentRead,
+  DocumentStatusResponse,
+  DocumentType,
+  EvaluationDecision,
+  RecordRead,
+  RuleEvaluationRow,
+  TokenResponse,
+  TransitionResponse,
+  UserPublic,
+  WorkflowStage,
+} from "./types";
+import { readToken } from "./auth";
+
+const API_BASE_URL =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE_URL) ||
+  "http://localhost:8000/api";
+
+export class ApiError extends Error {
+  status: number;
+  detail?: string;
+  constructor(status: number, message: string, detail?: string) {
+    super(message);
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+interface RequestOptions {
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  body?: unknown;
+  skipAuth?: boolean;
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (!options.skipAuth) {
+    const token = readToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: options.method ?? "GET",
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    cache: "no-store",
+  });
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await response.text();
+  const parsed = text ? (JSON.parse(text) as unknown) : undefined;
+
+  if (!response.ok) {
+    const detail =
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "detail" in parsed &&
+      typeof (parsed as { detail: unknown }).detail === "string"
+        ? ((parsed as { detail: string }).detail)
+        : response.statusText;
+    throw new ApiError(response.status, detail, detail);
+  }
+
+  return parsed as T;
+}
+
+// --- auth ---------------------------------------------------------------
+
+export const auth = {
+  login: (email: string, password: string) =>
+    request<TokenResponse>("/auth/login", {
+      method: "POST",
+      body: { email, password },
+      skipAuth: true,
+    }),
+  me: () => request<UserPublic>("/auth/me"),
+};
+
+// --- records ------------------------------------------------------------
+
+export const records = {
+  list: (params?: { limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.limit !== undefined) query.set("limit", String(params.limit));
+    if (params?.offset !== undefined) query.set("offset", String(params.offset));
+    const suffix = query.toString() ? `?${query}` : "";
+    return request<RecordRead[]>(`/records${suffix}`);
+  },
+  get: (id: number) => request<RecordRead>(`/records/${id}`),
+  evaluate: (id: number) =>
+    request<EvaluationDecision>(`/records/${id}/evaluate`, { method: "POST" }),
+  evaluations: (id: number) =>
+    request<RuleEvaluationRow[]>(`/records/${id}/evaluations`),
+  transition: (id: number, targetStageId: number) =>
+    request<TransitionResponse>(`/records/${id}/transition`, {
+      method: "POST",
+      body: { target_stage_id: targetStageId },
+    }),
+};
+
+// --- documents ----------------------------------------------------------
+
+export const documents = {
+  list: (recordId: number) =>
+    request<DocumentRead[]>(`/records/${recordId}/documents`),
+  upload: (
+    recordId: number,
+    body: {
+      document_type: DocumentType;
+      label?: string;
+      storage_uri?: string;
+      notes?: string;
+    }
+  ) =>
+    request<DocumentRead>(`/records/${recordId}/documents`, {
+      method: "POST",
+      body,
+    }),
+  status: (recordId: number) =>
+    request<DocumentStatusResponse>(`/records/${recordId}/document-status`),
+  verify: (documentId: number, notes?: string) =>
+    request<DocumentRead>(`/documents/${documentId}/verify`, {
+      method: "POST",
+      body: notes !== undefined ? { notes } : {},
+    }),
+  reject: (documentId: number, reason?: string) =>
+    request<DocumentRead>(`/documents/${documentId}/reject`, {
+      method: "POST",
+      body: reason !== undefined ? { reason } : {},
+    }),
+};
+
+// --- audit ---------------------------------------------------------------
+
+export const audit = {
+  list: (recordId: number, limit = 100) =>
+    request<AuditEntry[]>(`/records/${recordId}/audit?limit=${limit}`),
+};
+
+// --- workflows ----------------------------------------------------------
+
+interface WorkflowRead {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  stages: WorkflowStage[];
+}
+
+export const workflows = {
+  get: (id: number) => request<WorkflowRead>(`/workflows/${id}`),
+};
+
+export { API_BASE_URL };
