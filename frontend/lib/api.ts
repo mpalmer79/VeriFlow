@@ -9,6 +9,8 @@ import type {
   DocumentStatusResponse,
   DocumentType,
   EvaluationDecision,
+  IntegrityCheckResult,
+  RecordIntegritySummary,
   RecordRead,
   RuleEvaluationRow,
   TokenResponse,
@@ -110,19 +112,64 @@ export const records = {
         expected_version: expectedVersion,
       },
     }),
+  remove: (id: number, expectedVersion: number) =>
+    request<void>(
+      `/records/${id}?expected_version=${encodeURIComponent(expectedVersion)}`,
+      { method: "DELETE" }
+    ),
 };
 
 // --- documents ----------------------------------------------------------
 
+async function uploadMultipart(
+  recordId: number,
+  file: File,
+  metadata: {
+    document_type: DocumentType;
+    label?: string;
+    notes?: string;
+  }
+): Promise<DocumentRead> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("document_type", metadata.document_type);
+  if (metadata.label) form.append("label", metadata.label);
+  if (metadata.notes) form.append("notes", metadata.notes);
+  const headers: Record<string, string> = {};
+  const token = readToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const response = await fetch(
+    `${API_BASE_URL}/records/${recordId}/documents/upload`,
+    {
+      method: "POST",
+      headers,
+      body: form,
+      cache: "no-store",
+    }
+  );
+  const text = await response.text();
+  const parsed = text ? (JSON.parse(text) as unknown) : undefined;
+  if (!response.ok) {
+    const detail =
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "detail" in parsed &&
+      typeof (parsed as { detail: unknown }).detail === "string"
+        ? (parsed as { detail: string }).detail
+        : response.statusText;
+    throw new ApiError(response.status, detail, detail);
+  }
+  return parsed as DocumentRead;
+}
+
 export const documents = {
   list: (recordId: number) =>
     request<DocumentRead[]>(`/records/${recordId}/documents`),
-  upload: (
+  register: (
     recordId: number,
     body: {
       document_type: DocumentType;
       label?: string;
-      storage_uri?: string;
       notes?: string;
     }
   ) =>
@@ -130,6 +177,7 @@ export const documents = {
       method: "POST",
       body,
     }),
+  upload: uploadMultipart,
   status: (recordId: number) =>
     request<DocumentStatusResponse>(`/records/${recordId}/document-status`),
   verify: (documentId: number, notes?: string) =>
@@ -142,6 +190,43 @@ export const documents = {
       method: "POST",
       body: reason !== undefined ? { reason } : {},
     }),
+  remove: (documentId: number) =>
+    request<void>(`/documents/${documentId}`, { method: "DELETE" }),
+  integrityCheck: (documentId: number) =>
+    request<IntegrityCheckResult>(
+      `/documents/${documentId}/integrity-check`,
+      { method: "POST" }
+    ),
+  recordIntegritySummary: (recordId: number) =>
+    request<RecordIntegritySummary>(
+      `/records/${recordId}/integrity-summary`
+    ),
+  // The `/content` endpoint is plain HTTP because browsers handle the
+  // blob download directly. We expose a URL builder + auth header so a
+  // caller can trigger a download without inlining fetch logic.
+  contentUrl: (documentId: number) =>
+    `${API_BASE_URL}/documents/${documentId}/content`,
+  fetchContent: async (documentId: number): Promise<Blob> => {
+    const headers: Record<string, string> = {};
+    const token = readToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const response = await fetch(
+      `${API_BASE_URL}/documents/${documentId}/content`,
+      { headers, cache: "no-store" }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      let detail = response.statusText;
+      try {
+        const parsed = JSON.parse(text) as { detail?: string };
+        if (parsed && typeof parsed.detail === "string") detail = parsed.detail;
+      } catch {
+        // body was not JSON
+      }
+      throw new ApiError(response.status, detail, detail);
+    }
+    return response.blob();
+  },
 };
 
 // --- audit ---------------------------------------------------------------

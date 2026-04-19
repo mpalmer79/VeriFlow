@@ -39,6 +39,51 @@ class EmptyPayload(StorageError):
     pass
 
 
+class UnsupportedContentType(StorageError):
+    def __init__(self, detected: Optional[str], client: Optional[str]) -> None:
+        super().__init__(
+            f"Content type not allowed (detected={detected!r}, client={client!r})"
+        )
+        self.detected = detected
+        self.client = client
+
+
+# Evidence types accepted at ingest. Keep this tight — expanding it is a
+# policy change, not a perf tweak.
+ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
+    {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+    }
+)
+
+
+_MAGIC_SIGNATURES: tuple[tuple[bytes, str], ...] = (
+    (b"%PDF-", "application/pdf"),
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+)
+
+
+def detect_content_type(content: bytes, client_mime: Optional[str] = None) -> str:
+    """Return the canonical MIME type inferred from magic bytes.
+
+    Falls back to the client-provided type only when the payload has no
+    recognized signature *and* the client type is in the allowlist. Any
+    mismatch between a recognized signature and an allowed client type
+    resolves to the signature-detected type so we never trust the
+    extension or header alone.
+    """
+    for signature, mime in _MAGIC_SIGNATURES:
+        if content.startswith(signature):
+            return mime
+    normalized_client = (client_mime or "").split(";", 1)[0].strip().lower() or None
+    if normalized_client and normalized_client in ALLOWED_CONTENT_TYPES:
+        return normalized_client
+    raise UnsupportedContentType(detected=None, client=normalized_client)
+
+
 @dataclass(frozen=True)
 class StoredObject:
     storage_uri: str
@@ -78,6 +123,113 @@ def store_bytes(content: bytes) -> StoredObject:
     )
 
 
+_STREAM_CHUNK = 64 * 1024
+# How many bytes we peek before committing a storage file, used for content
+# type detection. All of our current magic headers fit in 8 bytes, so 32 is
+# a generous cushion.
+_TYPE_PEEK_BYTES = 32
+
+
+async def store_stream(
+    reader,
+    *,
+    client_mime: Optional[str] = None,
+) -> tuple[StoredObject, str]:
+    """Stream an upload to disk, hashing in chunks, without loading the
+    whole payload into memory.
+
+    `reader` must be an async object with a `.read(n)` coroutine that
+    returns `bytes` (FastAPI's `UploadFile` satisfies this). The function:
+
+    - peeks the first bytes to run content-type detection before anything
+      touches the filesystem
+    - writes the rest incrementally, updating a SHA-256 accumulator and
+      tracking the total byte count
+    - aborts cleanly (deleting the partial file) on empty payload,
+      oversize payload, or any unexpected I/O error
+    - returns a `StoredObject` plus the canonical detected MIME type
+    """
+    settings = get_settings()
+    max_bytes = settings.max_upload_bytes
+
+    head = await reader.read(_TYPE_PEEK_BYTES)
+    if not head:
+        raise EmptyPayload("File payload is empty")
+
+    detected_mime = detect_content_type(head, client_mime)
+
+    root = _storage_root()
+    storage_name = f"{uuid.uuid4().hex}.bin"
+    absolute_path = root / storage_name
+    hasher = hashlib.sha256()
+    total = 0
+
+    try:
+        # `x` mode is exclusive-create; a collision on the UUID would be
+        # catastrophic but also astronomically unlikely.
+        with absolute_path.open("xb") as out:
+            hasher.update(head)
+            total += len(head)
+            if total > max_bytes:
+                raise PayloadTooLarge(
+                    f"File exceeds maximum upload size ({total} > {max_bytes} bytes)"
+                )
+            out.write(head)
+            while True:
+                chunk = await reader.read(_STREAM_CHUNK)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise PayloadTooLarge(
+                        f"File exceeds maximum upload size ({total} > {max_bytes} bytes)"
+                    )
+                hasher.update(chunk)
+                out.write(chunk)
+    except BaseException:
+        # Any failure (size exceeded, I/O error, cancellation) must leave
+        # no orphan file on disk.
+        try:
+            absolute_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    if total == 0:
+        try:
+            absolute_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise EmptyPayload("File payload is empty")
+
+    return (
+        StoredObject(
+            storage_uri=_build_local_uri(absolute_path),
+            absolute_path=absolute_path,
+            size_bytes=total,
+            content_hash=hasher.hexdigest(),
+        ),
+        detected_mime,
+    )
+
+
+async def iter_stored_chunks(storage_uri: Optional[str], chunk_size: int = _STREAM_CHUNK):
+    """Async generator yielding successive file chunks for a local storage URI.
+
+    Returns nothing if the URI is not local or the file is missing. The
+    caller is expected to verify access before iterating.
+    """
+    path = resolve_local_path(storage_uri)
+    if path is None:
+        return
+    with path.open("rb") as source:
+        while True:
+            chunk = source.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+
 def is_local_uri(storage_uri: Optional[str]) -> bool:
     return bool(storage_uri and storage_uri.startswith(LOCAL_URI_PREFIX))
 
@@ -114,6 +266,22 @@ def read_stored_bytes(storage_uri: Optional[str]) -> Optional[bytes]:
         return None
 
 
+def delete_local_object(storage_uri: Optional[str]) -> bool:
+    """Delete the stored file for a local URI if it exists inside the
+    configured evidence root. Returns True iff a file was deleted.
+    """
+    path = resolve_local_path(storage_uri)
+    if path is None:
+        return False
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
+    return True
+
+
 def hash_bytes(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
@@ -139,12 +307,18 @@ __all__ = [
     "StorageError",
     "PayloadTooLarge",
     "EmptyPayload",
+    "UnsupportedContentType",
     "StoredObject",
     "LOCAL_URI_PREFIX",
+    "ALLOWED_CONTENT_TYPES",
     "store_bytes",
+    "store_stream",
+    "iter_stored_chunks",
     "is_local_uri",
     "resolve_local_path",
     "read_stored_bytes",
     "hash_bytes",
     "safe_filename",
+    "detect_content_type",
+    "delete_local_object",
 ]

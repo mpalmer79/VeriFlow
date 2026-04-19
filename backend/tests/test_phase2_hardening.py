@@ -57,17 +57,37 @@ def _create_record(client, auth_headers, workflow_id, **overrides):
     return response.json()
 
 
+PNG_HEADER = b"\x89PNG\r\n\x1a\n"
+
+
+def _png(payload: bytes) -> bytes:
+    """Prefix arbitrary test bytes with the PNG magic header so ingest
+    content-type validation accepts the payload as a real image.
+    """
+    return PNG_HEADER + payload
+
+
 def _upload_bytes(
-    client, auth_headers, record_id, document_type, content, filename="doc.bin"
+    client, auth_headers, record_id, document_type, content, filename="doc.png"
 ):
+    # Wrap raw test bytes in a PNG header unless the test explicitly
+    # supplies already-prefixed content.
+    body = content if content.startswith(PNG_HEADER) else _png(content)
     response = client.post(
         f"/api/records/{record_id}/documents/upload",
         headers=auth_headers,
         data={"document_type": document_type},
-        files={"file": (filename, content, "application/octet-stream")},
+        files={"file": (filename, body, "image/png")},
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _local_path(db_session, document_id: int):
+    """Resolve the on-disk path for a freshly uploaded document."""
+    orm_doc = db_session.get(Document, document_id)
+    db_session.refresh(orm_doc)
+    return evidence_storage.resolve_local_path(orm_doc.storage_uri)
 
 
 # --------------------------------------------------------------------------
@@ -79,7 +99,7 @@ def test_ingest_computes_sha256_and_size_from_bytes(
     client, auth_headers, db_session
 ):
     record = _create_record(client, auth_headers, _workflow(db_session).id)
-    content = b"raw-evidence-bytes-\x00\x01\x02-payload"
+    content = _png(b"raw-evidence-bytes-\x00\x01\x02-payload")
     expected_hash = hashlib.sha256(content).hexdigest()
 
     doc = _upload_bytes(client, auth_headers, record["id"], "photo_id", content)
@@ -92,7 +112,7 @@ def test_ingest_computes_sha256_and_size_from_bytes(
 
 def test_ingest_persists_filename_and_mime(client, auth_headers, db_session):
     record = _create_record(client, auth_headers, _workflow(db_session).id)
-    content = b"hello-world"
+    content = _png(b"hello-world")
     response = client.post(
         f"/api/records/{record['id']}/documents/upload",
         headers=auth_headers,
@@ -123,14 +143,16 @@ def test_ingest_rejects_overlong_payload(
     from app.core.config import get_settings
 
     settings = get_settings()
-    monkeypatch.setattr(settings, "max_upload_bytes", 16, raising=False)
+    # Bigger than the head peek (32 bytes) so type detection succeeds but
+    # the streaming writer still trips the size limit.
+    monkeypatch.setattr(settings, "max_upload_bytes", 48, raising=False)
 
     record = _create_record(client, auth_headers, _workflow(db_session).id)
     response = client.post(
         f"/api/records/{record['id']}/documents/upload",
         headers=auth_headers,
         data={"document_type": "photo_id"},
-        files={"file": ("big.bin", b"0" * 64, "application/octet-stream")},
+        files={"file": ("big.png", PNG_HEADER + b"X" * 256, "image/png")},
     )
     assert response.status_code == 413
 
@@ -141,14 +163,18 @@ def test_ingest_filename_is_sanitized(client, auth_headers, db_session):
         f"/api/records/{record['id']}/documents/upload",
         headers=auth_headers,
         data={"document_type": "photo_id"},
-        files={"file": ("../../etc/passwd", b"safe-bytes", "application/octet-stream")},
+        files={"file": ("../../etc/passwd", _png(b"safe-bytes"), "image/png")},
     )
     assert response.status_code == 201, response.text
     doc = response.json()
-    # Any directory component stripped; stored URI points inside evidence dir.
     assert doc["original_filename"] == "passwd"
-    assert doc["storage_uri"].startswith("file:")
-    resolved = evidence_storage.resolve_local_path(doc["storage_uri"])
+    # Response does not expose storage_uri; resolve the ORM row directly
+    # to confirm storage lives inside the configured evidence root.
+    orm_doc = db_session.get(Document, doc["id"])
+    db_session.refresh(orm_doc)
+    assert orm_doc.storage_uri is not None
+    assert orm_doc.storage_uri.startswith("file:")
+    resolved = evidence_storage.resolve_local_path(orm_doc.storage_uri)
     assert resolved is not None
     assert resolved.is_file()
 
@@ -162,7 +188,7 @@ def test_verification_rehashes_stored_bytes_and_succeeds(
     client, auth_headers, db_session
 ):
     record = _create_record(client, auth_headers, _workflow(db_session).id)
-    content = b"stable-verification-bytes"
+    content = _png(b"stable-verification-bytes")
     expected = hashlib.sha256(content).hexdigest()
     doc = _upload_bytes(client, auth_headers, record["id"], "photo_id", content)
 
@@ -184,7 +210,7 @@ def test_verification_fails_when_stored_bytes_are_altered(
     )
 
     # Tamper with the stored file on disk.
-    path = evidence_storage.resolve_local_path(doc["storage_uri"])
+    path = _local_path(db_session, doc["id"])
     assert path is not None
     path.write_bytes(b"tampered-bytes")
 
@@ -206,7 +232,7 @@ def test_verification_fails_when_stored_content_is_missing(
     record = _create_record(client, auth_headers, _workflow(db_session).id)
     doc = _upload_bytes(client, auth_headers, record["id"], "photo_id", b"gone-soon")
 
-    path = evidence_storage.resolve_local_path(doc["storage_uri"])
+    path = _local_path(db_session, doc["id"])
     assert path is not None
     path.unlink()
 
@@ -242,7 +268,7 @@ def test_integrity_check_returns_match_for_untouched_bytes(
     client, auth_headers, db_session
 ):
     record = _create_record(client, auth_headers, _workflow(db_session).id)
-    content = b"integrity-happy-path"
+    content = _png(b"integrity-happy-path")
     expected = hashlib.sha256(content).hexdigest()
     doc = _upload_bytes(client, auth_headers, record["id"], "photo_id", content)
 
@@ -263,7 +289,7 @@ def test_integrity_check_detects_tampering(client, auth_headers, db_session):
         client, auth_headers, record["id"], "photo_id", b"first"
     )
 
-    path = evidence_storage.resolve_local_path(doc["storage_uri"])
+    path = _local_path(db_session, doc["id"])
     assert path is not None
     path.write_bytes(b"second")
 
@@ -280,7 +306,7 @@ def test_integrity_check_on_missing_content(client, auth_headers, db_session):
     record = _create_record(client, auth_headers, _workflow(db_session).id)
     doc = _upload_bytes(client, auth_headers, record["id"], "photo_id", b"bye")
 
-    path = evidence_storage.resolve_local_path(doc["storage_uri"])
+    path = _local_path(db_session, doc["id"])
     assert path is not None
     path.unlink()
 

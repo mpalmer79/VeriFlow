@@ -12,6 +12,7 @@ import type {
   DocumentType,
   EvaluationDecision,
   EvaluationIssue,
+  IntegrityCheckResult,
   RecordRead,
   RuleEvaluationRow,
   WorkflowStage,
@@ -66,6 +67,13 @@ export default function RecordDetailPage() {
   const [targetStageId, setTargetStageId] = useState<number | "">("");
   const [flash, setFlash] = useState<Flash | null>(null);
   const [busyDocId, setBusyDocId] = useState<number | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadType, setUploadType] = useState<DocumentType>("photo_id");
+  const [uploadLabel, setUploadLabel] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [integrityResults, setIntegrityResults] = useState<
+    Record<number, IntegrityCheckResult>
+  >({});
 
   const refreshAll = useCallback(
     async (opts: { silent?: boolean } = {}) => {
@@ -245,6 +253,108 @@ export default function RecordDetailPage() {
       setFlash({
         kind: "error",
         text: err instanceof ApiError ? err.detail ?? err.message : "Rejection failed.",
+      });
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  async function handleUpload(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!record || !uploadFile || uploading) return;
+    setUploading(true);
+    setFlash(null);
+    try {
+      await documents.upload(record.id, uploadFile, {
+        document_type: uploadType,
+        label: uploadLabel || undefined,
+      });
+      setUploadFile(null);
+      setUploadLabel("");
+      await refreshAll({ silent: true });
+      setFlash({
+        kind: "success",
+        text: `Uploaded ${DOCUMENT_TYPE_LABELS[uploadType]}.`,
+      });
+    } catch (err) {
+      setFlash({
+        kind: "error",
+        text: err instanceof ApiError ? err.detail ?? err.message : "Upload failed.",
+      });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDelete(doc: DocumentRead) {
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        `Delete ${DOCUMENT_TYPE_LABELS[doc.document_type]}? This removes the document and any stored content.`
+      );
+      if (!confirmed) return;
+    }
+    setBusyDocId(doc.id);
+    setFlash(null);
+    try {
+      await documents.remove(doc.id);
+      setIntegrityResults((prev) => {
+        const next = { ...prev };
+        delete next[doc.id];
+        return next;
+      });
+      await refreshAll({ silent: true });
+      setFlash({
+        kind: "info",
+        text: `Deleted ${DOCUMENT_TYPE_LABELS[doc.document_type]}.`,
+      });
+    } catch (err) {
+      setFlash({
+        kind: "error",
+        text: err instanceof ApiError ? err.detail ?? err.message : "Deletion failed.",
+      });
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  async function handleIntegrityCheck(doc: DocumentRead) {
+    setBusyDocId(doc.id);
+    setFlash(null);
+    try {
+      const result = await documents.integrityCheck(doc.id);
+      setIntegrityResults((prev) => ({ ...prev, [doc.id]: result }));
+    } catch (err) {
+      setFlash({
+        kind: "error",
+        text:
+          err instanceof ApiError
+            ? err.detail ?? err.message
+            : "Integrity check failed.",
+      });
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  async function handleDownload(doc: DocumentRead) {
+    setBusyDocId(doc.id);
+    setFlash(null);
+    try {
+      const blob = await documents.fetchContent(doc.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download =
+        doc.original_filename ||
+        `document-${doc.id}.${(doc.mime_type ?? "application/octet-stream").split("/").pop()}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setFlash({
+        kind: "error",
+        text: err instanceof ApiError ? err.detail ?? err.message : "Download failed.",
       });
     } finally {
       setBusyDocId(null);
@@ -550,6 +660,58 @@ export default function RecordDetailPage() {
         title="Document evidence"
         description="Requirements in scope for this record's current stage, plus any attached documents."
       >
+        <form
+          onSubmit={handleUpload}
+          className="mb-4 grid gap-3 rounded-md border border-surface-border bg-surface-muted/30 p-3 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end"
+        >
+          <label className="flex flex-col gap-1">
+            <span className="field-label">Type</span>
+            <select
+              className="input"
+              value={uploadType}
+              onChange={(e) => setUploadType(e.target.value as DocumentType)}
+              disabled={uploading}
+            >
+              {(Object.keys(DOCUMENT_TYPE_LABELS) as DocumentType[]).map((t) => (
+                <option key={t} value={t}>
+                  {DOCUMENT_TYPE_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="field-label">Label (optional)</span>
+            <input
+              className="input"
+              value={uploadLabel}
+              onChange={(e) => setUploadLabel(e.target.value)}
+              placeholder="e.g. Front of driver's license"
+              disabled={uploading}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="field-label">File</span>
+            <input
+              type="file"
+              className="input"
+              accept="application/pdf,image/png,image/jpeg"
+              onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+              disabled={uploading}
+            />
+          </label>
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={uploading || uploadFile === null}
+          >
+            {uploading ? "Uploading…" : "Upload evidence"}
+          </button>
+          <p className="sm:col-span-4 text-xs text-text-subtle">
+            Accepted formats: PDF, PNG, JPEG. Server re-hashes on verify and
+            integrity check.
+          </p>
+        </form>
+
         {!docStatus ? (
           <LoadingSkeleton rows={3} />
         ) : (
@@ -611,8 +773,12 @@ export default function RecordDetailPage() {
                         <DocumentRows
                           docs={attached}
                           busyDocId={busyDocId}
+                          integrityResults={integrityResults}
                           onVerify={handleVerify}
                           onReject={handleReject}
+                          onDelete={handleDelete}
+                          onIntegrityCheck={handleIntegrityCheck}
+                          onDownload={handleDownload}
                         />
                       )}
                     </div>
@@ -642,8 +808,12 @@ export default function RecordDetailPage() {
                     <DocumentRows
                       docs={documentsByType[type] ?? []}
                       busyDocId={busyDocId}
+                      integrityResults={integrityResults}
                       onVerify={handleVerify}
                       onReject={handleReject}
+                      onDelete={handleDelete}
+                      onIntegrityCheck={handleIntegrityCheck}
+                      onDownload={handleDownload}
                     />
                   </div>
                 ))}
@@ -680,28 +850,53 @@ export default function RecordDetailPage() {
 function DocumentRows({
   docs,
   busyDocId,
+  integrityResults,
   onVerify,
   onReject,
+  onDelete,
+  onIntegrityCheck,
+  onDownload,
 }: {
   docs: DocumentRead[];
   busyDocId: number | null;
+  integrityResults: Record<number, IntegrityCheckResult>;
   onVerify: (doc: DocumentRead) => void;
   onReject: (doc: DocumentRead) => void;
+  onDelete: (doc: DocumentRead) => void;
+  onIntegrityCheck: (doc: DocumentRead) => void;
+  onDownload: (doc: DocumentRead) => void;
 }) {
   return (
     <ul className="divide-y divide-surface-border">
       {docs.map((doc) => {
         const busy = busyDocId === doc.id;
+        const stored = doc.has_stored_content;
+        const integrity = integrityResults[doc.id];
         return (
           <li key={doc.id} className="grid gap-2 px-3 py-2 text-sm sm:grid-cols-[auto_1fr_auto]">
-            <div className="flex items-center gap-2">
-              <DocumentStatusChip status={doc.status} />
-              <span className="truncate">{doc.label ?? "—"}</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <DocumentStatusChip status={doc.status} />
+                <span className="truncate">{doc.label ?? "—"}</span>
+              </div>
+              <span
+                className={`chip text-[11px] ${
+                  stored
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-surface-border bg-transparent text-text-muted"
+                }`}
+                title={stored ? "Real evidence bytes on file" : "Metadata-only registration — no bytes on disk"}
+              >
+                {stored ? "Evidence stored" : "Metadata only"}
+              </span>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-text-muted sm:grid-cols-3">
               <div>
                 <dt className="field-label">Uploaded</dt>
-                <dd>{formatDateTime(doc.created_at)}</dd>
+                <dd>
+                  {formatDateTime(doc.created_at)}
+                  {doc.original_filename ? ` · ${doc.original_filename}` : ""}
+                </dd>
               </div>
               <div>
                 <dt className="field-label">Verified</dt>
@@ -725,16 +920,60 @@ function DocumentRows({
                     : "—"}
                 </dd>
               </div>
+              {integrity ? (
+                <div className="sm:col-span-3">
+                  <dt className="field-label">Integrity</dt>
+                  <dd
+                    className={
+                      integrity.is_match
+                        ? "text-severity-low"
+                        : "text-severity-critical"
+                    }
+                  >
+                    {integrity.is_match
+                      ? `Match · ${integrity.actual_content_hash?.slice(0, 12)}…`
+                      : integrity.has_stored_content
+                      ? `Mismatch · ${integrity.message}`
+                      : `Missing content · ${integrity.message}`}
+                    <span className="ml-2 text-text-subtle">
+                      checked {formatDateTime(integrity.checked_at)}
+                    </span>
+                  </dd>
+                </div>
+              ) : null}
             </dl>
-            <div className="flex items-center gap-2 sm:justify-end">
-              {doc.status !== "verified" ? (
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              {stored && doc.status !== "verified" ? (
                 <button
                   type="button"
                   className="btn-secondary text-xs"
                   onClick={() => onVerify(doc)}
                   disabled={busy}
+                  title="Re-hash stored bytes and mark verified on match"
                 >
                   {busy ? "…" : "Verify"}
+                </button>
+              ) : null}
+              {stored ? (
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={() => onIntegrityCheck(doc)}
+                  disabled={busy}
+                  title="Compare stored bytes against the ingest hash"
+                >
+                  {busy ? "…" : "Integrity check"}
+                </button>
+              ) : null}
+              {stored ? (
+                <button
+                  type="button"
+                  className="btn-secondary text-xs"
+                  onClick={() => onDownload(doc)}
+                  disabled={busy}
+                  title="Download the stored evidence"
+                >
+                  {busy ? "…" : "Download"}
                 </button>
               ) : null}
               {doc.status !== "rejected" ? (
@@ -747,6 +986,15 @@ function DocumentRows({
                   {busy ? "…" : "Reject"}
                 </button>
               ) : null}
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => onDelete(doc)}
+                disabled={busy}
+                title="Remove the document record and any stored content"
+              >
+                {busy ? "…" : "Delete"}
+              </button>
             </div>
           </li>
         );

@@ -420,13 +420,13 @@ def test_verification_records_verified_content_hash(
     import hashlib
 
     record = _create_record(client, auth_headers, _workflow(db_session).id)
-    content = b"verified-content-hash-test-bytes"
+    content = b"\x89PNG\r\n\x1a\nverified-content-hash-test-bytes"
     expected = hashlib.sha256(content).hexdigest()
     upload = client.post(
         f"/api/records/{record['id']}/documents/upload",
         headers=auth_headers,
         data={"document_type": "photo_id"},
-        files={"file": ("doc.bin", content, "application/octet-stream")},
+        files={"file": ("doc.png", content, "image/png")},
     ).json()
     assert upload["content_hash"] == expected
 

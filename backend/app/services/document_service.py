@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -22,6 +23,8 @@ from app.models.user import User
 from app.repositories import document_repository
 from app.services import audit_service
 from app.services.audit_payloads import (
+    document_deleted,
+    document_integrity_failed,
     document_rejected,
     document_uploaded,
     document_verified,
@@ -169,28 +172,19 @@ def register_document_metadata(
 upload_document = register_document_metadata
 
 
-def upload_file_document(
+def _persist_uploaded_document(
     db: Session,
     *,
     actor: User,
     record: Record,
     document_type: DocumentType,
-    content: bytes,
-    original_filename: Optional[str] = None,
-    mime_type: Optional[str] = None,
-    label: Optional[str] = None,
-    notes: Optional[str] = None,
-    expires_at: Optional[datetime] = None,
+    stored: "evidence_storage.StoredObject",
+    resolved_mime: str,
+    original_filename: Optional[str],
+    label: Optional[str],
+    notes: Optional[str],
+    expires_at: Optional[datetime],
 ) -> Document:
-    """Ingest real bytes: compute size + SHA-256 from the payload, store
-    locally, and persist a Document whose content_hash reflects the
-    persisted content.
-    """
-    if record.organization_id != actor.organization_id:
-        raise DocumentAccessDenied("Record does not belong to this organization")
-
-    stored = evidence_storage.store_bytes(content)
-
     doc = Document(
         record_id=record.id,
         document_type=document_type,
@@ -199,7 +193,7 @@ def upload_file_document(
         notes=notes,
         status=DocumentStatus.UPLOADED,
         original_filename=evidence_storage.safe_filename(original_filename),
-        mime_type=mime_type,
+        mime_type=resolved_mime,
         size_bytes=stored.size_bytes,
         content_hash=stored.content_hash,
         expires_at=expires_at,
@@ -220,6 +214,90 @@ def upload_file_document(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def upload_file_document(
+    db: Session,
+    *,
+    actor: User,
+    record: Record,
+    document_type: DocumentType,
+    content: bytes,
+    original_filename: Optional[str] = None,
+    mime_type: Optional[str] = None,
+    label: Optional[str] = None,
+    notes: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
+) -> Document:
+    """Ingest bytes already held in memory. Kept for service-layer
+    callers and tests that already hold a bytes object; the route layer
+    prefers `upload_file_stream` which avoids buffering.
+    """
+    if record.organization_id != actor.organization_id:
+        raise DocumentAccessDenied("Record does not belong to this organization")
+
+    if not content:
+        raise evidence_storage.EmptyPayload("File payload is empty")
+
+    resolved_mime = evidence_storage.detect_content_type(content, mime_type)
+
+    stored = evidence_storage.store_bytes(content)
+
+    return _persist_uploaded_document(
+        db,
+        actor=actor,
+        record=record,
+        document_type=document_type,
+        stored=stored,
+        resolved_mime=resolved_mime,
+        original_filename=original_filename,
+        label=label,
+        notes=notes,
+        expires_at=expires_at,
+    )
+
+
+async def upload_file_stream(
+    db: Session,
+    *,
+    actor: User,
+    record: Record,
+    document_type: DocumentType,
+    reader,
+    original_filename: Optional[str] = None,
+    mime_type: Optional[str] = None,
+    label: Optional[str] = None,
+    notes: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
+) -> Document:
+    """Ingest an upload stream chunk-by-chunk, validating type on the
+    first bytes and aborting cleanly on oversize or unsupported content.
+    """
+    if record.organization_id != actor.organization_id:
+        raise DocumentAccessDenied("Record does not belong to this organization")
+
+    stored, resolved_mime = await evidence_storage.store_stream(
+        reader, client_mime=mime_type
+    )
+
+    try:
+        return _persist_uploaded_document(
+            db,
+            actor=actor,
+            record=record,
+            document_type=document_type,
+            stored=stored,
+            resolved_mime=resolved_mime,
+            original_filename=original_filename,
+            label=label,
+            notes=notes,
+            expires_at=expires_at,
+        )
+    except BaseException:
+        # A DB failure after the file has been committed would otherwise
+        # leave an orphaned blob.
+        evidence_storage.delete_local_object(stored.storage_uri)
+        raise
 
 
 def _require_access(doc: Document, record: Record, actor: User) -> None:
@@ -275,14 +353,11 @@ def verify_document(
             organization_id=record.organization_id,
             actor_user_id=actor.id,
             record_id=record.id,
-            payload={
-                "record_id": record.id,
-                "document_id": doc.id,
-                "document_type": doc.document_type.value,
-                "document_status": doc.status.value,
-                "expected_content_hash": doc.content_hash,
-                "actual_content_hash": recomputed,
-            },
+            payload=document_integrity_failed(
+                document=doc,
+                expected_content_hash=doc.content_hash,
+                actual_content_hash=recomputed,
+            ),
         )
         db.commit()
         raise DocumentIntegrityFailure(
@@ -402,6 +477,90 @@ def reject_document(
     db.commit()
     db.refresh(doc)
     return doc
+
+
+def delete_document(
+    db: Session,
+    *,
+    actor: User,
+    document_id: int,
+) -> None:
+    """Remove a document row and its stored content, if any.
+
+    File cleanup goes through `evidence_storage.delete_local_object`
+    which validates that the path lives inside the configured storage
+    root; a URI that points outside or a missing file is tolerated.
+    """
+    doc = document_repository.get(db, document_id)
+    if doc is None:
+        raise DocumentNotFound(f"Document {document_id} not found")
+    record = doc.record
+    _require_access(doc, record, actor)
+
+    stored_removed = evidence_storage.delete_local_object(doc.storage_uri)
+
+    audit_service.record_event(
+        db,
+        action="document.deleted",
+        entity_type="document",
+        entity_id=doc.id,
+        organization_id=record.organization_id,
+        actor_user_id=actor.id,
+        record_id=record.id,
+        payload=document_deleted(
+            document=doc,
+            deleted_by=actor.id,
+            stored_content_removed=stored_removed,
+        ),
+    )
+
+    db.delete(doc)
+    db.commit()
+
+
+def resolve_content_for_download(
+    db: Session,
+    *,
+    actor: User,
+    document_id: int,
+) -> Tuple[Document, Path]:
+    """Return the document row plus the absolute path of its stored bytes.
+
+    Enforces that the caller belongs to the record's organization and
+    that the document is upload-backed; metadata-only registrations
+    raise `DocumentContentMissing`. The path is always inside the
+    configured evidence root.
+    """
+    doc = document_repository.get(db, document_id)
+    if doc is None:
+        raise DocumentNotFound(f"Document {document_id} not found")
+    record = doc.record
+    _require_access(doc, record, actor)
+
+    path = evidence_storage.resolve_local_path(doc.storage_uri)
+    if path is None:
+        raise DocumentContentMissing(
+            f"Document {doc.id} has no resolvable stored content."
+        )
+    return doc, path
+
+
+def record_integrity_summary(
+    db: Session,
+    *,
+    actor: User,
+    record: Record,
+) -> List[IntegrityCheckResult]:
+    """Run the read-only integrity check against every document on a
+    record and return the collected results in insertion order.
+    """
+    if record.organization_id != actor.organization_id:
+        raise DocumentAccessDenied("Record does not belong to this organization")
+
+    documents = document_repository.list_for_record(db, record.id)
+    return [
+        check_integrity(db, actor=actor, document_id=doc.id) for doc in documents
+    ]
 
 
 def required_document_types(db: Session, record: Record) -> List[DocumentType]:

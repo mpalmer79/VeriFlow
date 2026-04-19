@@ -112,6 +112,68 @@ def create_record(db: Session, actor: User, payload: RecordCreate) -> Record:
     return record
 
 
+def delete_record(
+    db: Session,
+    *,
+    actor: User,
+    record_id: int,
+    expected_version: int,
+) -> bool:
+    """Delete a record, its documents, and any managed evidence files.
+
+    File cleanup runs first so a failure during storage deletion is
+    visible before the DB rows disappear. The DB then cascades through
+    documents, evaluations, and document requirements; the record row
+    is removed last. An audit event is emitted before the deletion so
+    the chain captures the organization scope while the row still
+    exists.
+    """
+    from app.core import evidence_storage
+
+    record = get_record(db, actor, record_id)
+    if record is None:
+        return False
+
+    if record.version != expected_version:
+        raise VersionConflict(
+            record_id=record.id,
+            expected=expected_version,
+            current=record.version,
+        )
+
+    document_ids = [doc.id for doc in record.documents]
+    storage_uris = [doc.storage_uri for doc in record.documents]
+
+    # Delete managed files first. `delete_local_object` validates that
+    # the URI points inside the configured storage root so a row with
+    # an arbitrary `file:/etc/...` URI would be left alone on disk.
+    files_removed = 0
+    for uri in storage_uris:
+        if evidence_storage.delete_local_object(uri):
+            files_removed += 1
+
+    audit_service.record_event(
+        db,
+        action="record.deleted",
+        entity_type="record",
+        entity_id=record.id,
+        organization_id=actor.organization_id,
+        actor_user_id=actor.id,
+        record_id=record.id,
+        payload={
+            "record_id": record.id,
+            "deleted_by": actor.id,
+            "document_ids": document_ids,
+            "documents_removed": len(document_ids),
+            "stored_files_removed": files_removed,
+        },
+    )
+
+    db.delete(record)
+    db.commit()
+    return True
+
+
 def update_record(
     db: Session, actor: User, record_id: int, payload: RecordUpdate
 ) -> Optional[Record]:

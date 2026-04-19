@@ -13,7 +13,6 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core import evidence_storage
 from app.models.enums import DocumentType
 
@@ -25,6 +24,8 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentRead,
     DocumentStatusResponse,
+    IntegrityCheckResponse,
+    RecordIntegritySummaryResponse,
 )
 from app.schemas.evaluation import (
     EvaluationDecisionRead,
@@ -108,6 +109,28 @@ def update_record(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
     return record
+
+
+@router.delete("/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_record(
+    record_id: int,
+    expected_version: int = Query(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        deleted = record_service.delete_record(
+            db,
+            actor=current_user,
+            record_id=record_id,
+            expected_version=expected_version,
+        )
+    except record_service.VersionConflict as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    return None
 
 
 @router.post("/{record_id}/evaluate", response_model=EvaluationDecisionRead)
@@ -234,20 +257,13 @@ async def upload_document_file(
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
 
-    content = await file.read()
-    max_bytes = get_settings().max_upload_bytes
-    if len(content) > max_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File exceeds maximum upload size of {max_bytes} bytes",
-        )
     try:
-        return document_service.upload_file_document(
+        return await document_service.upload_file_stream(
             db,
             actor=current_user,
             record=record,
             document_type=document_type,
-            content=content,
+            reader=file,
             original_filename=file.filename,
             mime_type=file.content_type,
             label=label,
@@ -257,6 +273,11 @@ async def upload_document_file(
     except evidence_storage.EmptyPayload as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except evidence_storage.UnsupportedContentType as exc:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=str(exc),
         ) from exc
     except evidence_storage.PayloadTooLarge as exc:
         raise HTTPException(
@@ -287,6 +308,41 @@ def list_audit(
         .limit(limit)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+@router.get(
+    "/{record_id}/integrity-summary",
+    response_model=RecordIntegritySummaryResponse,
+)
+def record_integrity_summary(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+
+    results = document_service.record_integrity_summary(
+        db, actor=current_user, record=record
+    )
+    checked_at = datetime.now()
+    return RecordIntegritySummaryResponse(
+        record_id=record.id,
+        checked_at=checked_at,
+        documents=[
+            IntegrityCheckResponse(
+                document_id=r.document_id,
+                has_stored_content=r.has_stored_content,
+                expected_content_hash=r.expected_content_hash,
+                actual_content_hash=r.actual_content_hash,
+                is_match=r.is_match,
+                checked_at=r.checked_at,
+                message=r.message,
+            )
+            for r in results
+        ],
+    )
 
 
 @router.get("/{record_id}/document-status", response_model=DocumentStatusResponse)
