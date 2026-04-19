@@ -1,39 +1,38 @@
-Phase 2 is committed (`5071eab`) and pushed to `claude/veriflow-phase-0-1-fNDG6`. All 38 tests pass (5 auth + 8 integrity + 7 records + 18 evaluation).
+Hardening pass committed (`af83828`) and pushed. **62 tests passing**.
 
 ## Summary
 
-### What was implemented
+### What was cleaned up
+- Nothing to remove from the repo root or `docs/` — no `CLAUDE.md`, `docs/build.md`, `docs/results.md`, logs, or prompt-history files were present. The repo was already clean on that front.
+- README rewritten for professional framing: clearer capabilities section, expanded repo layout, and demo credentials moved to a dedicated **Local Demo Access** section that labels them explicitly, warns about non-local use, and points to the seed constant.
+- `ARCHITECTURE.md` got a new **Known Tradeoffs** section that names the hybrid flag/document evaluation, the deliberately deferred rule-engine DSL, the reserved-but-inert `applies_when_code`, the current-state `rule_evaluations` contract, the canonical audit-payload module, and the SQLite-in-tests limitation.
+- `docs/document_evidence.md` updated to describe the new status partition and the uniqueness strategy.
 
-**Rule engine (code-driven registry):**
-- `rule_engine_service.py` — `RuleResult` dataclass, `@register(code)` decorator, `evaluate_record(db, record)` entry point. Rule definitions are data (in DB); evaluation logic is Python.
-- `rules.py` — seven built-in evaluators: `identity_required`, `insurance_verified_or_self_pay`, `consent_required`, `guardian_authorization_required`, `medical_history_warning`, `allergy_warning`, `out_of_network_warning`.
-- Evaluators read the rule's configured `action` / `risk_weight` so the same evaluator is reusable across workflows.
+### Schema issue that was fixed
+`DocumentRequirement` had a composite `UniqueConstraint` across `(workflow_id, stage_id, document_type)`. Because `stage_id` is nullable and PostgreSQL treats `NULL` as distinct, two workflow-global requirements for the same `(workflow, document_type)` could coexist.
 
-**Risk scoring:** `risk_service.py` — pure function; thresholds centralized (low 0–24, moderate 25–49, high 50–79, critical 80+).
+Replaced with **two partial unique indexes** (enforced in both Postgres and SQLite via `postgresql_where` / `sqlite_where`):
+- `uq_doc_req_workflow_global_type` — `stage_id IS NULL` ⇒ unique on `(workflow_id, document_type)`
+- `uq_doc_req_workflow_stage_type` — `stage_id IS NOT NULL` ⇒ unique on `(workflow_id, stage_id, document_type)`
 
-**Evaluation orchestration:** `evaluation_service.py` — runs engine → aggregates risk → replaces the record's `rule_evaluations` → updates `risk_score`/`risk_band` → writes `record.evaluated` + `record.risk_recalculated` audit events.
+This is now DB-enforced; no service-layer pre-check needed.
 
-**Transitions:** `workflow_service.transition_record` — validates stage ∈ workflow, runs evaluation in the same transaction, rejects on any `BLOCK` failure. Audit events: `transition_attempted`, `transition_blocked`, `transition_completed`.
+### Document-status semantics
+The endpoint now exposes an explicit partition of the requirement surface:
 
-**API:** `POST /api/records/{id}/evaluate`, `GET /api/records/{id}/evaluations`, `POST /api/records/{id}/transition`.
+- `required_types = satisfied_types + missing_types` (invariant, disjoint)
+- A requirement is **only** satisfied by a verified document. Uploaded-but-not-verified appears in `present_types` but *not* `satisfied_types`, and it still counts as `missing` until verified.
+- `rejected_types` is historical — it lists any type with at least one rejected document, even if a later verified one exists. Previously it required "all docs rejected" which produced confusing overlaps.
+- Added `satisfied_types` to both `DocumentStatusSummary` and the HTTP response schema.
 
-### Schema changes (minimal, additive)
+### Files removed, moved, or retained
+- **Removed**: none (nothing qualified as process noise).
+- **Moved/renamed**: none.
+- **Retained**: all existing docs (`ARCHITECTURE.md`, `docs/product_overview.md`, `docs/workflow_rules.md`, `docs/document_evidence.md`, `frontend/README.md`) — each still earns its place in a portfolio-facing repo.
 
-Four new fields on `Record` needed to express the seven rules cleanly:
-- `identity_verified: bool`
-- `guardian_authorization_signed: bool`
-- `allergy_info_provided: bool`
-- `insurance_in_network: Optional[bool]`
-
-Seeded rules align 1:1 with registered evaluators, idempotently.
-
-### How evaluation persistence was handled
-
-**Current-state, not history.** Each evaluation run replaces the record's `rule_evaluations` rows so the table always reflects the most recent outcome. Long-term history is captured in the append-only audit log. Rationale: unambiguous answer to "why is this record blocked right now," with no accumulation drift.
-
-### What remains for next phase
-
-- Document workflow (`document_service`, attachments, status transitions, document-driven rules).
-- Stage-aware rule filtering (a rule row carries `stage_id` today as advisory metadata; a future phase can gate evaluators on current vs. target stage rather than running the full set).
-- Reporting/analytics (aggregate risk over time, rule-trigger frequency, bottleneck detection).
-- Frontend surface for the decision payload and audit timeline.
+### Known limitations before frontend work
+- **CI matrix is SQLite-only.** The partial-unique-index fix is exercised in tests via SQLite's own partial-index support, but a PostgreSQL CI job is still the right next hardening step.
+- **Document storage.** `Document.storage_uri` remains a placeholder string. Real object-storage integration (S3/GCS/minio) is deferred.
+- **Conditional document requirements** (`applies_when_code`) are persisted but inert — the minor check still lives in the evaluator. A tiny resolver can replace this when there's a second use case.
+- **Role-based authorization is coarse.** `get_current_user` authenticates; `require_roles` exists but no route uses it yet. Worth revisiting before exposing verify/reject to non-reviewer roles.
+- **Frontend is still a scaffold.** API contracts are stable; the UI is next.
