@@ -9,6 +9,7 @@ import type {
   DocumentStatusResponse,
   DocumentType,
   EvaluationDecision,
+  EvidenceSummary,
   IntegrityCheckResult,
   RecordIntegritySummary,
   RecordRead,
@@ -117,6 +118,8 @@ export const records = {
       `/records/${id}?expected_version=${encodeURIComponent(expectedVersion)}`,
       { method: "DELETE" }
     ),
+  evidenceSummary: (id: number) =>
+    request<EvidenceSummary>(`/records/${id}/evidence-summary`),
 };
 
 // --- documents ----------------------------------------------------------
@@ -206,12 +209,18 @@ export const documents = {
   // caller can trigger a download without inlining fetch logic.
   contentUrl: (documentId: number) =>
     `${API_BASE_URL}/documents/${documentId}/content`,
-  fetchContent: async (documentId: number): Promise<Blob> => {
+  fetchContent: async (
+    documentId: number,
+    opts: { disposition?: "inline" | "attachment" } = {}
+  ): Promise<Blob> => {
     const headers: Record<string, string> = {};
     const token = readToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
+    const params = new URLSearchParams();
+    if (opts.disposition) params.set("disposition", opts.disposition);
+    const qs = params.toString() ? `?${params}` : "";
     const response = await fetch(
-      `${API_BASE_URL}/documents/${documentId}/content`,
+      `${API_BASE_URL}/documents/${documentId}/content${qs}`,
       { headers, cache: "no-store" }
     );
     if (!response.ok) {
