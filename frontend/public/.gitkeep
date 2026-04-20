@@ -1,0 +1,4 @@
+# Placeholder so git tracks this directory. Next.js expects `public/`
+# to exist at build time (it is the static-assets root served at `/`).
+# The app does not currently ship any static assets here; remove this
+# file if you add real content.
