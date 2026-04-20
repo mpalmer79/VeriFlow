@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { clearSession, readToken, readUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo";
 import type { UserPublic } from "@/lib/types";
+import { Logomark } from "@/components/ui/Logomark";
 
 interface NavItem {
   href: string;
@@ -65,10 +66,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-6">
           <Link
             href="/dashboard"
-            className="flex items-center gap-2 text-base font-semibold tracking-tight"
+            className="flex items-center gap-2 tracking-tight"
           >
-            <span className="inline-block h-2 w-2 rounded-full bg-accent" aria-hidden />
-            VeriFlow
+            <Logomark className="text-brand-400" size={22} />
+            <span className="font-display text-lg font-semibold text-text">
+              VeriFlow
+            </span>
           </Link>
           <nav className="flex items-center gap-1">
             {NAV_ITEMS.filter((item) => {
