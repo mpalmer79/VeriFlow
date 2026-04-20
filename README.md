@@ -4,7 +4,7 @@ VeriFlow is a workflow and evidence-control platform for
 compliance-heavy operations. It enforces staged progression against a
 code-driven rule registry, scores operational risk, and produces a
 tamper-evident audit trail and verifiable evidence chain so every
-decision on a record is explainable after the fact.
+decision on a record is explainable after the fact. 
 
 The engine is domain-agnostic. The first reference scenario is a
 healthcare intake workflow, but the same data model handles loan
