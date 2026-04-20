@@ -250,8 +250,8 @@ export default function DashboardPage() {
             sublabel={
               data
                 ? stats.blocked > 0
-                  ? "resolution required"
-                  : "no active blocks"
+                  ? "awaiting resolution"
+                  : "nothing blocked"
                 : "loading…"
             }
             icon={AlertOctagon}
@@ -266,8 +266,8 @@ export default function DashboardPage() {
             sublabel={
               data
                 ? stats.highRisk > 0
-                  ? "review recommended"
-                  : "risk contained"
+                  ? "under review"
+                  : "staying contained"
                 : "loading…"
             }
             icon={AlertTriangle}
