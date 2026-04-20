@@ -1,10 +1,14 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { FormEvent, useEffect, useRef } from "react";
+
+import { DURATION_MICRO, EASE_OUT, dialogPop, overlayFade } from "@/lib/motion";
 
 export type ConfirmTone = "default" | "danger";
 
 export interface ConfirmDialogProps {
+  open?: boolean;
   title: string;
   description?: string;
   confirmLabel: string;
@@ -20,7 +24,21 @@ export interface ConfirmDialogProps {
 }
 
 
-export function ConfirmDialog({
+export function ConfirmDialog(props: ConfirmDialogProps) {
+  // Callers historically either mounted / unmounted the dialog by
+  // conditional rendering, or passed `open`. Both paths work: the
+  // component treats missing `open` as true so AnimatePresence still
+  // runs enter animations on mount.
+  const open = props.open ?? true;
+  return (
+    <AnimatePresence mode="wait">
+      {open ? <ConfirmDialogInner key="confirm" {...props} /> : null}
+    </AnimatePresence>
+  );
+}
+
+
+function ConfirmDialogInner({
   title,
   description,
   confirmLabel,
@@ -34,6 +52,7 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const reduce = useReducedMotion();
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const confirmBtnRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -58,8 +77,8 @@ export function ConfirmDialog({
       if (!node) return;
       const focusable = Array.from(
         node.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        )
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+        ),
       );
       if (focusable.length === 0) return;
       const first = focusable[0];
@@ -83,21 +102,34 @@ export function ConfirmDialog({
   }
 
   const confirmCls = tone === "danger" ? "btn-danger" : "btn-primary";
+  const transition = reduce
+    ? { duration: 0 }
+    : { duration: DURATION_MICRO, ease: EASE_OUT };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 animate-overlay-in"
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       onClick={busy ? undefined : onCancel}
       role="presentation"
+      variants={overlayFade}
+      initial="hidden"
+      animate="visible"
+      exit="hidden"
+      transition={transition}
     >
-      <div
+      <motion.div
         ref={dialogRef}
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
         aria-describedby={description ? "confirm-description" : undefined}
-        className="w-full max-w-md rounded-md border border-surface-border bg-surface-panel shadow-xl animate-dialog-in"
+        className="w-full max-w-md rounded-md border border-surface-border bg-surface-panel shadow-xl"
         onClick={(e) => e.stopPropagation()}
+        variants={dialogPop}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        transition={transition}
       >
         <form onSubmit={handleSubmit} className="flex flex-col">
           <header className="border-b border-surface-border px-4 py-3">
@@ -145,7 +177,7 @@ export function ConfirmDialog({
             </button>
           </footer>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

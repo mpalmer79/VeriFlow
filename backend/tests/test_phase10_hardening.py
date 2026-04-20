@@ -128,20 +128,27 @@ def test_tailwind_registers_chain_pulse_keyframe():
 
 
 def test_modal_and_dialog_use_motion_utilities():
+    # The UI elevation pass swapped the one-shot CSS keyframes out for
+    # Framer Motion primitives (overlayFade + dialogPop from the motion
+    # vocabulary module), gated by AnimatePresence and useReducedMotion.
+    # Both the preview overlay and the confirm dialog must wire through
+    # the shared vocabulary so reduced-motion handling stays uniform.
     preview = (
         FRONTEND
         / "components"
         / "record-detail"
         / "PreviewOverlay.tsx"
     ).read_text(encoding="utf-8")
-    assert "animate-overlay-in" in preview
-    assert "animate-dialog-in" in preview
+    assert "AnimatePresence" in preview
+    assert "overlayFade" in preview
+    assert "dialogPop" in preview
 
     confirm = (FRONTEND / "components" / "ConfirmDialog.tsx").read_text(
         encoding="utf-8"
     )
-    assert "animate-overlay-in" in confirm
-    assert "animate-dialog-in" in confirm
+    assert "AnimatePresence" in confirm
+    assert "overlayFade" in confirm
+    assert "dialogPop" in confirm
 
 
 def test_app_shell_and_panel_and_login_carry_controlled_motion():
