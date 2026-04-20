@@ -10,16 +10,18 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ApiError, records as recordsApi, workflows as workflowsApi } from "@/lib/api";
+import { ApiError, records as recordsApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import {
+  loadStagesForRecords,
+  stageMapKey,
+  type StageMap,
+} from "@/lib/workflow-stages";
 import type {
   RecordRead,
   RecordStatus,
   RiskBand,
-  WorkflowStage,
 } from "@/lib/types";
-
-type StageMap = Map<number, WorkflowStage>;
 
 const RISK_BAND_OPTIONS: { value: RiskBand; label: string }[] = [
   { value: "low", label: "Low" },
@@ -55,20 +57,7 @@ export default function RecordsPage() {
     try {
       const list = await recordsApi.list({ limit: 500 });
       setRows(list);
-      if (list.length > 0) {
-        try {
-          const workflow = await workflowsApi.get(list[0].workflow_id);
-          const nextMap: StageMap = new Map();
-          for (const stage of workflow.stages) {
-            nextMap.set(stage.id, stage);
-          }
-          setStageMap(nextMap);
-        } catch {
-          setStageMap(new Map());
-        }
-      } else {
-        setStageMap(new Map());
-      }
+      setStageMap(await loadStagesForRecords(list));
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -89,7 +78,14 @@ export default function RecordsPage() {
   }, [load]);
 
   const stageOptions = useMemo(() => {
-    return Array.from(stageMap.values()).sort(
+    // Filter dropdown de-duplicates by stage name so a multi-workflow map
+    // does not show the same label multiple times. Filter matching still
+    // keys on stage_id, so selecting a name applies to just that workflow.
+    const seen = new Map<string, (typeof stageMap extends Map<infer _K, infer V> ? V : never)>();
+    for (const stage of stageMap.values()) {
+      if (!seen.has(stage.name)) seen.set(stage.name, stage);
+    }
+    return Array.from(seen.values()).sort(
       (a, b) => a.order_index - b.order_index,
     );
   }, [stageMap]);
@@ -117,9 +113,9 @@ export default function RecordsPage() {
     });
   }, [rows, search, stageId, riskBand, status]);
 
-  const stageNameFor = (id: number): string => {
-    const stage = stageMap.get(id);
-    return stage ? stage.name : `Stage #${id}`;
+  const stageNameFor = (workflowId: number, stageId: number): string => {
+    const stage = stageMap.get(stageMapKey(workflowId, stageId));
+    return stage ? stage.name : `Stage #${stageId}`;
   };
 
   return (
@@ -247,7 +243,7 @@ export default function RecordsPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3 align-top text-text">
-                          {stageNameFor(record.current_stage_id)}
+                          {stageNameFor(record.workflow_id, record.current_stage_id)}
                         </td>
                         <td className="px-4 py-3 align-top">
                           <StatusBadge status={record.status} />

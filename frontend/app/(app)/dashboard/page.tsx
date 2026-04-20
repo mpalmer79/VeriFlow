@@ -11,9 +11,14 @@ import { RiskBadge } from "@/components/RiskBadge";
 import { StageBadge } from "@/components/StageBadge";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ApiError, records as recordsApi, workflows as workflowsApi } from "@/lib/api";
+import { ApiError, records as recordsApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import type { RecordRead, WorkflowStage } from "@/lib/types";
+import {
+  loadStagesForRecords,
+  stageMapKey,
+  type StageMap,
+} from "@/lib/workflow-stages";
+import type { RecordRead } from "@/lib/types";
 
 function formatClockTime(date: Date | null): string {
   if (!date) return "—";
@@ -42,9 +47,7 @@ function sortRecent(a: RecordRead, b: RecordRead): number {
 
 export default function DashboardPage() {
   const [data, setData] = useState<RecordRead[] | null>(null);
-  const [stagesById, setStagesById] = useState<Map<number, WorkflowStage>>(
-    new Map()
-  );
+  const [stageMap, setStageMap] = useState<StageMap>(new Map());
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
@@ -56,17 +59,9 @@ export default function DashboardPage() {
       const result = await recordsApi.list({ limit: 200 });
       setData(result);
       setLastRefreshed(new Date());
-      const firstWorkflowId = result[0]?.workflow_id;
-      if (firstWorkflowId !== undefined) {
-        try {
-          const wf = await workflowsApi.get(firstWorkflowId);
-          const map = new Map<number, WorkflowStage>();
-          wf.stages.forEach((s) => map.set(s.id, s));
-          setStagesById(map);
-        } catch {
-          // Non-fatal — the dashboard still renders without stage names.
-        }
-      }
+      // Stage names resolved per-workflow so records from different
+      // workflows do not collide on matching stage_ids.
+      setStageMap(await loadStagesForRecords(result));
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -252,7 +247,9 @@ export default function DashboardPage() {
                   </thead>
                   <tbody>
                     {attentionRows.map((r) => {
-                      const stage = stagesById.get(r.current_stage_id);
+                      const stage = stageMap.get(
+                        stageMapKey(r.workflow_id, r.current_stage_id),
+                      );
                       return (
                         <tr
                           key={r.id}
