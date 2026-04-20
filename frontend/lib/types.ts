@@ -164,6 +164,15 @@ export interface EvidenceSummary {
   stored_bytes: number;
 }
 
+export interface SignedAccessGrant {
+  token: string;
+  expires_at: string;
+  ttl_seconds: number;
+  document_id: number;
+  disposition: "inline" | "attachment";
+  url: string;
+}
+
 export interface DocumentStatusResponse {
   required_types: DocumentType[];
   present_types: DocumentType[];

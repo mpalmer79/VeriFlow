@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ApiError, audit, documents, records, workflows } from "@/lib/api";
 import type {
@@ -77,12 +77,14 @@ export default function RecordDetailPage() {
   >({});
   const [evidenceSummary, setEvidenceSummary] = useState<EvidenceSummary | null>(null);
   const [preview, setPreview] = useState<{
-    objectUrl: string;
+    src: string;
     mimeType: string;
     filename: string;
     documentId: number;
+    cleanup: () => void;
   } | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const refreshAll = useCallback(
     async (opts: { silent?: boolean } = {}) => {
@@ -351,19 +353,19 @@ export default function RecordDetailPage() {
     setBusyDocId(doc.id);
     setFlash(null);
     try {
-      const blob = await documents.fetchContent(doc.id, {
+      const grant = await documents.signedAccess(doc.id, {
         disposition: "attachment",
       });
-      const url = URL.createObjectURL(blob);
+      const url = documents.signedContentUrl(grant);
       const a = document.createElement("a");
       a.href = url;
       a.download =
         doc.original_filename ||
         `document-${doc.id}.${(doc.mime_type ?? "application/octet-stream").split("/").pop()}`;
+      a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
       a.remove();
-      URL.revokeObjectURL(url);
     } catch (err) {
       setFlash({
         kind: "error",
@@ -374,21 +376,28 @@ export default function RecordDetailPage() {
     }
   }
 
-  async function handlePreview(doc: DocumentRead) {
+  async function handlePreview(
+    doc: DocumentRead,
+    trigger?: HTMLButtonElement | null
+  ) {
     if (!doc.has_stored_content) return;
+    previewTriggerRef.current = trigger ?? null;
     setPreviewLoading(true);
     setFlash(null);
     try {
-      const blob = await documents.fetchContent(doc.id, {
+      const grant = await documents.signedAccess(doc.id, {
         disposition: "inline",
       });
-      if (preview) URL.revokeObjectURL(preview.objectUrl);
-      const objectUrl = URL.createObjectURL(blob);
+      if (preview) preview.cleanup();
+      const src = documents.signedContentUrl(grant);
       setPreview({
-        objectUrl,
-        mimeType: doc.mime_type ?? blob.type ?? "application/octet-stream",
+        src,
+        mimeType: doc.mime_type ?? "application/octet-stream",
         filename: doc.original_filename ?? `document-${doc.id}`,
         documentId: doc.id,
+        cleanup: () => {
+          // Signed URL expires on its own; nothing to revoke.
+        },
       });
     } catch (err) {
       setFlash({
@@ -401,13 +410,19 @@ export default function RecordDetailPage() {
   }
 
   function closePreview() {
-    if (preview) URL.revokeObjectURL(preview.objectUrl);
+    if (preview) preview.cleanup();
     setPreview(null);
+    const trigger = previewTriggerRef.current;
+    previewTriggerRef.current = null;
+    if (trigger) {
+      // Return focus to the button that opened the modal.
+      requestAnimationFrame(() => trigger.focus());
+    }
   }
 
   useEffect(() => {
     return () => {
-      if (preview) URL.revokeObjectURL(preview.objectUrl);
+      if (preview) preview.cleanup();
     };
   }, [preview]);
 
@@ -932,7 +947,7 @@ function PreviewOverlay({
   onClose,
 }: {
   preview: {
-    objectUrl: string;
+    src: string;
     mimeType: string;
     filename: string;
     documentId: number;
@@ -941,10 +956,38 @@ function PreviewOverlay({
 }) {
   const isImage = preview.mimeType.startsWith("image/");
   const isPdf = preview.mimeType === "application/pdf";
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    closeBtnRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const node = dialogRef.current;
+      if (!node) return;
+      const focusable = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("aria-hidden"));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -954,19 +997,26 @@ function PreviewOverlay({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
-      role="dialog"
-      aria-modal="true"
+      role="presentation"
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="preview-title"
         className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-surface-border bg-surface-panel shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between gap-3 border-b border-surface-border px-4 py-2">
-          <div className="truncate text-sm font-medium">{preview.filename}</div>
+          <div id="preview-title" className="truncate text-sm font-medium">
+            {preview.filename}
+          </div>
           <button
+            ref={closeBtnRef}
             type="button"
             className="btn-secondary text-xs"
             onClick={onClose}
+            aria-label="Close preview"
           >
             Close
           </button>
@@ -976,7 +1026,7 @@ function PreviewOverlay({
             <div className="flex min-h-full items-center justify-center p-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={preview.objectUrl}
+                src={preview.src}
                 alt={preview.filename}
                 className="max-h-full max-w-full object-contain"
               />
@@ -984,7 +1034,7 @@ function PreviewOverlay({
           ) : isPdf ? (
             <iframe
               title={preview.filename}
-              src={preview.objectUrl}
+              src={preview.src}
               className="h-full w-full"
             />
           ) : (
@@ -1027,7 +1077,7 @@ function DocumentRows({
   onDelete: (doc: DocumentRead) => void;
   onIntegrityCheck: (doc: DocumentRead) => void;
   onDownload: (doc: DocumentRead) => void;
-  onPreview: (doc: DocumentRead) => void;
+  onPreview: (doc: DocumentRead, trigger: HTMLButtonElement | null) => void;
 }) {
   return (
     <ul className="divide-y divide-surface-border">
@@ -1132,7 +1182,7 @@ function DocumentRows({
                 <button
                   type="button"
                   className="btn-secondary text-xs"
-                  onClick={() => onPreview(doc)}
+                  onClick={(e) => onPreview(doc, e.currentTarget)}
                   disabled={busy}
                   title="Preview the stored evidence in an overlay"
                 >

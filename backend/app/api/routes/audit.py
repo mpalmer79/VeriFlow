@@ -1,14 +1,15 @@
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_roles
 from app.core import evidence_storage
 from app.core.database import get_db
 from app.models.document import Document
+from app.models.enums import UserRole
 from app.models.record import Record
 from app.models.user import User
 from app.services import audit_service
@@ -33,10 +34,24 @@ class StorageInventoryReport(BaseModel):
     orphaned_files: int
 
 
+class StorageCleanupReport(BaseModel):
+    dry_run: bool
+    files_examined: int
+    orphaned_found: int
+    orphaned_deleted: int
+    bytes_reclaimed: int
+    errors: int
+
+
+# Admin/debug routes — elevated role required. `require_roles` chains
+# through `get_current_user` so the dependency still yields a User.
+AdminUser = Depends(require_roles(UserRole.ADMIN))
+
+
 @router.get("/verify", response_model=AuditChainReport)
 def verify_audit_chain(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = AdminUser,
 ):
     report = audit_service.verify_chain(db, current_user.organization_id)
     return AuditChainReport(**report)
@@ -45,7 +60,7 @@ def verify_audit_chain(
 @router.get("/storage-inventory", response_model=StorageInventoryReport)
 def storage_inventory(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = AdminUser,
 ):
     """Read-only dry-run report comparing managed files on disk against
     live `Document` rows. Counts are safe to expose at org scope; file
@@ -110,4 +125,73 @@ def storage_inventory(
         total_bytes_referenced_by_organization=total_bytes_referenced_by_organization,
         dangling_references_in_organization=dangling,
         orphaned_files=orphaned_files,
+    )
+
+
+@router.post("/storage-cleanup", response_model=StorageCleanupReport)
+def storage_cleanup(
+    dry_run: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: User = AdminUser,
+):
+    """Sweep orphaned managed files. Default is a dry run; destructive
+    deletion requires `?dry_run=false` and is performed only against
+    files inside the configured storage root. Files referenced by any
+    live `Document` row are never deleted.
+    """
+    referenced_paths: set[str] = set()
+    all_uris = list(
+        db.execute(
+            select(Document.storage_uri).where(Document.storage_uri.isnot(None))
+        ).scalars()
+    )
+    for uri in all_uris:
+        path = evidence_storage.resolve_local_path(uri)
+        if path is not None:
+            referenced_paths.add(str(path.resolve()))
+
+    files_examined = 0
+    orphaned_found = 0
+    orphaned_deleted = 0
+    bytes_reclaimed = 0
+    errors = 0
+
+    for path, size in evidence_storage.iter_managed_files():
+        files_examined += 1
+        resolved = str(path.resolve())
+        if resolved in referenced_paths:
+            continue
+        orphaned_found += 1
+        if dry_run:
+            continue
+        if evidence_storage.delete_file_inside_root(path):
+            orphaned_deleted += 1
+            bytes_reclaimed += size
+        else:
+            errors += 1
+
+    audit_service.record_event(
+        db,
+        action="storage.cleanup",
+        entity_type="storage",
+        organization_id=current_user.organization_id,
+        actor_user_id=current_user.id,
+        payload={
+            "dry_run": dry_run,
+            "files_examined": files_examined,
+            "orphaned_found": orphaned_found,
+            "orphaned_deleted": orphaned_deleted,
+            "bytes_reclaimed": bytes_reclaimed,
+            "errors": errors,
+        },
+    )
+    db.commit()
+
+    return StorageCleanupReport(
+        dry_run=dry_run,
+        files_examined=files_examined,
+        orphaned_found=orphaned_found,
+        orphaned_deleted=orphaned_deleted,
+        bytes_reclaimed=bytes_reclaimed,
+        errors=errors,
     )

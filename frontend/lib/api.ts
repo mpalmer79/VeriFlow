@@ -14,6 +14,7 @@ import type {
   RecordIntegritySummary,
   RecordRead,
   RuleEvaluationRow,
+  SignedAccessGrant,
   TokenResponse,
   TransitionResponse,
   UserPublic,
@@ -209,6 +210,16 @@ export const documents = {
   // caller can trigger a download without inlining fetch logic.
   contentUrl: (documentId: number) =>
     `${API_BASE_URL}/documents/${documentId}/content`,
+  signedAccess: (
+    documentId: number,
+    body: { disposition?: "inline" | "attachment"; ttl_seconds?: number } = {}
+  ) =>
+    request<SignedAccessGrant>(
+      `/documents/${documentId}/signed-access`,
+      { method: "POST", body }
+    ),
+  signedContentUrl: (grant: SignedAccessGrant) =>
+    `${API_BASE_URL}${grant.url}`,
   fetchContent: async (
     documentId: number,
     opts: { disposition?: "inline" | "attachment" } = {}

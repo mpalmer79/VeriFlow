@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     evidence_storage_dir: str = "./evidence"
     max_upload_bytes: int = 25 * 1024 * 1024
+    content_access_ttl_seconds: int = 120
 
     cors_origins: List[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
