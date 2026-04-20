@@ -64,6 +64,15 @@ const config: Config = {
           "Menlo",
           "monospace",
         ],
+        display: [
+          "var(--font-display)",
+          "ui-serif",
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "Times",
+          "serif",
+        ],
       },
       keyframes: {
         "fade-in": {
