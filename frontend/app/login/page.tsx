@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { ApiError, auth } from "@/lib/api";
 import { readToken, saveSession } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo";
 import { ErrorBanner } from "@/components/ErrorBanner";
 
 const DEMO_PASSWORD = "VeriFlow!2025";
@@ -41,6 +42,13 @@ function LoginPageInner() {
   useEffect(() => {
     if (readToken()) {
       router.replace(resolveNext(nextParam));
+      return;
+    }
+    // Demo deployments never show the sign-in form; the root auto-
+    // signs-in and directs to the dashboard, and `/roles` is the way
+    // to swap roles from there.
+    if (isDemoMode()) {
+      router.replace("/");
     }
   }, [router, nextParam]);
 
