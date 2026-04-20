@@ -75,29 +75,13 @@ const config: Config = {
         ],
       },
       keyframes: {
-        "fade-in": {
-          "0%": { opacity: "0", transform: "translateY(4px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "fade-in-slow": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
-        },
-        "overlay-in": {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
-        },
-        "dialog-in": {
-          "0%": { opacity: "0", transform: "translateY(6px) scale(0.98)" },
-          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        "chain-pulse": {
+          "0%, 100%": { opacity: "0.85", transform: "scale(1)" },
+          "50%": { opacity: "1", transform: "scale(1.15)" },
         },
       },
       animation: {
-        "fade-in": "fade-in 180ms ease-out both",
-        "fade-in-slow": "fade-in-slow 300ms ease-out both",
-        "page-in": "fade-in-slow 1600ms cubic-bezier(0.22, 1, 0.36, 1) both",
-        "overlay-in": "overlay-in 160ms ease-out both",
-        "dialog-in": "dialog-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both",
+        "chain-pulse": "chain-pulse 3s ease-in-out infinite",
       },
     },
   },
