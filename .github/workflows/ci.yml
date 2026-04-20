@@ -138,6 +138,10 @@ jobs:
       VERIFLOW_ALLOW_SEED: "true"
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
       CI: "true"
+      # The Playwright suite performs ~10 fresh logins in a single IP
+      # within ~1 minute. Raise the login bucket so the limiter does
+      # not 401 the tail of the run. Other buckets keep their defaults.
+      RATE_LIMIT_LOGIN_PER_MINUTE: "200"
     steps:
       - uses: actions/checkout@v4
 
