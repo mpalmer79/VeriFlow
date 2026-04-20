@@ -140,6 +140,13 @@ export default function RecordDetailPage() {
     refreshAll();
   }, [refreshAll]);
 
+  // Auto-dismiss non-error flashes; errors stay so operators don't miss them.
+  useEffect(() => {
+    if (!flash || flash.kind === "error") return;
+    const t = window.setTimeout(() => setFlash(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [flash]);
+
   const stagesById = useMemo(() => {
     const map = new Map<number, WorkflowStage>();
     workflow?.stages.forEach((s) => map.set(s.id, s));

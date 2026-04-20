@@ -265,12 +265,19 @@ def test_ci_workflow_references_real_commands():
         assert expected in jobs, f"CI is missing job {expected}"
 
     # Spot-check that the steps invoke commands we actually expose.
+    # The SQLite job is the broad feedback loop; Alembic is exercised by
+    # the PostgreSQL job (Phase 9 CI split).
     backend_sqlite_cmds = " ".join(
         step.get("run", "") for step in jobs["backend-sqlite"]["steps"]
     )
     assert "pip install -r requirements.txt" in backend_sqlite_cmds
     assert "pytest" in backend_sqlite_cmds
-    assert "alembic upgrade head" in backend_sqlite_cmds
+
+    backend_postgres_cmds = " ".join(
+        step.get("run", "") for step in jobs["backend-postgres"]["steps"]
+    )
+    assert "alembic upgrade head" in backend_postgres_cmds
+    assert "pytest" in backend_postgres_cmds
 
     frontend_cmds = " ".join(
         step.get("run", "") for step in jobs["frontend"]["steps"]

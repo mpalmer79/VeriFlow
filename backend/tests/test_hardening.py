@@ -112,9 +112,16 @@ def _reject(client, auth_headers, document_id, reason=None):
 
 # --------------------------------------------------------------------------
 # DocumentRequirement uniqueness with nullable stage_id
+#
+# Marked `postgres` so CI runs them under PostgreSQL: partial unique
+# indexes on nullable columns are the exact dialect-sensitive surface
+# this project relies on, and NULL-distinctness semantics differ between
+# PostgreSQL and SQLite. The tests still pass locally on SQLite thanks to
+# `sqlite_where`, but production trust comes from the PG run.
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.postgres
 def test_duplicate_global_document_requirement_is_rejected(db_session):
     """Two workflow-global requirements for the same (workflow, document_type)
     must not coexist. The partial unique index on `stage_id IS NULL` enforces
@@ -143,6 +150,7 @@ def test_duplicate_global_document_requirement_is_rejected(db_session):
     db_session.rollback()
 
 
+@pytest.mark.postgres
 def test_duplicate_stage_specific_requirement_is_rejected(db_session):
     """Two requirements for the same (workflow, stage, document_type) must
     not coexist. The seed already inserts most stage-scoped requirements,
@@ -174,6 +182,7 @@ def test_duplicate_stage_specific_requirement_is_rejected(db_session):
     db_session.rollback()
 
 
+@pytest.mark.postgres
 def test_global_and_stage_specific_requirement_can_coexist(db_session):
     """A workflow-global requirement and a stage-specific requirement of the
     same document type are legitimately different rows. Neither partial
@@ -210,6 +219,7 @@ def test_global_and_stage_specific_requirement_can_coexist(db_session):
     assert scopes == {None, stage_id}
 
 
+@pytest.mark.postgres
 def test_different_stages_same_document_type_are_allowed(db_session):
     """Same document type, two different stages in the same workflow: legal."""
     stages, workflow = _stages(db_session)
