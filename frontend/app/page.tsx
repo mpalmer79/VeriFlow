@@ -136,8 +136,15 @@ function HeroSection({
           animate="visible"
           className="relative z-10 flex flex-col items-center"
         >
-          <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
-            <Logomark className="text-brand-400" size={56} />
+          <motion.div
+            variants={fadeRise}
+            transition={SPRING_DEFAULT}
+            className="flex items-center gap-3"
+          >
+            <Logomark className="text-brand-400" size={44} />
+            <span className="font-display text-2xl font-semibold tracking-tight text-text sm:text-3xl">
+              VeriFlow
+            </span>
           </motion.div>
           <motion.h1
             id="hero-heading"
