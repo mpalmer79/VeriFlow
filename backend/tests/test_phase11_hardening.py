@@ -273,3 +273,51 @@ def test_readme_frames_project_as_evidence_control_platform():
     assert "single-node" in text.lower()
     # CI documentation mentions the new e2e job scope.
     assert "e2e (playwright, chromium)" in text
+
+
+# --------------------------------------------------------------------------
+# F. CSV env parsing for CORS_*  (regression guard)
+# --------------------------------------------------------------------------
+#
+# Railway-style deploys pass `CORS_ORIGINS=http://example.com` as a plain
+# string. pydantic-settings defaults to JSON-decoding any collection-typed
+# env var, which would reject that value before the CSV validator runs.
+# The custom EnvSettingsSource in app.core.config routes these fields
+# around the JSON decoder so plain strings, CSVs, and JSON lists all
+# parse correctly.
+
+
+def test_cors_origins_env_plain_string(monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:3000")
+    monkeypatch.setenv("JWT_SECRET", "t")
+    s = Settings()
+    assert s.cors_origins == ["http://localhost:3000"]
+
+
+def test_cors_origins_env_csv(monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.setenv("CORS_ORIGINS", "http://a.com,http://b.com")
+    monkeypatch.setenv("JWT_SECRET", "t")
+    s = Settings()
+    assert s.cors_origins == ["http://a.com", "http://b.com"]
+
+
+def test_cors_origins_env_json_list(monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.setenv("CORS_ORIGINS", '["http://a.com","http://b.com"]')
+    monkeypatch.setenv("JWT_SECRET", "t")
+    s = Settings()
+    assert s.cors_origins == ["http://a.com", "http://b.com"]
+
+
+def test_cors_allow_methods_env_csv(monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.setenv("CORS_ALLOW_METHODS", "GET,POST")
+    monkeypatch.setenv("JWT_SECRET", "t")
+    s = Settings()
+    assert s.cors_allow_methods == ["GET", "POST"]
