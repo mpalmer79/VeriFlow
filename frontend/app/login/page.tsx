@@ -138,7 +138,7 @@ function LoginPageInner() {
               className="btn-primary w-full"
               disabled={submitting}
             >
-              {submitting ? "Signing in\u2026" : "Sign in"}
+              {submitting ? "Signing in…" : "Sign in"}
             </button>
 
             {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
