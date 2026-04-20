@@ -59,7 +59,7 @@ export function PreviewOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-overlay-in"
       onClick={onClose}
       role="presentation"
     >
@@ -68,7 +68,7 @@ export function PreviewOverlay({
         role="dialog"
         aria-modal="true"
         aria-labelledby="preview-title"
-        className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-surface-border bg-surface-panel shadow-xl"
+        className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-surface-border bg-surface-panel shadow-xl animate-dialog-in"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between gap-3 border-b border-surface-border px-4 py-2">

@@ -10,8 +10,27 @@
     color: #e6edf3;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
+  body {
+    /* Operations tooling. Tabular numerals everywhere so numbers align
+       in tables, risk scores, file sizes, and timestamps. Individual
+       prose blocks can opt back into proportional numbers with
+       `font-variant-numeric: proportional-nums`. */
+    font-variant-numeric: tabular-nums;
+  }
   button {
     cursor: pointer;
+  }
+  /* Respect the user's reduced-motion preference over any of our
+     animation utilities. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -27,7 +46,9 @@
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium
-           transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+           transition-colors duration-150 ease-out
+           disabled:cursor-not-allowed disabled:opacity-50
+           active:translate-y-px;
   }
   .btn-primary {
     @apply btn bg-accent text-white hover:bg-accent-strong;
@@ -41,9 +62,20 @@
   .input {
     @apply w-full rounded-md border border-surface-border bg-surface-muted px-3 py-2
            text-sm text-text placeholder:text-text-subtle focus:outline-none
-           focus:ring-1 focus:ring-accent;
+           focus:ring-1 focus:ring-accent
+           transition-colors duration-150;
   }
   .chip {
     @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium;
+  }
+  /* Mono affordance for identifiers that are meaningful as fixed-width
+     strings: document hashes, audit IDs, rule codes, reference codes. */
+  .mono {
+    @apply font-mono tabular-nums;
+  }
+  /* Numeric columns / metric values align on the decimal point across
+     rows thanks to tabular-nums. Applied opt-in so prose stays humane. */
+  .num {
+    font-variant-numeric: tabular-nums;
   }
 }

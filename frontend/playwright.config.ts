@@ -1,15 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Playwright groundwork for VeriFlow.
+ * Playwright runs against a live stack: backend on :8000 and frontend on
+ * :3000. Locally the easiest path is `docker compose up` from the repo
+ * root. In CI the `e2e` job in `.github/workflows/ci.yml` installs
+ * dependencies, seeds SQLite, and launches both services in background
+ * processes before invoking `npx playwright test --workers=1`.
  *
- * These tests run against a live stack: backend on :8000 and frontend on
- * :3000. The easiest way to bring that stack up is `docker compose up`
- * from the repo root, which runs migrations and seeds the demo org. Once
- * both services report ready, run `npm run test:e2e` from this directory.
- *
- * CI intentionally does not run Playwright yet. That decision is revisited
- * once the suite has enough coverage to justify the additional runtime.
+ * Chromium-only on purpose: the goal is a credible browser smoke, not a
+ * matrix. Expanding to Firefox/WebKit would roughly double the job
+ * runtime without meaningfully widening the coverage VeriFlow needs.
  */
 
 const FRONTEND_URL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";

@@ -1,5 +1,4 @@
 import os
-import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -18,18 +17,31 @@ os.environ.setdefault("JWT_EXPIRES_MINUTES", "60")
 _EVIDENCE_TMP = Path(tempfile.mkdtemp(prefix="veriflow-tests-evidence-"))
 os.environ.setdefault("EVIDENCE_STORAGE_DIR", str(_EVIDENCE_TMP))
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+# Swap bcrypt for passlib's `plaintext` scheme inside the test process.
+# bcrypt dominates per-test setup cost (~300 ms per hash × 4 seed users),
+# which previously made the broad SQLite suite CPU-bound on password
+# hashing rather than on application logic. The password-handling surface
+# itself is tested indirectly through the login flow; swapping the CryptContext
+# keeps hash/verify consistent while reducing each call to a no-op.
+from passlib.context import CryptContext  # noqa: E402
 
-from app.core import database as db_module
-from app.core.database import get_db
-from app.core.rate_limit import reset_rate_limits
-from app.main import app
-from app.models import Base
-from app.seed.seed_data import seed
+from app.core import security as _security  # noqa: E402
+
+_security.pwd_context = CryptContext(schemes=["plaintext"])
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from app.core import database as db_module  # noqa: E402
+from app.core.content_access import reset_content_access_guard  # noqa: E402
+from app.core.database import get_db  # noqa: E402
+from app.core.rate_limit import reset_rate_limits  # noqa: E402
+from app.main import app  # noqa: E402
+from app.models import Base  # noqa: E402
+from app.seed.seed_data import seed  # noqa: E402
 
 
 # Honor TEST_DATABASE_URL for CI matrix entries that want to exercise
@@ -59,27 +71,15 @@ def session_factory(engine):
     return sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 
 
-@pytest.fixture(autouse=True)
-def _reset_database(engine, session_factory, monkeypatch):
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-
-    # Clear any evidence blobs persisted by the previous test so integrity
-    # checks see a clean slate per test.
-    if _EVIDENCE_TMP.exists():
-        for entry in _EVIDENCE_TMP.iterdir():
-            if entry.is_file():
-                entry.unlink()
-
-    monkeypatch.setattr(db_module, "engine", engine, raising=True)
-    monkeypatch.setattr(db_module, "SessionLocal", session_factory, raising=True)
-
-    # Each test starts with an empty rate-limit bucket so budgets from
-    # one test cannot bleed into another.
-    reset_rate_limits()
-
-    with session_factory() as db:
-        seed(db)
+@pytest.fixture(scope="session", autouse=True)
+def _bind_app_to_test_engine(engine, session_factory):
+    """Point the application at the test engine / session factory for the
+    entire session. Per-test fixtures still reset data, but they no longer
+    rebind these attributes on every test — previously the rebind happened
+    through `monkeypatch`, which adds per-test teardown overhead.
+    """
+    db_module.engine = engine
+    db_module.SessionLocal = session_factory
 
     def _override_get_db():
         db = session_factory()
@@ -90,7 +90,31 @@ def _reset_database(engine, session_factory, monkeypatch):
 
     app.dependency_overrides[get_db] = _override_get_db
     yield
-    app.dependency_overrides.clear()
+    app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_database(engine, session_factory):
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    # Clear any evidence blobs persisted by the previous test so integrity
+    # checks see a clean slate per test.
+    if _EVIDENCE_TMP.exists():
+        for entry in _EVIDENCE_TMP.iterdir():
+            if entry.is_file():
+                entry.unlink()
+
+    # Each test starts with an empty rate-limit bucket so budgets from
+    # one test cannot bleed into another.
+    reset_rate_limits()
+    # Same reset for the signed-access replay guard so one test's jti
+    # tracking can't influence another's.
+    reset_content_access_guard()
+
+    with session_factory() as db:
+        seed(db)
+    yield
 
 
 @pytest.fixture

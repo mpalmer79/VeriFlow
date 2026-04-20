@@ -70,7 +70,7 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+    <div className="flex min-h-screen items-center justify-center px-4 py-10 animate-page-in">
       <div className="w-full max-w-[400px] space-y-4">
         <div className="panel p-6">
           <div className="mb-5 space-y-1">
