@@ -1,6 +1,6 @@
-You are acting as a staff-level full-stack engineer performing Phase 8 hardening and product refinement on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
+You are acting as a staff-level full-stack engineer performing Phase 9 optimization and deployment-completion work on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
 
-Phase 1 through Phase 7 already landed. The project now has:
+Phase 1 through Phase 8 already landed. The project now has:
 - strong workflow, audit, and evidence lifecycle foundations
 - signed content access
 - preview/download flows
@@ -10,69 +10,82 @@ Phase 1 through Phase 7 already landed. The project now has:
 - document service modularization
 - record detail page component extraction
 - tighter config/security posture
+- operations/admin UI surface
+- Railway groundwork
+- Playwright scaffolding
 
-Phase 8 is about pushing the project from "strong engineering system" to "credible product experience with cleaner deployment readiness".
+Phase 9 is about:
+- materially reducing CI runtime
+- removing duplicated backend test burden
+- following through on frontend interaction testing
+- tightening Railway deployment clarity
+- applying a final restrained UX pass where it materially improves product quality
 
-This phase must focus on:
-- frontend interaction quality
-- restrained UI/UX polish
-- better operational/admin UI surface
-- frontend testing groundwork
-- Railway deployment groundwork
-
-This is not a rewrite. This is a focused productization and deployment-readiness pass.
+This is not a rewrite. This is a focused optimization and completion pass.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Implement Phase 8 as a structured improvement pass covering:
+Implement Phase 9 as a structured optimization pass covering:
 
-1. Frontend interaction polish and product feel
-2. Better loading / empty / error / destructive-action UX
-3. Admin/operational tooling UI surface
-4. Frontend interaction testing groundwork
-5. Railway deployment groundwork for backend and frontend
-6. Supporting docs/config for Railway
-7. Incremental Alembic migration only if schema changes are actually required
+1. CI runtime reduction with preserved confidence
+2. Backend test classification and smarter SQLite/PostgreSQL split
+3. Playwright follow-through with a few meaningful interaction tests
+4. Railway deployment completion and config clarity
+5. Final restrained frontend UX refinement for critical flows
+6. Incremental Alembic migration only if schema changes are actually required
 
 Do not stop at analysis. Inspect the repository, reconcile to actual file paths, and implement completely.
+
+==================================================
+VERY IMPORTANT CI DIRECTION
+==================================================
+
+Current problem:
+CI is still too slow because the backend SQLite and PostgreSQL jobs appear to be running too much overlapping work.
+
+Goal:
+Speed up CI materially without fake optimization and without deleting meaningful confidence.
+
+This does NOT mean:
+- blindly skipping tests
+- removing PostgreSQL coverage
+- hiding failures
+- weakening migrations/testing
+- adding complexity without payoff
+
+It DOES mean:
+- classifying tests properly
+- running broad fast coverage once
+- running PostgreSQL only where it adds real value
+- reducing duplicated setup cost
+- keeping the workflow readable and honest
 
 ==================================================
 VERY IMPORTANT UI/UX DIRECTION
 ==================================================
 
-The UI must improve in a restrained, serious way.
+The frontend should continue improving in a restrained, serious way.
 
 This does NOT mean:
 - generic AI slop
-- trendy dashboard fluff
-- icons everywhere
+- dashboard fluff
 - emoji usage
+- gratuitous icons
 - decorative gradients
-- over-animated interactions
-- noisy cards that say nothing
+- fake enterprise chrome
 
 It DOES mean:
-- stronger hierarchy
-- better information density decisions
-- better action grouping
-- more deliberate visual rhythm
-- clearer state handling
-- more coherent confirmations and error messaging
-- more product-like interaction flow
-- less “assembled components”, more “designed screen”
+- better state transitions
+- better action hierarchy
+- cleaner loading/error/success handling
+- better admin/operations usability
+- stronger polish through spacing, layout, and information structure
 
-Style requirements:
-- no emojis
-- no gratuitous icons
-- no ornamental chrome
-- no generic AI-generated labels
-- no filler copy
-- keep it calm, credible, operational, and polished
-- typography, spacing, borders, structure, and state behavior should do the work
-
-The result should feel like a real internal operations product used by serious teams.
+No emojis.
+No gratuitous icons.
+No ornamental clutter.
 
 ==================================================
 NON-NEGOTIABLE EXECUTION RULES
@@ -81,40 +94,38 @@ NON-NEGOTIABLE EXECUTION RULES
 1. Inspect the repo first.
    - Read the current backend and frontend structure fully.
    - Identify actual files for:
-     - record detail page and extracted components
-     - admin/debug routes and any current admin surfaces
+     - GitHub Actions workflow(s)
+     - pytest config / conftest / test layout
+     - backend tests and fixtures
+     - Playwright config and current tests
+     - Railway config files and deployment docs
+     - backend startup/config/migration flow
+     - record detail page and operations/admin UI pieces
      - frontend API helpers/types
-     - auth/session/token usage in frontend
-     - app config and environment loading
-     - Docker/deployment assets
-     - README/docs
-     - CI files
      - migrations
-   - Confirm the current preview, download, verify, integrity, delete, and admin route behavior before changing them.
 
 2. Preserve the current architecture.
    - Keep FastAPI + SQLAlchemy + local evidence storage
    - Keep Next.js app structure
-   - Keep current backend route structure unless a small cleanup is clearly better
-   - Do not redesign auth architecture
-   - Do not replace the evidence model
-   - Do not introduce cloud storage or new infrastructure providers beyond Railway groundwork
+   - Keep PostgreSQL CI coverage in some form
+   - Do not redesign the app into microservices
+   - Do not replace the testing stack unless necessary
 
 3. Prefer modifying existing files.
    - Avoid duplication
-   - Reuse current components/helpers where sensible
-   - Extract additional components only when they improve clarity
+   - Reuse existing test/config patterns
+   - Add markers and structure rather than rewriting the whole suite
 
-4. Keep correctness ahead of appearance.
-   - UI polish must improve usability, not just appearance
-   - Railway groundwork must be real and coherent
-   - Testing groundwork must support future confidence, not just check a box
+4. Keep correctness ahead of speed.
+   - CI optimization must preserve meaningful trust
+   - Railway docs/config must reflect actual deploy behavior
+   - frontend testing should cover real flows, not toy checks
 
 5. Do not overbuild.
-   - No giant admin dashboard
-   - No design-system rewrite
-   - No heavy frontend framework changes
-   - No premature multi-environment deployment complexity
+   - no giant CI matrix
+   - no giant E2E suite
+   - no heavy deployment orchestration
+   - no design-system rewrite
 
 6. Minimal comments.
    - No AI-style comments
@@ -128,6 +139,7 @@ NON-NEGOTIABLE EXECUTION RULES
    - migration files added
    - tests added/updated
    - known limitations remaining
+   - before/after CI design rationale
 
 ==================================================
 I. ALEMBIC DISCIPLINE (MANDATORY)
@@ -229,258 +241,195 @@ If NO schema change:
 → explicitly say: "No new migration required"
 
 ==================================================
-PHASE 8A — FRONTEND INTERACTION POLISH
+PHASE 9A — CI PERFORMANCE OPTIMIZATION
 ==================================================
 
 Goal:
-Improve the record-detail experience so it feels like a real product surface, not just a capability hub.
+Cut CI runtime materially while preserving real confidence.
 
-Known concern:
-- frontend is better structured now, but still likely lags the backend in overall polish and interaction quality
+Known issue:
+- backend SQLite and backend PostgreSQL jobs appear to duplicate too much work
+- frontend is not the bottleneck
 
 Required behavior:
-Refine the record detail UX with focus on:
-- hierarchy
-- grouping
-- action clarity
-- state handling
-- visual rhythm
+Audit the current CI and redesign it so the backend jobs are better scoped.
 
-Key improvements to target:
-1. Better grouping of:
-   - record summary
-   - workflow status
-   - evaluation state
-   - evidence actions
-   - audit/operational context
-2. Better action placement so destructive or secondary actions do not compete with primary actions
-3. Better local state feedback around:
-   - upload
-   - verify
-   - integrity check
-   - preview
-   - delete
-4. Better spacing and density so the screen feels deliberate rather than assembled
+Minimum required outcome:
+1. Classify backend tests into categories such as:
+   - fast/generic
+   - postgres-specific
+   - migration-sensitive
+   - slow/integration
+2. Add pytest markers or equivalent structure where appropriate
+3. Change CI so:
+   - SQLite runs the broad fast suite
+   - PostgreSQL runs only the subset that actually benefits from PostgreSQL coverage
+4. Keep Alembic/migration confidence where it matters
+5. Preserve readability of the workflow
 
 Requirements:
-- keep the restrained style
-- no icons unless absolutely necessary and materially useful
-- no decorative design tricks
-- use layout, spacing, borders, and copy quality to improve the feel
+- do not just delete tests from CI
+- do not run the full backend suite twice unless clearly justified
+- do not make the workflow misleading
+- use dependency caching effectively if not already optimal
+- review fixture/setup scope for repeated expensive setup
 
-Do not:
-- redesign the whole page into a flashy dashboard
-- reduce useful information density too much
-- hide important operational detail behind unnecessary clicks
+Strongly consider:
+- moving PostgreSQL-specific confidence into a smaller marked subset
+- separating migration smoke tests from full broad backend execution if that saves meaningful time
+- xdist only if the suite is stable and the speedup is real
+
+At the end, explain:
+- what runs in SQLite
+- what runs in PostgreSQL
+- why
 
 ==================================================
-PHASE 8B — LOADING / EMPTY / ERROR / CONFIRMATION UX
+PHASE 9B — TEST SUITE STRUCTURE
 ==================================================
 
 Goal:
-Make the UI feel more product-complete through better states and interactions.
+Make the test structure match the CI strategy cleanly.
 
 Required behavior:
-Review and improve:
-- loading states
-- empty states
-- error states
-- destructive confirmations
-- success/failure feedback
-
-Targets:
-1. Upload flow
-2. Verify flow
-3. Integrity check flow
-4. Delete document flow
-5. Preview/download flow
-6. Any admin/debug actions surfaced in UI
+1. Introduce clear pytest markers and/or file organization for:
+   - postgres-only or postgres-sensitive tests
+   - integration/slow tests if needed
+2. Update test config so local developers can still run:
+   - fast default tests easily
+   - postgres-targeted tests intentionally
+3. Keep current test ergonomics reasonable
 
 Requirements:
-- replace crude/native interaction where a better app-level pattern is reasonable
-- avoid modal spam
-- confirmations should be deliberate, readable, and not generic
-- errors should be specific and operationally useful
-- empty states should not look unfinished
+- do not force every developer into a heavy Postgres loop by default
+- do not claim Postgres confidence without actually running marked tests in CI
+- keep conftest and fixtures understandable
 
-If native browser dialogs are still in use for key flows:
-- replace them with a restrained in-app confirmation pattern if feasible within current stack
-
-Do not:
-- add toast spam everywhere
-- add generic “Something went wrong” messages when backend errors can be surfaced meaningfully
+Preferred outcome:
+- fast default local loop remains
+- CI is more efficient
+- DB-specific confidence is preserved intentionally, not accidentally
 
 ==================================================
-PHASE 8C — ADMIN / OPERATIONAL TOOLING UI SURFACE
+PHASE 9C — PLAYWRIGHT FOLLOW-THROUGH
 ==================================================
 
 Goal:
-Expose the existing admin/debug capabilities in a restrained UI for authorized users.
-
-Known concern:
-- admin/debug tooling exists in backend but likely lacks product UI
+Turn the current Playwright scaffolding into a small but meaningful frontend confidence layer.
 
 Required behavior:
-Add a minimal admin/operations surface for existing capabilities such as:
-- audit chain verification
-- storage inventory
-- storage cleanup dry-run / execution if present
-- evidence summary / integrity summary if useful
+Add a few real Playwright tests for the highest-value user flows.
+
+Recommended minimum flows:
+1. record detail page loads critical sections
+2. metadata-only documents do not expose invalid actions
+3. upload-backed documents expose preview/download actions appropriately
+4. preview modal opens and closes correctly
+5. admin/operations page or admin surface renders expected sections for authorized access if practical in current setup
 
 Requirements:
-1. Inspect current auth/role awareness in frontend and backend
-2. Only surface admin features when appropriate
-3. Keep the admin surface narrow and operational
-4. It can live:
-   - on the record detail page in an admin-only section
-   - on a small dedicated admin page
-   - or both if clearly justified
-
-Preferred characteristics:
-- clean tables or summary panels
-- clear counts and statuses
-- deliberate action placement
-- no “admin console” theatrics
-
-Do not:
-- build a giant dashboard
-- expose unsafe operational actions casually
-- guess admin capability purely on the frontend if backend truth can be fetched or inferred reliably
-
-==================================================
-PHASE 8D — FRONTEND TESTING GROUNDWORK
-==================================================
-
-Goal:
-Begin closing the frontend confidence gap.
-
-Known concern:
-- no real frontend interaction tests yet
-
-Required behavior:
-Add the smallest credible frontend testing foundation that fits the repo.
-
-Preferred path:
-- Playwright for high-value end-to-end interaction coverage
-OR
-- a small existing-compatible testing setup if Playwright is too disruptive
-
-At minimum, create groundwork for testing core flows such as:
-- upload form presence and interaction
-- preview modal open/close
-- integrity-check action visibility
-- metadata-only vs upload-backed action gating
-- admin-only surface visibility if surfaced in UI
-
-Requirements:
-- keep setup realistic
-- do not add a giant test matrix
-- prefer a few meaningful tests over large fake coverage
-
-If full interaction testing cannot be completed in one pass:
-- still add the foundation and at least one or two meaningful tests
-- document what remains
+- keep the suite small and meaningful
+- do not attempt huge E2E coverage in one pass
+- prefer stable smoke-plus-critical-flow tests
+- if auth setup is difficult, use the lightest credible setup that matches current app structure
 
 Do not:
 - add brittle placeholder tests
-- claim frontend confidence without exercising real interaction paths
+- create a large flaky browser suite
+- overstate frontend confidence
 
 ==================================================
-PHASE 8E — RAILWAY DEPLOYMENT GROUNDWORK
+PHASE 9D — RAILWAY DEPLOYMENT COMPLETION
 ==================================================
 
 Goal:
-Start making the project Railway-ready in a clean, credible way.
+Tighten the Railway story from groundwork into something clearer and more deployment-ready.
 
 Required behavior:
-Add groundwork for deploying backend and frontend to Railway.
+Inspect current Railway files/docs/config and improve clarity and correctness.
 
-This should include, as appropriate after inspecting the repo:
-1. Railway-oriented run/start commands
-2. Environment variable documentation
-3. Backend and frontend service expectations
-4. Healthcheck/readiness path clarity
-5. Build/start assumptions that match Railway deployment reality
-6. Optional `railway.json` files if they materially help and fit the repo
-7. README/deployment docs section for Railway
-
-Targets:
-- backend service
-- frontend service
-- Postgres service assumptions
-- migration expectations on deploy
+Focus on:
+1. explicit backend start command expectations
+2. explicit frontend start/build expectations
+3. environment variable clarity
+4. migration strategy on Railway
+5. health/readiness path usage
+6. seed behavior in hosted environments
+7. service-to-service URL expectations
 
 Requirements:
-- do not invent magical automation
-- be explicit about what Railway needs:
-  - env vars
-  - start commands
-  - migrations
-  - service URLs
-- if Railway deployment should not auto-run destructive or dev-only seed behavior, fix/document that clearly
-- ensure Docker and/or standard build strategy makes sense for Railway
+- be honest about what is manual vs automated
+- do not auto-run unsafe seeding in hosted environments
+- make Railway-specific docs more explicit if needed
+- if `railway.json` or service config can be improved safely, do so
 
 Preferred outcome:
-A new engineer should be able to understand:
-- how to deploy backend to Railway
-- how to deploy frontend to Railway
-- what env vars are needed
-- how migrations are run safely
-- how services point to one another
-
-Important:
-- local `docker-compose` convenience is not the same as Railway reality
-- deployment docs must reflect that honestly
+A new engineer should be able to answer:
+- how backend deploys on Railway
+- how frontend deploys on Railway
+- what env vars are required
+- how migrations are run
+- what is intentionally not automated
 
 Do not:
 - add fake production claims
-- auto-run unsafe seeds in hosted environments
-- leave ambiguous whether migrations happen on startup, release, or manual step
+- leave migration behavior ambiguous
+- rely on local Docker assumptions as if they are Railway behavior
 
 ==================================================
-PHASE 8F — DEPLOYMENT / CONFIG CLEANUP
-==================================================
-
-Goal:
-Tighten the project’s deployment story beyond just adding docs.
-
-Required behavior:
-Inspect startup/config behavior and improve anything that makes Railway or production-style deployment feel brittle.
-
-Examples of good targets:
-- make seed behavior explicitly dev-only if needed
-- make environment assumptions clearer
-- make backend/frontend URLs/config naming clearer
-- improve health endpoint clarity
-- reduce accidental reliance on local defaults
-
-Do not:
-- introduce environment sprawl without reason
-- silently preserve unsafe hosted defaults
-
-==================================================
-PHASE 8G — README / DOCS REFINEMENT
+PHASE 9E — FINAL RESTRAINED UX PASS
 ==================================================
 
 Goal:
-Update the docs to reflect the stronger frontend and Railway groundwork.
+Apply one more focused UX refinement pass to the most important operational flows.
+
+Targets:
+- upload
+- verify
+- integrity check
+- preview/download
+- delete/reject
+- operations/admin surface
 
 Required behavior:
-Update README and/or docs to cover:
-- product capabilities
-- local development
-- CI
-- Docker
-- Railway deployment
-- migrations
-- environment variables
-- frontend testing setup if added
-- known hosted limitations
+Refine:
+1. loading states
+2. success/failure feedback
+3. admin action clarity
+4. empty states
+5. section hierarchy where still weak
+
+Requirements:
+- keep the restrained style
+- no emojis
+- no gratuitous icons
+- no ornamental chrome
+- no generic AI product wording
+- improve clarity through structure, copy, spacing, and state behavior
+
+This phase should be small and targeted.
+Do not turn it into another broad UI rewrite.
+
+==================================================
+PHASE 9F — DOCS / ENGINEERING STORY CLEANUP
+==================================================
+
+Goal:
+Make the repo’s engineering story match the new CI and deployment structure.
+
+Required behavior:
+Update README and/or deployment docs to reflect:
+- new CI strategy
+- test markers / local test options
+- Playwright test scope
+- Railway deployment flow
+- migration strategy
+- limitations that still remain
 
 Requirements:
 - concise
 - honest
-- no marketing fluff
+- no fluff
 - no exaggerated claims
 
 ==================================================
@@ -490,12 +439,12 @@ TESTING REQUIREMENTS
 Extend the test suite as needed.
 
 At minimum add/update tests for:
-1. frontend/product-state groundwork if test infra is added
-2. admin surface visibility or gating logic where feasible
-3. Railway/deployment config consistency if practical
-4. startup/config safety related to hosted environments
-5. any replacement of native confirmations or state handling
-6. docs/config assumptions reflected in code
+1. CI/test marker structure works as intended
+2. postgres-only or db-sensitive test selection behaves correctly
+3. any workflow/config assumptions introduced are valid
+4. Playwright tests cover a few real flows
+5. Railway/deployment docs/config align with actual startup behavior
+6. any refined frontend state handling still behaves correctly
 
 Use existing patterns where possible.
 Do not create a giant framework unless justified.
@@ -505,21 +454,12 @@ IMPLEMENTATION DISCOVERY STEPS
 ==================================================
 
 Before editing:
-1. Read current backend files for:
-   - auth/roles
-   - admin/debug routes
-   - config
-   - startup behavior
-   - deploy-related docs/assets
-2. Read current frontend files for:
-   - record detail page
-   - extracted record-detail components
-   - api client
-   - shared types
-3. Determine whether any frontend test framework already exists
-4. Determine whether Railway-specific files already exist
-5. Determine how seeds and migrations currently behave in Docker/hosted contexts
-6. Determine current README/deployment documentation quality
+1. Read current CI workflow(s) and identify duplicated work
+2. Read current pytest config, conftest, and test layout
+3. Determine whether markers already exist
+4. Read current Playwright setup and current npm scripts
+5. Read current Railway files/docs and backend/frontend start behavior
+6. Read current record-detail and operations UI files to find the weakest remaining state/interaction areas
 
 Then implement the changes.
 
@@ -527,13 +467,13 @@ Then implement the changes.
 ACCEPTANCE CRITERIA
 ==================================================
 
-- record-detail experience feels more product-like and less scaffold-like
-- loading/error/empty/confirm flows are materially improved
-- admin/debug tooling has a restrained UI surface for authorized use
-- frontend testing groundwork exists and exercises at least a few meaningful interactions
-- Railway deployment groundwork is real and documented
-- deployment/config behavior is cleaner and more hosted-safe
-- docs tell a credible product and deployment story
+- CI runtime is materially improved by reducing duplicated backend burden
+- SQLite remains the fast broad feedback loop
+- PostgreSQL remains a real but narrower confidence layer
+- Playwright has a few meaningful real tests
+- Railway deployment story is clearer and more complete
+- frontend operational flows feel more deliberate and polished
+- docs reflect the actual new workflow honestly
 - no generic AI slop appears in the UI
 - no obvious runtime mismatch remains
 
@@ -549,5 +489,6 @@ Provide:
 4. Migration files
 5. Tests updated/added
 6. Remaining limitations
+7. Before vs after CI strategy and expected runtime impact
 
 Now begin by inspecting the repository and identifying exact files to modify.
