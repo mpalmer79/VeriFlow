@@ -1,17 +1,25 @@
 "use client";
 
+import { motion } from "framer-motion";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import {
+  Activity,
+  AlertOctagon,
+  AlertTriangle,
+  Clock,
+} from "@/components/icons";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StageBadge } from "@/components/StageBadge";
-import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { KPICard } from "@/components/ui/KPICard";
 import { ApiError, records as recordsApi } from "@/lib/api";
+import { fadeRise, SPRING_DEFAULT, staggerParent } from "@/lib/motion";
 import { formatDateTime } from "@/lib/format";
 import {
   loadStagesForRecords,
@@ -150,52 +158,70 @@ export default function DashboardPage() {
 
       {error ? <ErrorBanner message={error} /> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Total records"
-          value={loading || !data ? "—" : stats.total}
-          sublabel={
-            data ? `${stats.total === 1 ? "record" : "records"} in view` : "loading…"
-          }
-          tone="neutral"
-        />
-        <StatCard
-          label="In progress"
-          value={loading || !data ? "—" : stats.inProgress}
-          sublabel={
-            data
-              ? stats.inProgress > 0
-                ? "moving through stages"
-                : "nothing in flight"
-              : "loading…"
-          }
-          tone="neutral"
-        />
-        <StatCard
-          label="Blocked"
-          value={loading || !data ? "—" : stats.blocked}
-          sublabel={
-            data
-              ? stats.blocked > 0
-                ? "resolution required"
-                : "no active blocks"
-              : "loading…"
-          }
-          tone="critical"
-        />
-        <StatCard
-          label="High or critical risk"
-          value={loading || !data ? "—" : stats.highRisk}
-          sublabel={
-            data
-              ? stats.highRisk > 0
-                ? "review recommended"
-                : "risk contained"
-              : "loading…"
-          }
-          tone="warning"
-        />
-      </div>
+      <motion.div
+        variants={staggerParent}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="Total records"
+            value={loading || !data ? "—" : stats.total}
+            sublabel={
+              data ? `${stats.total === 1 ? "record" : "records"} in view` : "loading…"
+            }
+            icon={Activity}
+            tone="neutral"
+          />
+        </motion.div>
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="In progress"
+            value={loading || !data ? "—" : stats.inProgress}
+            sublabel={
+              data
+                ? stats.inProgress > 0
+                  ? "moving through stages"
+                  : "nothing in flight"
+                : "loading…"
+            }
+            icon={Clock}
+            tone="neutral"
+          />
+        </motion.div>
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="Blocked"
+            value={loading || !data ? "—" : stats.blocked}
+            sublabel={
+              data
+                ? stats.blocked > 0
+                  ? "resolution required"
+                  : "no active blocks"
+                : "loading…"
+            }
+            icon={AlertOctagon}
+            tone="critical"
+            highlighted={!!data && stats.blocked > 0}
+          />
+        </motion.div>
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="High or critical risk"
+            value={loading || !data ? "—" : stats.highRisk}
+            sublabel={
+              data
+                ? stats.highRisk > 0
+                  ? "review recommended"
+                  : "risk contained"
+                : "loading…"
+            }
+            icon={AlertTriangle}
+            tone="warning"
+          />
+        </motion.div>
+      </motion.div>
 
       {loading && !error ? (
         <div className="grid gap-6 lg:grid-cols-3">
