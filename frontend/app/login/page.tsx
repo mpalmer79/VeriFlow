@@ -38,6 +38,7 @@ function LoginPageInner() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showDemoHint, setShowDemoHint] = useState(false);
 
   useEffect(() => {
     if (readToken()) {
@@ -49,6 +50,16 @@ function LoginPageInner() {
     // to swap roles from there.
     if (isDemoMode()) {
       router.replace("/");
+      return;
+    }
+    // If we're landing on /login from a hosted origin but demo mode
+    // is off, surface a hint for the operator — this is almost always
+    // because `NEXT_PUBLIC_DEMO_MODE` wasn't set at build time.
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      const hostedOrigin =
+        host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
+      setShowDemoHint(hostedOrigin);
     }
   }, [router, nextParam]);
 
@@ -134,6 +145,23 @@ function LoginPageInner() {
             {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
           </form>
         </div>
+
+        {showDemoHint ? (
+          <div className="panel-muted p-4 text-xs text-text-muted">
+            <div className="mb-1 field-label text-severity-high">
+              Operator note · demo mode is off
+            </div>
+            <p>
+              You&rsquo;re seeing this sign-in form because the build does not
+              have <span className="mono">NEXT_PUBLIC_DEMO_MODE</span> set to
+              <span className="mono"> true</span>. To expose the public demo
+              (auto-sign-in + role switcher), set that variable on the
+              frontend service and rebuild. <span className="mono">
+              NEXT_PUBLIC_*</span> values are inlined at build time, so a
+              variable change requires a full rebuild — not just a restart.
+            </p>
+          </div>
+        ) : null}
 
         <div className="panel-muted p-4">
           <div className="mb-1 field-label">Local demo access</div>
