@@ -1,286 +1,436 @@
-You are acting as a staff-level full-stack engineer performing Phase 10 optimization and frontend product refinement on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js 14 project named VeriFlow.
+You are acting as a staff-level full-stack engineer performing Phase 11 refinement and trust-hardening on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js 14 project named VeriFlow.
 
-Phase 1 through Phase 9 already landed. The project now has:
+Phase 1 through Phase 10 already landed. The project now has:
 - strong workflow, audit, and evidence lifecycle foundations
-- document integrity and storage handling
-- CI with optimized SQLite/PostgreSQL split
+- signed content access
+- preview/download flows
+- evidence cleanup and integrity tooling
+- CI with SQLite + PostgreSQL split
 - Dockerfiles and Railway groundwork
 - modular backend services
 - operations/admin UI surface
-- Playwright scaffolding
-- structured frontend components
+- Playwright groundwork plus a few real tests
+- restrained typography system using next/font/google
+- Inter + JetBrains Mono
+- tabular numerals and mono utilities
+- controlled motion and reduced-motion support
+- dramatically improved backend test runtime
 
-Phase 10 is about:
-- reducing backend test runtime (primary bottleneck)
-- elevating frontend into a polished product surface
-- introducing disciplined typography and layout system
-- adding motion/animation in a controlled, professional way
-- improving frontend interaction confidence
-- tightening deployment credibility
+Phase 11 is about:
+- tightening the remaining trust/security edges
+- making the frontend feel more finished under real use
+- increasing confidence in key user flows
+- improving the admin/operations experience
+- sharpening the repo and product story for serious review
 
-This is NOT a rewrite. This is a precision refinement phase.
+This is not a rewrite. This is a focused refinement and trust-hardening pass.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Implement Phase 10 covering:
+Implement Phase 11 covering:
 
-1. Backend test runtime reduction (highest priority)
-2. Frontend typography system (Inter + tabular numerals + mono)
-3. Controlled motion/animation system
-4. High-value UI/UX refinement (no AI slop)
-5. Playwright follow-through (minimal but meaningful)
-6. CI/runtime alignment with new test structure
-7. Deployment clarity (Railway + Docker positioning)
+1. Signed-content access tightening
+2. Playwright CI strategy and selective browser confidence
+3. Frontend visual QA and high-value refinement
+4. Admin/operations usability polish
+5. Product/readme/portfolio presentation cleanup
+6. Incremental Alembic migration only if schema changes are actually required
+
+Do not stop at analysis. Inspect the repository, reconcile to actual file paths, and implement completely.
 
 ==================================================
-CRITICAL UI/UX PRINCIPLES
+UI/UX DIRECTION
 ==================================================
 
-The UI must feel:
+The UI must continue to feel:
 - clean
 - technical
 - modern
-- deliberate
-- high signal, low noise
+- calm
+- operationally credible
 
 DO NOT:
-- use emojis
-- add decorative icons everywhere
-- use gradients or flashy effects
-- create dashboard fluff
-- generate generic AI UI copy
+- add generic AI slop
+- add emojis
+- add decorative gradients
+- add gratuitous icons
+- create fake KPI dashboards
+- overanimate the experience
 
 DO:
-- use spacing, alignment, and typography to create hierarchy
-- keep density appropriate for an operations tool
-- make actions clear and intentional
-- improve clarity over decoration
+- improve hierarchy
+- improve spacing rhythm
+- improve information grouping
+- improve state clarity
+- improve interaction confidence
+- improve readability under dense operational data
 
-Target inspiration:
-- Linear
-- Stripe dashboards
-- modern internal tooling
+Typography direction remains:
+- Inter for UI
+- JetBrains Mono or existing mono choice for hashes, IDs, rule codes
+- tabular numerals on all aligned numeric UI
 
-==================================================
-PHASE 10A — BACKEND TEST RUNTIME OPTIMIZATION
-==================================================
-
-Goal:
-Reduce the SQLite broad suite runtime significantly.
-
-Current issue:
-- heavy per-test setup in conftest
-- repeated drop_all/create_all
-- reseeding on every test
-
-Required actions:
-1. Audit backend/tests/conftest.py
-2. Reduce full schema resets where not required
-3. Introduce smarter fixture scoping:
-   - session or module where safe
-4. Split tests into:
-   - requires_full_reset
-   - lightweight tests
-5. Avoid reseeding entire dataset per test unless required
-6. Ensure test isolation is preserved
-
-Optional:
-- evaluate pytest-xdist ONLY if suite becomes worker-safe
-
-Do NOT:
-- remove meaningful tests
-- break isolation for speed
+Motion direction remains:
+- subtle
+- purposeful
+- low-noise
+- reduced-motion respected
 
 ==================================================
-PHASE 10B — TYPOGRAPHY SYSTEM (MANDATORY)
+NON-NEGOTIABLE EXECUTION RULES
 ==================================================
 
-Goal:
-Introduce a professional typography system.
+1. Inspect the repo first.
+   - Read the current backend and frontend structure fully.
+   - Identify actual files for:
+     - signed content routes and token logic
+     - auth/security/config
+     - operations/admin UI
+     - record detail page and child components
+     - Playwright config and current specs
+     - CI workflow
+     - README/docs
+     - deployment docs
+     - migrations
 
-Required implementation:
+2. Preserve the current architecture.
+   - Keep FastAPI + SQLAlchemy + local evidence storage
+   - Keep Next.js app structure
+   - Keep the current CI split unless a targeted improvement is justified
+   - Do not redesign auth architecture wholesale
+   - Do not replace the storage model
+   - Do not add cloud providers or major infra changes
 
-1. Use Next.js 14 font system:
-   - next/font/google
+3. Prefer modifying existing files.
+   - Avoid duplication
+   - Reuse the typography/motion system already introduced
+   - Extend the current test structure rather than creating a second system
 
-2. Primary font:
-   - Inter
+4. Keep trust and correctness ahead of appearance.
+   - Security tightening must be real
+   - Playwright CI must be scoped and credible
+   - UI polish must improve usability, not just visuals
 
-3. Monospace font:
-   - JetBrains Mono OR IBM Plex Mono
+5. Do not overbuild.
+   - no giant browser test matrix
+   - no giant admin console
+   - no design-system rewrite
+   - no fake enterprise security theater
 
-4. Apply tabular numerals:
-   - font-variant-numeric: tabular-nums
+6. Minimal comments.
+   - No AI-style comments
+   - No tutorial comments
+   - Only concise human comments where needed
 
-Apply tabular numerals to:
-- risk scores
-- versions
-- timestamps
-- file sizes
-- numeric table columns
-- counts and metrics
-
-Apply monospace to:
-- document hashes
-- audit IDs
-- rule codes
-- correlation IDs
-
-Create reusable utilities or classes for:
-- tabular numeric alignment
-- mono text usage
-
-Ensure:
-- zero layout shift from fonts
-- no external font requests
-
-==================================================
-PHASE 10C — MOTION / ANIMATION SYSTEM
-==================================================
-
-Goal:
-Introduce motion that enhances UX without becoming distracting.
-
-This must be subtle, intentional, and product-grade.
-
-DO NOT:
-- add flashy animations
-- animate everything
-- create gimmicky transitions
-
-DO:
-- use motion to reinforce state changes
-- improve perceived performance
-- guide user attention
-
-Required implementations:
-
-1. Initial page entry animation
-   - when user first lands on homepage
-   - ~2 seconds total duration
-   - smooth fade + slight vertical motion
-   - must not block interaction
-
-2. Component-level motion
-   Apply subtle motion to:
-   - section transitions
-   - modal open/close (preview, confirm dialog)
-   - table row updates
-   - loading-to-loaded transitions
-   - admin panel sections
-
-3. Interaction feedback
-   - hover states (subtle)
-   - button press feedback
-   - success/failure transitions
-
-4. Loading transitions
-   - replace abrupt content swaps with smooth transitions
-   - skeleton or fade-in patterns where appropriate
-
-Implementation guidance:
-- use a lightweight library (e.g., framer-motion) OR CSS transitions
-- keep durations short (150–300ms typical, except initial load)
-- maintain performance
+7. At the end, provide:
+   - concise summary
+   - exact files changed
+   - exact files added
+   - migration files added
+   - tests added/updated
+   - known limitations remaining
 
 ==================================================
-PHASE 10D — FRONTEND PRODUCT POLISH
+I. ALEMBIC DISCIPLINE (MANDATORY)
 ==================================================
 
-Target areas:
-- record detail page
-- operations/admin page
-- document evidence panel
-- tables and lists
+This project uses Alembic with a baseline migration:
 
-Improve:
-1. alignment and spacing
-2. numeric column readability
-3. action grouping
-4. section hierarchy
-5. loading and empty states
-6. confirmation flows
-7. error messaging clarity
+    0001_initial_schema.py
 
-Ensure:
-- metadata-only vs upload-backed states are obvious
-- admin actions are clearly separated from user actions
+This file is LOCKED.
+
+You MUST NOT:
+- modify 0001_initial_schema.py
+- regenerate or overwrite the baseline
+- collapse new schema changes into the baseline
+- create fake or redundant migrations
+
+All schema evolution must be incremental.
+
+----------------------------------------
+SCHEMA CHANGE DETECTION
+----------------------------------------
+
+Before implementing any change, determine:
+
+"Does this change the database schema?"
+
+Schema changes include:
+- adding/removing columns
+- changing nullability
+- changing defaults
+- adding/removing indexes
+- adding/removing constraints
+- adding/removing tables
+
+If YES:
+→ create a NEW migration revision
+
+If NO:
+→ DO NOT create a migration
+
+----------------------------------------
+INCREMENTAL MIGRATIONS ONLY
+----------------------------------------
+
+If a schema change is required:
+
+1. Create a new migration file:
+   backend/migrations/versions/
+
+2. Use clear naming:
+   - 0002_add_<thing>
+   - 0003_alter_<thing>
+   - 0004_create_<thing>
+
+3. Implement BOTH:
+   - upgrade()
+   - downgrade()
+
+4. Do not touch the baseline migration.
+
+----------------------------------------
+OUTPUT REQUIREMENT
+----------------------------------------
+
+If ANY schema change is made, include:
+- migration filename
+- what it changes
+- confirmation baseline not modified
+
+If NO schema change:
+→ explicitly say: "No new migration required"
 
 ==================================================
-PHASE 10E — PLAYWRIGHT FOLLOW-THROUGH
+PHASE 11A — SIGNED ACCESS TIGHTENING
 ==================================================
 
 Goal:
-Add minimal but meaningful frontend confidence.
+Tighten the remaining trust gap around signed content access.
 
-Add tests for:
-1. record detail page renders
-2. preview modal opens/closes
-3. metadata-only gating works
-4. operations page renders correctly
-5. confirm dialog behavior
+Known current limitation:
+- signed content-access tokens can be replayed until expiry
 
-Keep:
-- test count small
-- tests stable
+Required behavior:
+Inspect the current signed-access implementation and strengthen it in the smallest credible way.
 
-Do NOT:
-- create a large flaky suite
+Preferred improvements:
+1. Add stronger claim scoping if missing:
+   - document id
+   - organization id
+   - disposition
+   - token type
+2. Reduce accidental misuse surface
+3. If feasible without overengineering, add one of:
+   - jti tracking with short-lived in-memory replay prevention
+   - one-time-use token tracking in a small bounded store
+   - stricter nonce validation path
+4. Preserve short TTL behavior
+5. Ensure metadata-only docs still cannot obtain signed content access
+
+Requirements:
+- do not create a giant distributed token store
+- do not weaken current behavior
+- do not introduce brittle global state
+- if replay prevention is only partial within current architecture, implement the best bounded improvement and document the limitation honestly
+
+Also review:
+- signed access error responses
+- expired token behavior
+- invalid disposition handling
+- whether preview/download semantics remain clear
 
 ==================================================
-PHASE 10F — CI ALIGNMENT
+PHASE 11B — PLAYWRIGHT CI STRATEGY
 ==================================================
 
 Goal:
-Ensure CI reflects optimized test structure.
+Promote frontend browser confidence carefully without blowing up runtime.
 
-Verify:
-- SQLite runs broad fast suite
-- PostgreSQL runs targeted subset
-- no duplication reintroduced
+Current state:
+- Playwright groundwork exists
+- some specs exist
+- browser tests are not yet part of the main CI trust story
 
-Do NOT:
-- increase CI runtime unnecessarily
-- add heavy frontend test jobs unless lightweight
+Required behavior:
+Design and implement a small, credible Playwright CI strategy.
+
+Preferred approach:
+1. Keep the main CI fast
+2. Add one of:
+   - a lightweight Playwright smoke job on PRs
+   - a narrower manual/nightly/browser job
+   - a conditional browser job that runs only when frontend files change, if that is feasible and maintainable
+3. Keep the test count small and meaningful
+
+Required test coverage:
+- at least one real record-detail/browser flow
+- at least one confirm-dialog or modal flow
+- at least one admin/operations visibility flow if practical
+
+Requirements:
+- do not add a big flaky browser suite
+- do not double the CI runtime
+- do not pretend browser confidence is broad if it is still narrow
+- document clearly what browser coverage actually exists
+
+At the end, explain:
+- whether Playwright now runs in CI
+- when it runs
+- what it covers
+- why that scope is appropriate
 
 ==================================================
-PHASE 10G — DEPLOYMENT CLARITY
+PHASE 11C — FRONTEND VISUAL QA / REFINEMENT
 ==================================================
 
 Goal:
-Make deployment story explicit and honest.
+Apply one more pass of high-value UI refinement where the frontend still feels slightly assembled rather than fully designed.
 
-Required:
-- clarify Railway vs Docker usage
-- document:
-  - env variables
-  - migrations
-  - startup commands
-  - storage limitations
-- ensure seed logic is dev-only
+Required behavior:
+Inspect the current record-detail experience and operations/admin surface and improve the weakest remaining areas.
 
-Positioning:
-- Dockerfiles remain for consistency and portability
-- Railway is primary deployment path
+Focus on:
+1. section spacing and grouping
+2. action hierarchy
+3. loading / empty / failure states
+4. readability of dense tables/rows
+5. admin/operations clarity
+6. consistency of typography utilities
+7. consistency of motion across dialogs/overlays/panels
 
-Do NOT:
-- imply production-grade infra beyond reality
-- hide limitations
+Specific quality checks:
+- numeric alignment should be consistent anywhere values stack vertically
+- mono usage should be consistent and restrained
+- motion should not feel random across components
+- no section should feel visually “unfinished”
+- no admin area should feel like a raw debug dump if it is now user-visible
+
+Do not:
+- add fluff
+- redesign from scratch
+- add gratuitous icons
+- add visual noise
+
+==================================================
+PHASE 11D — ADMIN / OPERATIONS USABILITY POLISH
+==================================================
+
+Goal:
+Make the operations surface more credible for real use.
+
+Required behavior:
+Refine the existing admin/operations UI so it better supports actual operator workflows.
+
+Focus on:
+- audit verification results
+- storage inventory readability
+- cleanup dry-run vs destructive action clarity
+- status/result presentation
+- safe action messaging
+
+If useful and consistent with current scope, add:
+- clearer result summaries
+- better grouping of destructive vs read-only operations
+- stronger confirm copy
+- better empty/error states
+
+Do not:
+- build a huge admin dashboard
+- expose unsafe operational detail casually
+- add charts just to look impressive
+
+==================================================
+PHASE 11E — README / PRODUCT STORY REFINEMENT
+==================================================
+
+Goal:
+Sharpen how the repo presents itself to serious engineers and recruiters.
+
+Required behavior:
+Refine README and relevant docs so they better communicate:
+- what the product actually does
+- where the strongest engineering work is
+- how the evidence/integrity model works
+- what CI/test confidence exists
+- what deployment story exists
+- what limitations remain honestly
+
+Also improve:
+- terminology consistency
+- wording precision
+- project framing
+
+Desired framing:
+VeriFlow should read like a serious workflow and evidence-control platform for compliance-heavy operations, not a classroom app and not a vague AI tool.
+
+Do not:
+- add marketing fluff
+- exaggerate production readiness
+- hide important limitations
+
+==================================================
+PHASE 11F — OPTIONAL SMALL QUALITY-OF-LIFE IMPROVEMENTS
+==================================================
+
+Goal:
+If there is time and scope after the core work, land one or two small high-value improvements only if they fit cleanly.
+
+Acceptable examples:
+- clearer runtime/ops badges or labels in admin surface
+- tighter content access feedback
+- small route or helper cleanup that improves clarity
+- minor CI warning cleanup if still present
+
+Do not:
+- expand scope substantially
+- start a new architecture phase
+- add novelty features
+
+==================================================
+TESTING REQUIREMENTS
+==================================================
+
+Extend the test suite as needed.
+
+At minimum add/update tests for:
+1. tightened signed-access behavior
+2. replay-prevention or improved token-boundary behavior if implemented
+3. Playwright CI path or CI workflow assumptions
+4. the refined admin/operations UI behavior where testable
+5. any frontend interaction changes introduced
+6. docs/config assumptions reflected in code where practical
+
+Use existing patterns where possible.
+Do not create a giant new framework.
+
+==================================================
+IMPLEMENTATION DISCOVERY STEPS
+==================================================
+
+Before editing:
+1. Read current signed-access backend code and identify its remaining trust gaps
+2. Read current Playwright config, specs, and CI workflow
+3. Read current frontend record-detail and operations/admin components
+4. Read README and deployment docs for wording and framing gaps
+5. Determine whether any CI warnings or browser-runner assumptions need cleanup
+
+Then implement the changes.
 
 ==================================================
 ACCEPTANCE CRITERIA
 ==================================================
 
-- backend SQLite suite runtime reduced
-- UI feels more polished and intentional
-- typography system is consistent
-- numeric alignment is visibly improved
-- motion enhances UX without distraction
-- Playwright tests cover real flows
-- CI remains efficient
-- deployment story is clear and honest
+- signed access is tighter and less replay-friendly than before
+- Playwright has a credible CI role or clearly scoped execution path
+- frontend feels more finished and consistent
+- operations/admin UI is more deliberate and usable
+- docs communicate the project more sharply and honestly
+- no generic AI slop appears in the UI or docs
+- no obvious runtime mismatch remains
 
 ==================================================
 OUTPUT FORMAT
@@ -292,8 +442,8 @@ Provide:
 2. Files modified
 3. Files added
 4. Migration files
-5. Tests added/updated
+5. Tests updated/added
 6. Remaining limitations
-7. Expected CI runtime improvement
+7. If Playwright was added to CI, explain runtime impact and why it is acceptable
 
-Now begin by inspecting the repository and implementing Phase 10.
+Now begin by inspecting the repository and identifying exact files to modify.
