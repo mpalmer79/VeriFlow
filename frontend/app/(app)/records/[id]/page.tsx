@@ -515,7 +515,7 @@ export default function RecordDetailPage() {
         }}
       />
 
-      <AuditTrail entries={auditEntries} />
+      <AuditTrail entries={auditEntries} stagesById={stagesById} />
 
       {preview ? (
         <PreviewOverlay preview={preview} onClose={closePreview} />
