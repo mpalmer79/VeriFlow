@@ -24,12 +24,26 @@ const config: Config = {
           DEFAULT: "#3b82f6",
           strong: "#2563eb",
         },
+        brand: {
+          50: "#edfafd",
+          100: "#d2f1f6",
+          200: "#aae1ec",
+          300: "#75cadb",
+          400: "#3dabc4",
+          500: "#1c8da8",
+          600: "#0e7490",
+          700: "#0f5c78",
+          800: "#134d63",
+          900: "#12404f",
+        },
         severity: {
           low: "#22c55e",
           moderate: "#eab308",
           high: "#f97316",
           critical: "#ef4444",
         },
+        verified: "#14b8a6",
+        rejected: "#b45309",
       },
       fontFamily: {
         sans: [
