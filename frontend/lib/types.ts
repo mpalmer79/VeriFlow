@@ -173,6 +173,32 @@ export interface SignedAccessGrant {
   url: string;
 }
 
+export interface AuditChainReport {
+  organization_id: number | null;
+  checked: number;
+  ok: boolean;
+  broken_entries: { audit_id: number; stored_entry_hash: string; recomputed_entry_hash: string }[];
+  broken_links: { audit_id: number; stored_previous_hash: string | null; expected_previous_hash: string | null }[];
+}
+
+export interface StorageInventoryReport {
+  managed_files_on_disk: number;
+  total_bytes_on_disk: number;
+  referenced_by_organization: number;
+  total_bytes_referenced_by_organization: number;
+  dangling_references_in_organization: number;
+  orphaned_files: number;
+}
+
+export interface StorageCleanupReport {
+  dry_run: boolean;
+  files_examined: number;
+  orphaned_found: number;
+  orphaned_deleted: number;
+  bytes_reclaimed: number;
+  errors: number;
+}
+
 export interface DocumentStatusResponse {
   required_types: DocumentType[];
   present_types: DocumentType[];

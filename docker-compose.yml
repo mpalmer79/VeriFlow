@@ -42,6 +42,9 @@ services:
       - veriflow-evidence:/var/lib/veriflow/evidence
     ports:
       - "8000:8000"
+    # Migrations run on every start (idempotent). The seed only runs in
+    # dev-like environments; the seed script refuses to execute against
+    # non-dev APP_ENV unless VERIFLOW_ALLOW_SEED=true is set explicitly.
     command:
       - bash
       - -lc
