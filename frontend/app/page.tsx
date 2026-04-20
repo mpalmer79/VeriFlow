@@ -1,56 +1,401 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { motion, useReducedMotion } from "framer-motion";
+import { useEffect, useState, type MouseEvent } from "react";
 
+import { ChainMotif } from "@/components/landing/ChainMotif";
+import { RiskBadge } from "@/components/RiskBadge";
+import { SeverityPanel } from "@/components/SeverityPanel";
+import { Logomark } from "@/components/ui/Logomark";
+import {
+  ArrowRight,
+  ChevronRight,
+  Fingerprint,
+  Link2,
+  ShieldCheck,
+  type LucideIcon,
+} from "@/components/icons";
 import { readToken } from "@/lib/auth";
-import { demoSignInAs, isDemoMode } from "@/lib/demo";
+import {
+  fadeRise,
+  fadeRiseSlow,
+  staggerParent,
+  SPRING_DEFAULT,
+} from "@/lib/motion";
 
-export default function Index() {
+const PILLARS: Array<{ icon: LucideIcon; title: string; body: string }> = [
+  {
+    icon: ShieldCheck,
+    title: "Controlled transitions",
+    body: "Stage progression is gated by a rule registry. Failing rules block the move or warn with explicit risk weight.",
+  },
+  {
+    icon: Link2,
+    title: "Tamper-evident audit",
+    body: "Every domain event writes an append-only row whose hash chains to the one before it. Break a link and the verify endpoint says so.",
+  },
+  {
+    icon: Fingerprint,
+    title: "Verifiable evidence",
+    body: "Uploads stream to managed storage with SHA-256 at ingest and re-hash at verification. Rewrite the bytes, lose the match.",
+  },
+];
+
+const MOCK_VIOLATIONS = [
+  {
+    rule_code: "insurance.status_known",
+    message:
+      "Insurance status is unknown. Verified coverage, pending claim, or self-pay acknowledgement required.",
+    risk_applied: 20,
+  },
+];
+
+const MOCK_WARNINGS = [
+  {
+    rule_code: "consent.current",
+    message: "Consent forms are older than 90 days. Re-sign before provider triage.",
+    risk_applied: 10,
+  },
+  {
+    rule_code: "documents.identity_evidence",
+    message: "Identity document uploaded but not yet verified.",
+    risk_applied: 5,
+  },
+];
+
+const HEALTHCARE_STAGES = [
+  "New intake",
+  "Identity verification",
+  "Insurance review",
+  "Consent & authorization",
+  "Clinical history review",
+  "Provider triage",
+  "Ready for scheduling",
+  "Blocked",
+  "Closed",
+];
+
+export default function Landing() {
   const router = useRouter();
-  const [failureMessage, setFailureMessage] = useState<string | null>(null);
+  const reduce = useReducedMotion();
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
-    const existing = readToken();
-    if (existing) {
+    if (readToken()) {
+      setRedirecting(true);
       router.replace("/dashboard");
-      return;
     }
-    if (!isDemoMode()) {
-      router.replace("/login");
-      return;
-    }
-    // Demo deploys: auto-sign-in as admin and drop straight into the
-    // dashboard. The `/roles` page is the supported way to switch to
-    // other seeded roles afterwards.
-    let cancelled = false;
-    (async () => {
-      try {
-        await demoSignInAs("admin");
-        if (!cancelled) router.replace("/dashboard");
-      } catch (err) {
-        if (!cancelled) {
-          setFailureMessage(
-            err instanceof Error
-              ? err.message
-              : "Demo sign-in failed. Check that the backend is reachable."
-          );
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [router]);
 
-  return failureMessage ? (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-md border border-severity-critical/40 bg-severity-critical/10 p-4 text-sm text-severity-critical">
-        <div className="mb-1 text-xs font-medium uppercase tracking-wide">
-          Demo sign-in failed
-        </div>
-        <div>{failureMessage}</div>
+  if (redirecting) return null;
+
+  function handleAnchorClick(e: MouseEvent<HTMLAnchorElement>, targetId: string) {
+    const target = typeof document !== "undefined" ? document.getElementById(targetId) : null;
+    if (!target) return;
+    e.preventDefault();
+    target.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
+
+  return (
+    <main className="min-h-screen bg-surface text-text">
+      <HeroSection onAnchorClick={handleAnchorClick} />
+      <PillarsSection />
+      <ExplainabilitySection />
+      <HealthcareSection />
+      <LandingFooter />
+    </main>
+  );
+}
+
+function HeroSection({
+  onAnchorClick,
+}: {
+  onAnchorClick: (e: MouseEvent<HTMLAnchorElement>, id: string) => void;
+}) {
+  return (
+    <section
+      id="hero"
+      aria-labelledby="hero-heading"
+      className="textured brand-gradient relative overflow-hidden"
+    >
+      <div className="relative mx-auto flex min-h-[92vh] max-w-6xl flex-col items-center justify-center px-6 py-24 text-center">
+        <ChainMotif
+          className="pointer-events-none absolute right-[-4rem] top-16 hidden text-brand-500 opacity-40 md:block"
+        />
+        <ChainMotif
+          className="pointer-events-none absolute bottom-24 left-[-6rem] hidden text-brand-700 opacity-30 md:block"
+        />
+        <motion.div
+          variants={staggerParent}
+          initial="hidden"
+          animate="visible"
+          className="relative z-10 flex flex-col items-center"
+        >
+          <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+            <Logomark className="text-brand-400" size={56} />
+          </motion.div>
+          <motion.h1
+            id="hero-heading"
+            variants={fadeRise}
+            transition={SPRING_DEFAULT}
+            className="mt-8 font-display text-4xl font-semibold leading-[1.05] tracking-tight text-text sm:text-6xl"
+          >
+            Process compliance
+            <br />
+            <span className="text-brand-300">you can prove.</span>
+          </motion.h1>
+          <motion.p
+            variants={fadeRise}
+            transition={SPRING_DEFAULT}
+            className="mt-6 max-w-2xl text-base text-text-muted sm:text-lg"
+          >
+            VeriFlow enforces staged progression against a rule registry,
+            scores operational risk, and produces an audit trail that a
+            reviewer can verify — not just read.
+          </motion.p>
+          <motion.div
+            variants={fadeRise}
+            transition={SPRING_DEFAULT}
+            className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
+          >
+            <motion.div whileHover={{ y: -1 }} whileTap={{ y: 1 }}>
+              <Link
+                href="/enter"
+                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-300"
+              >
+                Enter demo
+                <ArrowRight size={16} aria-hidden />
+              </Link>
+            </motion.div>
+            <a
+              href="#pillars"
+              onClick={(e) => onAnchorClick(e, "pillars")}
+              className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-panel/60 px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-text-subtle"
+            >
+              See how it works
+              <ChevronRight size={16} aria-hidden />
+            </a>
+          </motion.div>
+        </motion.div>
       </div>
-    </div>
-  ) : null;
+    </section>
+  );
+}
+
+function PillarsSection() {
+  return (
+    <motion.section
+      id="pillars"
+      aria-labelledby="pillars-heading"
+      variants={fadeRiseSlow}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-10%" }}
+      transition={SPRING_DEFAULT}
+      className="border-t border-surface-border"
+    >
+      <div className="mx-auto max-w-6xl px-6 py-24">
+        <h2
+          id="pillars-heading"
+          className="font-display text-3xl font-semibold tracking-tight sm:text-4xl"
+        >
+          What it actually does.
+        </h2>
+        <p className="mt-3 max-w-2xl text-base text-text-muted">
+          Three primitives, each pulling its own weight. None of them depend on
+          the domain — healthcare intake is a scenario, not the product.
+        </p>
+        <motion.ul
+          variants={staggerParent}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-10%" }}
+          className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3"
+        >
+          {PILLARS.map(({ icon: Icon, title, body }) => (
+            <motion.li
+              key={title}
+              variants={fadeRise}
+              transition={SPRING_DEFAULT}
+              className="panel p-6"
+            >
+              <Icon size={28} className="text-brand-400" aria-hidden />
+              <h3 className="mt-4 font-display text-xl font-semibold">
+                {title}
+              </h3>
+              <p className="mt-2 text-sm text-text-muted">{body}</p>
+            </motion.li>
+          ))}
+        </motion.ul>
+      </div>
+    </motion.section>
+  );
+}
+
+function ExplainabilitySection() {
+  return (
+    <motion.section
+      id="explainability"
+      aria-labelledby="explain-heading"
+      variants={fadeRiseSlow}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-10%" }}
+      transition={SPRING_DEFAULT}
+      className="border-t border-surface-border bg-surface-panel/30"
+    >
+      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 py-24 lg:grid-cols-2 lg:items-center">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-400">
+            Explainability
+          </div>
+          <h2
+            id="explain-heading"
+            className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl"
+          >
+            Why is this record blocked?
+          </h2>
+          <p className="mt-4 max-w-xl text-base text-text-muted">
+            Every evaluation returns the rules that ran, the ones that failed,
+            the risk each one contributed, and the human-readable reason — so
+            a reviewer can trust the decision without reading the source.
+          </p>
+        </div>
+        <div className="space-y-4 rounded-lg border border-surface-border bg-surface-panel p-5 shadow-xl shadow-black/30">
+          <div className="flex items-center justify-between gap-4 border-b border-surface-border pb-4">
+            <div>
+              <div className="field-label">Current stage</div>
+              <div className="mt-1 font-display text-lg font-semibold">
+                Insurance review
+              </div>
+            </div>
+            <RiskBadge band="high" score={45} size="md" />
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <SeverityPanel
+              tone="critical"
+              title="Blocking issues"
+              emptyLabel="No blocking issues."
+              issues={MOCK_VIOLATIONS}
+            />
+            <SeverityPanel
+              tone="warning"
+              title="Warnings"
+              emptyLabel="No active warnings."
+              issues={MOCK_WARNINGS}
+            />
+          </div>
+          <p className="text-xs text-text-subtle">
+            Live component — same SeverityPanel rendered on every record
+            detail page.
+          </p>
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+function HealthcareSection() {
+  return (
+    <motion.section
+      id="healthcare"
+      aria-labelledby="healthcare-heading"
+      variants={fadeRiseSlow}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: "-10%" }}
+      transition={SPRING_DEFAULT}
+      className="border-t border-surface-border"
+    >
+      <div className="mx-auto max-w-6xl px-6 py-24">
+        <h2
+          id="healthcare-heading"
+          className="font-display text-3xl font-semibold tracking-tight sm:text-4xl"
+        >
+          Healthcare intake is a scenario, not the product.
+        </h2>
+        <p className="mt-3 max-w-2xl text-base text-text-muted">
+          The reference workflow moves prospective patients through nine
+          stages. Swap it for loan intake, vendor onboarding, or claims
+          triage and the engine does not know the difference.
+        </p>
+        {/* TODO(phase-4): replace with the rebuilt WorkflowTimeline once
+            Phase 4 lands; the pill row is a placeholder that reads as
+            "ordered sequence" without pretending to be the real control. */}
+        <ol className="mt-12 flex flex-wrap items-center gap-2 text-sm">
+          {HEALTHCARE_STAGES.map((stage, idx) => {
+            const terminal = stage === "Blocked" || stage === "Closed";
+            const toneCls = terminal
+              ? stage === "Blocked"
+                ? "border-severity-critical/40 bg-severity-critical/10 text-severity-critical"
+                : "border-slate-600/40 bg-slate-700/30 text-slate-400"
+              : "border-surface-border bg-surface-muted text-text";
+            return (
+              <li key={stage} className="flex items-center gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1 ${toneCls}`}
+                >
+                  {stage}
+                </span>
+                {idx < HEALTHCARE_STAGES.length - 1 ? (
+                  <ChevronRight
+                    size={14}
+                    className="text-text-subtle"
+                    aria-hidden
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </motion.section>
+  );
+}
+
+function LandingFooter() {
+  return (
+    <footer
+      aria-label="Site"
+      className="border-t border-surface-border bg-surface-panel/40"
+    >
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-2 text-sm text-text-muted">
+          <Logomark className="text-brand-400" size={18} />
+          <span>© {new Date().getFullYear()} VeriFlow</span>
+        </div>
+        <nav aria-label="Resources" className="flex flex-wrap gap-6 text-sm text-text-muted">
+          <a
+            href="https://github.com/mpalmer79/veriflow"
+            className="transition-colors hover:text-text"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://github.com/mpalmer79/veriflow/blob/main/ARCHITECTURE.md"
+            className="transition-colors hover:text-text"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Architecture
+          </a>
+          <a
+            href="https://github.com/mpalmer79/veriflow/tree/main/docs"
+            className="transition-colors hover:text-text"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Docs
+          </a>
+        </nav>
+        <div className="text-xs text-text-subtle">
+          Built with FastAPI and Next.js.
+        </div>
+      </div>
+    </footer>
+  );
 }
