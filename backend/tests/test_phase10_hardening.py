@@ -112,13 +112,19 @@ def test_globals_css_applies_tabular_nums_globally_and_exposes_mono_utility():
 # --------------------------------------------------------------------------
 
 
-def test_tailwind_registers_motion_keyframes():
+def test_tailwind_registers_chain_pulse_keyframe():
+    # The UI elevation pass replaced the one-shot CSS keyframes
+    # (fade-in / fade-in-slow / overlay-in / dialog-in / page-in) with
+    # Framer Motion primitives. Only the chain-pulse ambient heartbeat
+    # remains in tailwind.config.ts — used by live indicators (blocked
+    # status dot, dashboard LIVE pill) where CSS is the right primitive
+    # for a perpetual, JS-free loop.
     text = (FRONTEND / "tailwind.config.ts").read_text(encoding="utf-8")
-    for name in ("fade-in", "fade-in-slow", "overlay-in", "dialog-in"):
-        assert f'"{name}"' in text, f"keyframe {name!r} missing"
-    for name in ("page-in", "fade-in", "overlay-in", "dialog-in"):
-        # Animation utilities are what components actually reference.
-        assert f'"{name}"' in text
+    assert '"chain-pulse"' in text, "chain-pulse keyframe/animation missing"
+    for removed in ("fade-in", "fade-in-slow", "overlay-in", "dialog-in", "page-in"):
+        assert f'"{removed}"' not in text, (
+            f"legacy keyframe {removed!r} should have been removed"
+        )
 
 
 def test_modal_and_dialog_use_motion_utilities():
