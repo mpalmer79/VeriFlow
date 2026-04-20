@@ -18,7 +18,13 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG NEXT_PUBLIC_DEMO_MODE
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_PUBLIC_DEMO_MODE=${NEXT_PUBLIC_DEMO_MODE}
-ENV NODE_ENV=production
+
+# NOTE: do NOT set `NODE_ENV=production` in the builder stage. `npm ci`
+# honours NODE_ENV and skips devDependencies when it is `production`,
+# which drops tailwindcss + typescript + @types/* and the whole Next
+# build chain collapses with "Cannot find module 'tailwindcss'" and
+# cascading `@/*` path-alias errors. The runtime stage sets
+# NODE_ENV=production where it actually matters.
 
 COPY package.json package-lock.json ./
 RUN npm ci
