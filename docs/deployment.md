@@ -118,11 +118,17 @@ Required environment variables:
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | backend public URL + `/api` | Baked into the client bundle at build time. Rebuilds are required after a change. |
+| `NEXT_PUBLIC_API_BASE_URL` | backend public URL + `/api` | Baked into the client bundle at build time. Rebuilds are required after a change. Must be the **public** URL (e.g. `https://veriflow-backend-production.up.railway.app/api`); a `localhost` URL would trigger Chrome's Private Network Access prompt on the deployed site, and an unset value now surfaces a visible runtime error rather than silently falling back to localhost. |
 
-`NEXT_PUBLIC_*` values are inlined at `next build` time. Changing this
-variable in Railway triggers a rebuild — the running container cannot
-pick it up on the fly.
+Optional:
+
+| Variable | Value | Notes |
+| --- | --- | --- |
+| `NEXT_PUBLIC_DEMO_MODE` | `true` | Public portfolio deployments only. When set, the frontend auto-signs-in as the admin seeded account on first visit and exposes a `/roles` page for walking through role-based access (admin / intake coordinator / reviewer / manager). Leave unset on real production deploys so the sign-in form stays on the critical path. |
+
+`NEXT_PUBLIC_*` values are inlined at `next build` time. Changing any
+of them in Railway triggers a rebuild — the running container cannot
+pick them up on the fly.
 
 The frontend healthcheck points at `/login`, which is a static-route
 `200` regardless of backend reachability. Frontend "up" therefore

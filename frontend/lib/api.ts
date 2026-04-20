@@ -26,8 +26,7 @@ import type {
 import { readToken } from "./auth";
 
 const API_BASE_URL =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE_URL) ||
-  "http://localhost:8000/api";
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_BASE_URL) || "";
 
 export class ApiError extends Error {
   status: number;
@@ -46,6 +45,12 @@ interface RequestOptions {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new ApiError(
+      0,
+      "Frontend is not configured: NEXT_PUBLIC_API_BASE_URL is empty. Set it to the backend's public URL + /api and rebuild."
+    );
+  }
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };

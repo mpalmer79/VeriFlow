@@ -5,12 +5,14 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { clearSession, readToken, readUser } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo";
 import type { UserPublic } from "@/lib/types";
 
 interface NavItem {
   href: string;
   label: string;
   adminOnly?: boolean;
+  demoOnly?: boolean;
 }
 
 
@@ -18,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/records", label: "Records" },
   { href: "/operations", label: "Operations", adminOnly: true },
+  { href: "/roles", label: "Roles", demoOnly: true },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -25,16 +28,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<UserPublic | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const demo = isDemoMode();
 
   useEffect(() => {
     const token = readToken();
     if (!token) {
-      router.replace(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+      // In demo mode the root route auto-signs-in; bouncing there is
+      // kinder than landing on the sign-in form that the demo hides.
+      router.replace(
+        demo ? "/" : `/login?next=${encodeURIComponent(pathname || "/dashboard")}`
+      );
       return;
     }
     setUser(readUser());
     setHydrated(true);
-  }, [router, pathname]);
+  }, [router, pathname, demo]);
 
   if (!hydrated) {
     return (
@@ -46,7 +54,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   function handleLogout() {
     clearSession();
-    router.replace("/login");
+    // Demo deploys re-enter at the root (which auto-signs-in); every
+    // other deploy goes back to the sign-in form.
+    router.replace(demo ? "/" : "/login");
   }
 
   return (
@@ -61,9 +71,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             VeriFlow
           </Link>
           <nav className="flex items-center gap-1">
-            {NAV_ITEMS.filter(
-              (item) => !item.adminOnly || user?.role === "admin"
-            ).map((item) => {
+            {NAV_ITEMS.filter((item) => {
+              if (item.adminOnly && user?.role !== "admin") return false;
+              if (item.demoOnly && !demo) return false;
+              return true;
+            }).map((item) => {
               const active =
                 pathname === item.href || pathname?.startsWith(`${item.href}/`);
               return (
@@ -89,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             ) : null}
             <button type="button" className="btn-secondary" onClick={handleLogout}>
-              Sign out
+              {demo ? "Reset demo" : "Sign out"}
             </button>
           </div>
         </div>
