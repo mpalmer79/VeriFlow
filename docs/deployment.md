@@ -53,11 +53,39 @@ rollbacks are a manual `alembic downgrade <rev>` against `DATABASE_URL`
 
 ## Railway wiring
 
+> **First thing to check if a build fails with
+> `Railpack could not determine how to build the app` or
+> `Script start.sh not found`:** the service's **Root Directory** is
+> still pointed at the repo root. Go to
+> _Service → Settings → Source → Root Directory_ and set it to
+> `backend` (for the backend service) or `frontend` (for the frontend
+> service). Without this, Railway never sees `Dockerfile` or
+> `railway.json` and falls back to its default Railpack builder, which
+> can't infer anything from a monorepo root.
+
 `backend/railway.json` and `frontend/railway.json` are picked up when
-each service's root directory is set to `backend/` or `frontend/`. Both
+each service's root directory is set to `backend` or `frontend`. Both
 configs use the `DOCKERFILE` builder and `ON_FAILURE` restart policy
 with a bounded retry count, so a crash-looping revision does not mask
 the previous healthy one forever.
+
+### Creating the services in Railway
+
+1. **Backend service**
+   - New service → Deploy from GitHub → this repo.
+   - _Settings → Source → Root Directory_: `backend`.
+   - _Variables_: populate the required env vars listed below.
+   - Attach the Postgres plugin; reference its URL via
+     `${{Postgres.DATABASE_URL}}`.
+   - Attach a volume at `/var/lib/veriflow/evidence` and set
+     `EVIDENCE_STORAGE_DIR` to match.
+2. **Frontend service**
+   - New service → Deploy from GitHub → same repo.
+   - _Settings → Source → Root Directory_: `frontend`.
+   - _Variables_: set `NEXT_PUBLIC_API_BASE_URL` to the backend's
+     public URL followed by `/api`.
+   - Changing `NEXT_PUBLIC_API_BASE_URL` triggers a rebuild because
+     Next.js inlines it at build time.
 
 ### Backend service
 
