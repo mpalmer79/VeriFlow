@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -39,17 +39,44 @@ const STATUS_OPTIONS: { value: RecordStatus; label: string }[] = [
 ];
 
 export default function RecordsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RecordsPageInner />
+    </Suspense>
+  );
+}
+
+function RecordsPageInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [rows, setRows] = useState<RecordRead[]>([]);
   const [stageMap, setStageMap] = useState<StageMap>(new Map());
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [search, setSearch] = useState<string>("");
-  const [stageId, setStageId] = useState<string>("all");
-  const [riskBand, setRiskBand] = useState<string>("all");
-  const [status, setStatus] = useState<string>("all");
+  // Filters live in the URL so refresh, back button, and shared links
+  // reproduce the same view. Reads are direct on each render; writes go
+  // through router.replace so the URL updates without a history push.
+  const search = searchParams.get("q") ?? "";
+  const stageId = searchParams.get("stage") ?? "all";
+  const riskBand = searchParams.get("risk") ?? "all";
+  const status = searchParams.get("status") ?? "all";
+
+  const updateFilter = useCallback(
+    (key: "q" | "stage" | "risk" | "status", value: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (!value || value === "all") {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,14 +158,16 @@ export default function RecordsPage() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => updateFilter("q", e.target.value)}
           placeholder="Search by subject or reference"
           className="input max-w-xs"
+          aria-label="Search records"
         />
         <select
           value={stageId}
-          onChange={(e) => setStageId(e.target.value)}
+          onChange={(e) => updateFilter("stage", e.target.value)}
           className="input w-auto"
+          aria-label="Filter by stage"
         >
           <option value="all">All stages</option>
           {stageOptions.map((stage) => (
@@ -149,8 +178,9 @@ export default function RecordsPage() {
         </select>
         <select
           value={riskBand}
-          onChange={(e) => setRiskBand(e.target.value)}
+          onChange={(e) => updateFilter("risk", e.target.value)}
           className="input w-auto"
+          aria-label="Filter by risk band"
         >
           <option value="all">All risk bands</option>
           {RISK_BAND_OPTIONS.map((opt) => (
@@ -161,8 +191,9 @@ export default function RecordsPage() {
         </select>
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => updateFilter("status", e.target.value)}
           className="input w-auto"
+          aria-label="Filter by status"
         >
           <option value="all">All statuses</option>
           {STATUS_OPTIONS.map((opt) => (
