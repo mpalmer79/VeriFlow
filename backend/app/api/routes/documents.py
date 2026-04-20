@@ -11,6 +11,7 @@ from app.api.deps import get_current_user
 from app.core import evidence_storage
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.rate_limit import rate_limit
 from app.core.security import (
     CONTENT_ACCESS_DEFAULT_TTL_SECONDS,
     TokenValidationError,
@@ -269,6 +270,16 @@ async def download_document_content(
 @router.post(
     "/{document_id}/signed-access",
     response_model=SignedAccessResponse,
+    dependencies=[
+        Depends(
+            rate_limit(
+                "documents.signed_access",
+                max_requests=lambda: get_settings().rate_limit_signed_access_per_minute,
+                window_seconds=60.0,
+                authenticated=True,
+            )
+        )
+    ],
 )
 def issue_signed_content_access(
     document_id: int,

@@ -26,19 +26,30 @@ from sqlalchemy.pool import StaticPool
 
 from app.core import database as db_module
 from app.core.database import get_db
+from app.core.rate_limit import reset_rate_limits
 from app.main import app
 from app.models import Base
 from app.seed.seed_data import seed
 
 
+# Honor TEST_DATABASE_URL for CI matrix entries that want to exercise
+# PostgreSQL. The default keeps the fast in-memory SQLite loop used
+# during local development.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL") or "sqlite+pysqlite:///:memory:"
+IS_SQLITE_MEMORY = TEST_DATABASE_URL.startswith("sqlite") and ":memory:" in TEST_DATABASE_URL
+
+
 @pytest.fixture(scope="session")
 def engine():
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
+    if IS_SQLITE_MEMORY:
+        engine = create_engine(
+            TEST_DATABASE_URL,
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+            future=True,
+        )
+    else:
+        engine = create_engine(TEST_DATABASE_URL, future=True, pool_pre_ping=True)
     Base.metadata.create_all(bind=engine)
     return engine
 
@@ -62,6 +73,10 @@ def _reset_database(engine, session_factory, monkeypatch):
 
     monkeypatch.setattr(db_module, "engine", engine, raising=True)
     monkeypatch.setattr(db_module, "SessionLocal", session_factory, raising=True)
+
+    # Each test starts with an empty rate-limit bucket so budgets from
+    # one test cannot bleed into another.
+    reset_rate_limits()
 
     with session_factory() as db:
         seed(db)

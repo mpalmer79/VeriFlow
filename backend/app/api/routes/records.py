@@ -14,6 +14,8 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.core import evidence_storage
+from app.core.config import get_settings
+from app.core.rate_limit import rate_limit
 from app.models.enums import DocumentType
 
 from app.api.deps import get_current_user
@@ -243,6 +245,16 @@ def upload_document(
     "/{record_id}/documents/upload",
     response_model=DocumentRead,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[
+        Depends(
+            rate_limit(
+                "documents.upload",
+                max_requests=lambda: get_settings().rate_limit_upload_per_minute,
+                window_seconds=60.0,
+                authenticated=True,
+            )
+        )
+    ],
 )
 async def upload_document_file(
     record_id: int,

@@ -53,8 +53,9 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=settings.cors_allow_methods,
+        allow_headers=settings.cors_allow_headers,
+        expose_headers=["Content-Disposition", "Content-Range", "Accept-Ranges"],
     )
 
     csp_header = _build_csp(settings.cors_origins)

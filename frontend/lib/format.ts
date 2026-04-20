@@ -62,3 +62,16 @@ export const RISK_BAND_LABELS: Record<RiskBand, string> = {
   high: "High",
   critical: "Critical",
 };
+
+
+export function formatBytes(size: number | null | undefined): string {
+  if (!Number.isFinite(size as number) || (size ?? 0) <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = size as number;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
