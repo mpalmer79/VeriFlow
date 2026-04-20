@@ -31,7 +31,7 @@ export function RecordHeader({ record, currentStage }: RecordHeaderProps) {
             {record.external_reference ? (
               <>
                 Reference{" "}
-                <span className="font-mono text-text">
+                <span className="mono text-text">
                   {record.external_reference}
                 </span>
               </>
@@ -69,7 +69,7 @@ export function RecordHeader({ record, currentStage }: RecordHeaderProps) {
           </span>
         </MetaCell>
         <MetaCell label="Record version">
-          <span className="font-mono text-sm">v{record.version}</span>
+          <span className="mono text-sm">v{record.version}</span>
         </MetaCell>
       </dl>
     </header>

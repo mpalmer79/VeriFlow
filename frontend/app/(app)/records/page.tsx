@@ -241,7 +241,7 @@ export default function RecordsPage() {
                             {record.subject_full_name}
                           </Link>
                           {record.external_reference ? (
-                            <div className="mt-0.5 text-xs text-text-muted">
+                            <div className="mono mt-0.5 text-xs text-text-muted">
                               {record.external_reference}
                             </div>
                           ) : null}

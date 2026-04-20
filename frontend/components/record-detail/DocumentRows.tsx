@@ -143,11 +143,18 @@ function DocumentRow({
                   : "text-severity-critical"
               }
             >
-              {integrity.is_match
-                ? `Match · ${integrity.actual_content_hash?.slice(0, 12)}…`
-                : integrity.has_stored_content
-                ? `Mismatch · ${integrity.message}`
-                : `Missing content · ${integrity.message}`}
+              {integrity.is_match ? (
+                <>
+                  Match ·{" "}
+                  <span className="mono">
+                    {integrity.actual_content_hash?.slice(0, 12)}…
+                  </span>
+                </>
+              ) : integrity.has_stored_content ? (
+                `Mismatch · ${integrity.message}`
+              ) : (
+                `Missing content · ${integrity.message}`
+              )}
               <span className="ml-2 text-text-subtle">
                 checked {formatDateTime(integrity.checked_at)}
               </span>

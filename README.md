@@ -308,7 +308,7 @@ the required stack setup.
   gating with an explicit opt-in override, readiness endpoint with a
   live DB ping, Railway configuration for both services, deployment
   docs, and Playwright groundwork.
-- **Phase 9 (this pass)** — optimization and completion: pytest
+- **Phase 9** — optimization and completion: pytest
   `postgres` / `migration` markers, CI split into a broad SQLite job
   and a narrow PostgreSQL job (upgrade/downgrade round-trip plus the
   dialect-sensitive subset), real Playwright flows for auth/shell,
@@ -318,6 +318,18 @@ the required stack setup.
   from manual, and a restrained UX pass on the operations admin
   surface (captured run timestamp, auto-dismissed flashes, explicit
   pre-run empty state).
+- **Phase 10 (this pass)** — runtime + product refinement: the
+  backend broad suite drops from ~5 min to ~20 s by swapping the test
+  `CryptContext` from bcrypt to `plaintext` at session scope and
+  binding the app to the test engine once per session instead of per
+  test; typography system (Inter + JetBrains Mono via
+  `next/font/google`, body-wide `tabular-nums`, `.mono` utility for
+  identifiers); controlled motion system (Tailwind keyframes for
+  page, overlay, dialog, and section fades; a ~1.6 s fade for the
+  initial login landing; route-change fade for the app main area);
+  product polish on identifiers, integrity hashes, and record
+  references; two new Playwright specs for the confirm-dialog flow
+  and the typography/motion wiring.
 
 ## Known limitations
 

@@ -16,7 +16,7 @@ export function Panel({
   className,
 }: PanelProps) {
   return (
-    <section className={`panel ${className ?? ""}`}>
+    <section className={`panel animate-fade-in ${className ?? ""}`}>
       {(title || actions) && (
         <header className="flex items-start justify-between gap-4 border-b border-surface-border px-4 py-3">
           <div>

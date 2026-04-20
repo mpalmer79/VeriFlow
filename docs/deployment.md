@@ -5,6 +5,26 @@ a PostgreSQL database. This document describes the concrete wiring for
 Railway, which is the primary hosted target, and calls out the pieces
 that generalize to any platform that can run Dockerfiles.
 
+## Railway vs Docker
+
+Both exist on purpose and answer different questions:
+
+- **Railway** is the primary hosted path. Each service has a
+  `railway.json` next to its `Dockerfile`; Railway uses the Dockerfile
+  builder and executes the `deploy.startCommand` defined in the config.
+  Migrations run automatically on every backend deploy via the start
+  command; readiness probes hold traffic off a node until the DB is
+  reachable.
+- **Docker / docker-compose** is how you get local parity with the
+  hosted shape and how any other platform (Fly, Render, k8s, a VM)
+  would consume the app. The Dockerfiles are the source of truth for
+  "how to build and run the service"; Railway's config only adds the
+  orchestration layer on top. If you move off Railway, you take the
+  Dockerfiles and replace only `railway.json`.
+
+No piece of VeriFlow is Railway-specific. Railway-specific behavior
+lives in the two `railway.json` files; everything else is portable.
+
 ## Service topology
 
 | Service  | Container | Exposes | Depends on |
