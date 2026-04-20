@@ -15,6 +15,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { ActionBar } from "@/components/record-detail/ActionBar";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DocumentEvidencePanel } from "@/components/record-detail/DocumentEvidencePanel";
@@ -428,12 +429,7 @@ export default function RecordDetailPage() {
   if (loading && !record) {
     return (
       <div className="space-y-6">
-        <Link
-          href="/records"
-          className="text-sm text-text-muted hover:text-text"
-        >
-          ← All records
-        </Link>
+        <Breadcrumbs items={[{ label: "Records", href: "/records" }, { label: "Loading…" }]} />
         <LoadingSkeleton rows={10} />
       </div>
     );
@@ -442,12 +438,7 @@ export default function RecordDetailPage() {
   if (notFound) {
     return (
       <div className="space-y-6">
-        <Link
-          href="/records"
-          className="text-sm text-text-muted hover:text-text"
-        >
-          ← All records
-        </Link>
+        <Breadcrumbs items={[{ label: "Records", href: "/records" }, { label: "Not found" }]} />
         <EmptyState
           title="Record not found"
           description="This record does not exist or is not visible to your organization."

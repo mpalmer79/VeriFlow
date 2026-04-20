@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StageBadge } from "@/components/StageBadge";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -14,20 +13,19 @@ interface RecordHeaderProps {
 export function RecordHeader({ record, currentStage }: RecordHeaderProps) {
   return (
     <header className="space-y-4">
-      <Link
-        href="/records"
-        className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-text"
-      >
-        <span aria-hidden>←</span>
-        All records
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "Records", href: "/records" },
+          { label: record.subject_full_name },
+        ]}
+      />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-text">
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-text sm:text-4xl">
             {record.subject_full_name}
           </h1>
-          <p className="mt-1 text-sm text-text-muted">
+          <p className="mt-2 text-sm text-text-muted">
             {record.external_reference ? (
               <>
                 Reference{" "}
@@ -69,7 +67,12 @@ export function RecordHeader({ record, currentStage }: RecordHeaderProps) {
           </span>
         </MetaCell>
         <MetaCell label="Record version">
-          <span className="mono text-sm">v{record.version}</span>
+          <span
+            className="mono text-sm"
+            title="Incremented on every state change. Used to prevent conflicting edits via optimistic concurrency."
+          >
+            v{record.version}
+          </span>
         </MetaCell>
       </dl>
     </header>
