@@ -409,6 +409,7 @@ def test_successful_transition_applies_risk_change_atomically(
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.migration
 def test_alembic_env_imports_metadata():
     # Import the env module and confirm it binds to the app's metadata.
     import importlib.util
@@ -428,6 +429,7 @@ def test_alembic_env_imports_metadata():
     assert "target_metadata = Base.metadata" in source
 
 
+@pytest.mark.migration
 def test_alembic_baseline_migration_loads():
     import importlib.util
 

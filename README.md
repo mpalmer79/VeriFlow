@@ -187,16 +187,27 @@ list):
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on every push and pull request. The two
+backend jobs are scoped so neither pays for the other's work:
 
-- **`backend-sqlite`** — installs backend deps and runs the full pytest
-  suite against in-memory SQLite (the fast default).
-- **`backend-postgres`** — spins up a `postgres:16` service container,
-  runs `alembic upgrade head` against it, and executes the same pytest
-  suite with `TEST_DATABASE_URL` pointing at Postgres. This catches
-  dialect-specific issues (partial unique indexes, JSONB, enum
-  conversions) that SQLite can hide.
+- **`backend (sqlite, broad)`** — installs backend deps and runs the
+  full suite against in-memory SQLite, skipping anything marked
+  `postgres`. This is the fast feedback loop; almost all behavioural
+  assertions (auth, records, evaluations, transitions, documents, audit,
+  rate limits, content delivery, operations) live here.
+- **`backend (postgres, targeted)`** — stands up a `postgres:16` service
+  container and runs only tests marked `postgres` or `migration`, plus a
+  full `alembic upgrade head` → `downgrade base` → `upgrade head`
+  round-trip. These are the assertions that would silently pass on
+  SQLite but need real PostgreSQL semantics: partial unique indexes on
+  nullable columns, `IntegrityError` surfaced via psycopg2, native enum
+  types, and the baseline migration shape.
 - **`frontend`** — `npm ci`, `npm run type-check`, `npm run build`.
+
+Adding a test that depends on PostgreSQL-only semantics? Tag it with
+`@pytest.mark.postgres` (or `@pytest.mark.migration` for migration file
+inspections). The SQLite job deselects them; the PostgreSQL job opts
+them in.
 
 ## Migrations
 
@@ -217,16 +228,43 @@ See `docs/migrations.md` for the baseline strategy.
 
 ## Testing
 
+Backend:
+
 ```bash
 cd backend
-pytest                                # SQLite default
-TEST_DATABASE_URL=postgresql+psycopg2://… pytest
+pytest                                # all 199 tests (SQLite)
+pytest -m "not postgres"              # broad suite only; mirrors the SQLite CI job
+pytest -m "postgres or migration"     # targeted subset; mirrors the PostgreSQL CI job
+TEST_DATABASE_URL=postgresql+psycopg2://… pytest -m "postgres or migration"
 ```
 
 The SQLite default keeps the local loop fast; the PostgreSQL path is
-wired for CI and can be run locally by exporting
-`TEST_DATABASE_URL`. Every test resets the schema, the evidence
-storage tempdir, and the rate-limit buckets to avoid state bleed.
+wired for CI and can be run locally by exporting `TEST_DATABASE_URL`.
+Every test resets the schema, the evidence storage tempdir, and the
+rate-limit buckets to avoid state bleed.
+
+Frontend unit/type checks:
+
+```bash
+cd frontend
+npm run type-check
+npm run build
+```
+
+Frontend end-to-end (Playwright):
+
+```bash
+cd frontend
+npm run test:e2e:install      # one-time; downloads Chromium
+npm run test:e2e              # requires backend + frontend running locally
+```
+
+The Playwright suite is intentionally small: auth/shell smoke checks,
+the records flow (list → detail, critical sections present,
+metadata-only documents do not surface upload-only actions), and the
+operations admin console (admin sees panels; non-admin sees the
+access-required empty state). See `frontend/tests/e2e/README.md` for
+the required stack setup.
 
 ## Security posture
 
@@ -263,13 +301,23 @@ storage tempdir, and the rate-limit buckets to avoid state bleed.
   split), frontend componentization and polish, CI workflow with
   PostgreSQL matrix, Dockerfiles + Compose, JWT-secret and CORS
   tightening, rate limiting, and a PostgreSQL test path.
-- **Phase 8 (this pass)** — productization and deployment readiness:
+- **Phase 8** — productization and deployment readiness:
   shared in-app `ConfirmDialog` replacing native `window.confirm` /
   `window.prompt`, admin-gated `/operations` UI for audit-chain
   verification and storage inventory + orphan cleanup, dev-only seed
   gating with an explicit opt-in override, readiness endpoint with a
   live DB ping, Railway configuration for both services, deployment
   docs, and Playwright groundwork.
+- **Phase 9 (this pass)** — optimization and completion: pytest
+  `postgres` / `migration` markers, CI split into a broad SQLite job
+  and a narrow PostgreSQL job (upgrade/downgrade round-trip plus the
+  dialect-sensitive subset), real Playwright flows for auth/shell,
+  records list + detail + metadata-only semantics, and the operations
+  console, Railway config completion (frontend healthcheck, bounded
+  restart retries), deployment docs rewritten to separate automated
+  from manual, and a restrained UX pass on the operations admin
+  surface (captured run timestamp, auto-dismissed flashes, explicit
+  pre-run empty state).
 
 ## Known limitations
 
@@ -279,10 +327,11 @@ storage tempdir, and the rate-limit buckets to avoid state bleed.
 - **Evidence storage is local only.** No S3 / GCS. The storage
   interface is small enough that a cloud-backed implementation can
   live behind `evidence_storage` without schema changes.
-- **Frontend tests are scaffolded, not exhaustive.** A minimal
-  Playwright harness lives under `frontend/tests/e2e/`; run it against
-  a running stack via `npm run test:e2e`. Type-check and Next build
-  are still the primary CI guardrails.
+- **Playwright is local-only.** The e2e suite in
+  `frontend/tests/e2e/` is small and runs against a locally-hosted
+  stack (`docker compose up` + `npm run dev`). CI does not currently
+  spin Playwright up; type-check and Next build remain the in-CI
+  guardrails for the frontend.
 - **Signed content-access tokens can be replayed** until they expire
   (default 120s). A `jti` denylist would make them strict one-shot.
 - **Alembic runs at start-up** in both the local compose stack and

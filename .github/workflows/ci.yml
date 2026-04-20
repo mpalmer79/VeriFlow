@@ -11,7 +11,11 @@ concurrency:
 
 jobs:
   backend-sqlite:
-    name: backend (sqlite)
+    # Broad, fast feedback loop. Runs the full suite against in-memory
+    # SQLite; the `postgres`-marked subset is the dialect-sensitive
+    # confidence layer that the dedicated PostgreSQL job covers, so we
+    # skip it here to avoid paying for the same assertions twice.
+    name: backend (sqlite, broad)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -29,24 +33,21 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run pytest (in-memory SQLite)
+      - name: Run pytest (SQLite, broad suite)
         env:
           APP_ENV: test
           JWT_SECRET: ci-sqlite-secret
-        run: pytest -q
-
-      - name: Verify Alembic baseline applies cleanly
-        env:
-          APP_ENV: test
-          JWT_SECRET: ci-sqlite-secret
-          DATABASE_URL: sqlite+pysqlite:///./_ci_alembic.db
-        run: |
-          alembic upgrade head
-          alembic current
-          rm -f ./_ci_alembic.db
+        run: pytest -q -m "not postgres"
 
   backend-postgres:
-    name: backend (postgresql)
+    # Narrow, dialect-specific confidence. Runs only:
+    #   - tests marked `postgres` (partial unique indexes on nullable
+    #     columns, native enum surface, IntegrityError via psycopg2)
+    #   - tests marked `migration` (Alembic baseline inspection)
+    # plus a real `alembic upgrade head` + `downgrade base` +
+    # `upgrade head` cycle against PostgreSQL to catch migration
+    # regressions that SQLite would hide.
+    name: backend (postgres, targeted)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -65,6 +66,11 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+    env:
+      APP_ENV: test
+      JWT_SECRET: ci-postgres-secret
+      DATABASE_URL: postgresql+psycopg2://veriflow:veriflow@localhost:5432/veriflow
+      TEST_DATABASE_URL: postgresql+psycopg2://veriflow:veriflow@localhost:5432/veriflow
     steps:
       - uses: actions/checkout@v4
 
@@ -78,19 +84,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Apply Alembic migrations
-        env:
-          APP_ENV: test
-          JWT_SECRET: ci-postgres-secret
-          DATABASE_URL: postgresql+psycopg2://veriflow:veriflow@localhost:5432/veriflow
-        run: alembic upgrade head
+      - name: Alembic upgrade/downgrade round-trip
+        run: |
+          alembic upgrade head
+          alembic current
+          alembic downgrade base
+          alembic upgrade head
 
-      - name: Run pytest against PostgreSQL
-        env:
-          APP_ENV: test
-          JWT_SECRET: ci-postgres-secret
-          TEST_DATABASE_URL: postgresql+psycopg2://veriflow:veriflow@localhost:5432/veriflow
-        run: pytest -q
+      - name: Run pytest (PostgreSQL, targeted subset)
+        run: pytest -q -m "postgres or migration"
 
   frontend:
     name: frontend

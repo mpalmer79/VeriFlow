@@ -153,6 +153,7 @@ def test_update_record_rejects_unknown_stage(client, auth_headers):
 # --- rule code uniqueness scope --------------------------------------------
 
 
+@pytest.mark.postgres
 def test_rule_code_unique_per_workflow(db_session):
     primary = _get_workflow(db_session)
     other = _foreign_workflow(db_session)
@@ -186,6 +187,7 @@ def test_rule_code_unique_per_workflow(db_session):
     assert {r.workflow_id for r in rules} == {primary.id, other.id}
 
 
+@pytest.mark.postgres
 def test_rule_code_unique_within_same_workflow(db_session):
     workflow = _get_workflow(db_session)
     db_session.add(

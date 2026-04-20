@@ -1,25 +1,43 @@
 # Deployment
 
-VeriFlow ships as two services (FastAPI backend + Next.js frontend) and a
-PostgreSQL database. This document describes the concrete wiring for
+VeriFlow ships as two services (FastAPI backend + Next.js frontend) and
+a PostgreSQL database. This document describes the concrete wiring for
 Railway, which is the primary hosted target, and calls out the pieces
 that generalize to any platform that can run Dockerfiles.
 
-## Services
+## Service topology
 
-- **backend** — `backend/Dockerfile`, exposes `:8000`.
-  Runs `alembic upgrade head` before starting uvicorn, so every deploy
-  reconciles the schema against `migrations/versions/`.
-- **frontend** — `frontend/Dockerfile`, exposes `:3000`. Pure `next start`
-  against the compiled output baked at build time.
-- **Postgres 16** — any managed instance is fine. The backend
-  connects via `DATABASE_URL`.
+| Service  | Container | Exposes | Depends on |
+| -------- | --------- | ------- | ---------- |
+| backend  | `backend/Dockerfile`  | `:8000` (via `$PORT`) | Postgres, optionally a volume |
+| frontend | `frontend/Dockerfile` | `:3000` (via `$PORT`) | backend public URL |
+| postgres | Railway plugin        | `5432`               | — |
+
+## What is automated vs manual
+
+| Step | Where |
+| --- | --- |
+| Image build on each push | Railway (Dockerfile builder, config in each `railway.json`) |
+| `alembic upgrade head` at deploy | Railway (baked into the backend start command) |
+| DB readiness probe | Railway (`/health/readiness` on the backend, `/login` on the frontend) |
+| Environment variable provisioning | Manual (set once per service in Railway UI) |
+| Attaching an evidence volume | Manual (Railway → Volumes → mount `/var/lib/veriflow/evidence`) |
+| Demo seed | Manual; refuses to run in non-dev envs unless `VERIFLOW_ALLOW_SEED=true` |
+| Rollback to a previous deployment | Manual (Railway UI → previous deploy → "Redeploy") |
+
+The baseline Alembic migration (`0001_initial_schema.py`) is locked.
+Every schema change ships as an incremental revision under
+`backend/migrations/versions/`. Upgrades run on every backend start;
+rollbacks are a manual `alembic downgrade <rev>` against `DATABASE_URL`
+(Railway's shell on the backend service can invoke it directly).
 
 ## Railway wiring
 
-A [`railway.json`](../backend/railway.json) lives next to each service's
-Dockerfile. Railway picks them up automatically when each service's
-root directory is set to `backend/` or `frontend/` respectively.
+`backend/railway.json` and `frontend/railway.json` are picked up when
+each service's root directory is set to `backend/` or `frontend/`. Both
+configs use the `DOCKERFILE` builder and `ON_FAILURE` restart policy
+with a bounded retry count, so a crash-looping revision does not mask
+the previous healthy one forever.
 
 ### Backend service
 
@@ -27,22 +45,24 @@ Required environment variables:
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `APP_ENV` | `production` | Disables the demo seed and refuses default JWT secrets. |
-| `JWT_SECRET` | random 32+ bytes | `openssl rand -hex 32` is fine. |
+| `APP_ENV` | `production` | Refuses the default JWT secret; also gates the seed. |
+| `JWT_SECRET` | random 32+ bytes | `openssl rand -hex 32`. |
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | Reference the attached Postgres plugin. |
 | `CORS_ORIGINS` | frontend public URL | Comma-separated; include the Railway-assigned HTTPS host. |
-| `EVIDENCE_STORAGE_DIR` | `/var/lib/veriflow/evidence` | Mount a Railway volume here so uploads survive redeploys. |
+| `EVIDENCE_STORAGE_DIR` | `/var/lib/veriflow/evidence` | Must match the Railway volume mount path. |
 
 Optional:
 
 - `MAX_UPLOAD_BYTES` — override the 25 MiB default cap.
 - `RATE_LIMIT_*_PER_MINUTE` — loosen or tighten per-bucket limits.
-- `VERIFLOW_ALLOW_SEED` — **do not set** in production. Only used in
-  staging if you want the demo org materialized once after a fresh DB.
+- `CONTENT_ACCESS_TTL_SECONDS` — signed-URL expiry (default 120s).
+- `VERIFLOW_ALLOW_SEED` — **do not set in production.** Staging only,
+  and only if you want the demo org materialized once.
 
-The Railway config declares `/health/readiness` as the healthcheck path.
+The Railway config declares `/health/readiness` as the healthcheck.
 That endpoint returns `200` only after the DB is reachable, so Railway
-will hold traffic off the node until migrations succeed.
+keeps traffic on the previous revision until the new one finishes
+migrations.
 
 ### Frontend service
 
@@ -50,44 +70,64 @@ Required environment variables:
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_BASE_URL` | backend public URL + `/api` | Baked into the client bundle at build time; rebuild on change. |
+| `NEXT_PUBLIC_API_BASE_URL` | backend public URL + `/api` | Baked into the client bundle at build time. Rebuilds are required after a change. |
+
+`NEXT_PUBLIC_*` values are inlined at `next build` time. Changing this
+variable in Railway triggers a rebuild — the running container cannot
+pick it up on the fly.
+
+The frontend healthcheck points at `/login`, which is a static-route
+`200` regardless of backend reachability. Frontend "up" therefore
+explicitly does not imply "backend up"; correctness of the end-to-end
+flow still depends on the backend's own readiness probe.
 
 ### Postgres plugin
 
-Attach Railway's built-in Postgres 16 plugin. No schema bootstrap is
-required — the backend runs Alembic on every start, and the baseline
-migration (`0001_initial_schema.py`) creates all tables.
+Attach Railway's Postgres 16 plugin. No schema bootstrap is required —
+the backend's start command runs `alembic upgrade head` every deploy
+and the baseline revision creates all tables.
+
+### Service-to-service URL expectations
+
+Railway services talk over the public internet unless you set up a
+private network. The frontend's `NEXT_PUBLIC_API_BASE_URL` must be the
+**public** backend URL (`https://<backend>.up.railway.app/api`) because
+it is evaluated in the user's browser. The backend does not need to
+call the frontend at all.
 
 ## Evidence storage
 
-Railway's ephemeral filesystem is not a safe place to keep uploaded
-evidence between deploys. Either:
+Railway's ephemeral filesystem loses writes on redeploy. Options:
 
-1. Attach a Railway volume at `/var/lib/veriflow/evidence` and point
-   `EVIDENCE_STORAGE_DIR` at it. This is the simplest option and what
-   the provided `railway.json` assumes.
-2. Swap `evidence_storage` for an S3-backed implementation. The module
-   boundary in `backend/app/services/evidence_storage.py` is designed
-   for this — it already abstracts store/read/delete behind a stable
-   interface.
+1. **Railway volume (recommended).** Mount a volume at
+   `/var/lib/veriflow/evidence` and set `EVIDENCE_STORAGE_DIR` to match.
+   `backend/railway.json` assumes this path. Volume attachment is the
+   one Railway-side action that is not automated by config.
+2. **Object storage.** Swap `evidence_storage` for an S3-backed
+   implementation behind the same interface. No schema changes
+   required. Not shipped in this repo.
 
 ## Release migrations
 
-Migrations run in the container's start command, before uvicorn binds
-the port. Readiness returns `503` until both the start command reaches
-uvicorn and the DB ping succeeds, so Railway keeps the previous
-revision serving traffic if Alembic fails.
+`alembic upgrade head` runs in the backend's start command before
+uvicorn binds the port. Readiness returns `503` until both uvicorn is
+up and the DB ping succeeds. Railway keeps the previous revision
+serving traffic while a new one fails to come ready.
 
-If a migration is risky enough that you'd rather gate it behind a
-manual step, split the deploy into two:
+For risky schema changes, split the deploy:
 
-1. First deploy: ship the migration with code that tolerates both
-   schemas (current and post-migration).
-2. Second deploy: remove the compatibility shims.
+1. Ship the migration with code that tolerates both the old and new
+   schema.
+2. Once fully rolled out, ship a follow-up deploy that removes the
+   compatibility shims.
+
+A rollback is a manual `alembic downgrade <rev>` inside the Railway
+shell on the backend service, followed by redeploying the previous
+image.
 
 ## Local parity
 
 `docker compose up --build` from the repo root brings up the same
-three-service topology against a local Postgres. The backend's compose
-command additionally runs the demo seed, which only succeeds because
-`APP_ENV=development` is set on the service definition.
+three-service topology against a local Postgres. The compose file sets
+`APP_ENV=development` on the backend, which is the only configuration
+that enables the demo seed. No other local state is assumed.

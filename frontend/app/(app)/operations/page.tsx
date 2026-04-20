@@ -19,19 +19,32 @@ import type {
 
 type FlashKind = "success" | "info" | "error";
 
+interface CleanupRun {
+  report: StorageCleanupReport;
+  completedAt: string;
+}
+
 
 export default function OperationsPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
 
   const [chain, setChain] = useState<AuditChainReport | null>(null);
   const [inventory, setInventory] = useState<StorageInventoryReport | null>(null);
-  const [lastCleanup, setLastCleanup] = useState<StorageCleanupReport | null>(null);
+  const [lastRun, setLastRun] = useState<CleanupRun | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [cleaning, setCleaning] = useState(false);
   const [dryRunning, setDryRunning] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [flash, setFlash] = useState<{ kind: FlashKind; text: string } | null>(null);
+
+  // Auto-dismiss non-error flashes. Errors stay until the next action
+  // overwrites them so an admin never misses a failure on the way out.
+  useEffect(() => {
+    if (!flash || flash.kind === "error") return;
+    const t = window.setTimeout(() => setFlash(null), 6000);
+    return () => window.clearTimeout(t);
+  }, [flash]);
 
   useEffect(() => {
     const user = readUser();
@@ -71,7 +84,7 @@ export default function OperationsPage() {
     setFlash(null);
     try {
       const report = await audit.storageCleanup(true);
-      setLastCleanup(report);
+      setLastRun({ report, completedAt: new Date().toISOString() });
       setFlash({
         kind: "info",
         text: `Dry run complete: ${report.orphaned_found} orphan(s) would be removed.`,
@@ -91,7 +104,7 @@ export default function OperationsPage() {
     setFlash(null);
     try {
       const report = await audit.storageCleanup(false);
-      setLastCleanup(report);
+      setLastRun({ report, completedAt: new Date().toISOString() });
       setConfirming(false);
       await refresh();
       setFlash({
@@ -288,23 +301,38 @@ export default function OperationsPage() {
               {cleaning ? "Cleaning…" : "Delete orphans"}
             </button>
           </div>
-          {lastCleanup ? (
+          {lastRun ? (
             <dl className="grid grid-cols-2 gap-2 rounded-md border border-surface-border bg-surface-muted/40 p-3 text-xs sm:grid-cols-4">
-              <ReportCell label="Mode" value={lastCleanup.dry_run ? "dry run" : "destructive"} />
-              <ReportCell label="Examined" value={lastCleanup.files_examined} />
-              <ReportCell label="Found" value={lastCleanup.orphaned_found} />
               <ReportCell
-                label={lastCleanup.dry_run ? "Would delete" : "Deleted"}
-                value={lastCleanup.dry_run ? lastCleanup.orphaned_found : lastCleanup.orphaned_deleted}
+                label="Mode"
+                value={lastRun.report.dry_run ? "dry run" : "destructive"}
+              />
+              <ReportCell label="Examined" value={lastRun.report.files_examined} />
+              <ReportCell label="Found" value={lastRun.report.orphaned_found} />
+              <ReportCell
+                label={lastRun.report.dry_run ? "Would delete" : "Deleted"}
+                value={
+                  lastRun.report.dry_run
+                    ? lastRun.report.orphaned_found
+                    : lastRun.report.orphaned_deleted
+                }
               />
               <ReportCell
-                label={lastCleanup.dry_run ? "Would reclaim" : "Reclaimed"}
-                value={formatBytes(lastCleanup.bytes_reclaimed)}
+                label={lastRun.report.dry_run ? "Would reclaim" : "Reclaimed"}
+                value={formatBytes(lastRun.report.bytes_reclaimed)}
               />
-              <ReportCell label="Errors" value={lastCleanup.errors} />
-              <ReportCell label="Run at" value={formatDateTime(new Date().toISOString())} />
+              <ReportCell label="Errors" value={lastRun.report.errors} />
+              <ReportCell
+                label="Run at"
+                value={formatDateTime(lastRun.completedAt)}
+              />
             </dl>
-          ) : null}
+          ) : (
+            <p className="text-xs text-text-subtle">
+              No cleanup has run yet. Start with a dry-run to review what
+              would be removed.
+            </p>
+          )}
         </div>
       </Panel>
 
