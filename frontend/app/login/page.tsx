@@ -1,5 +1,6 @@
 "use client";
 
+import { motion, useReducedMotion } from "framer-motion";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -7,6 +8,8 @@ import { ApiError, auth } from "@/lib/api";
 import { readToken, saveSession } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { AlertTriangle } from "@/components/icons";
+import { fadeRise, SPRING_DEFAULT } from "@/lib/motion";
 
 const DEMO_PASSWORD = "VeriFlow!2025";
 const DEMO_ACCOUNTS: { email: string; role: string }[] = [
@@ -87,9 +90,18 @@ function LoginPageInner() {
     }
   }
 
+  const reduce = useReducedMotion();
+  const entrance = reduce ? { duration: 0 } : SPRING_DEFAULT;
+
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10 animate-page-in">
-      <div className="w-full max-w-[400px] space-y-4">
+    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+      <motion.div
+        variants={fadeRise}
+        initial="hidden"
+        animate="visible"
+        transition={entrance}
+        className="w-full max-w-[400px] space-y-4"
+      >
         <div className="panel p-6">
           <div className="mb-5 space-y-1">
             <div className="text-xs font-medium uppercase tracking-wide text-text-subtle">
@@ -138,7 +150,7 @@ function LoginPageInner() {
               className="btn-primary w-full"
               disabled={submitting}
             >
-              {submitting ? "Signing in\u2026" : "Sign in"}
+              {submitting ? "Signing in…" : "Sign in"}
             </button>
 
             {errorMessage ? <ErrorBanner message={errorMessage} /> : null}
@@ -146,19 +158,24 @@ function LoginPageInner() {
         </div>
 
         {showDemoHint ? (
-          <div className="panel-muted p-4 text-xs text-text-muted">
-            <div className="mb-1 field-label text-severity-high">
-              Operator note · demo mode is off
+          <div className="panel-muted flex gap-3 p-3 text-xs text-text-muted">
+            <AlertTriangle
+              size={14}
+              className="mt-0.5 shrink-0 text-severity-high"
+              aria-hidden
+            />
+            <div className="space-y-1">
+              <div className="field-label text-severity-high">
+                Operator note · demo mode is off
+              </div>
+              <p>
+                This build does not have{" "}
+                <span className="mono">NEXT_PUBLIC_DEMO_MODE</span> set to
+                <span className="mono"> true</span>. Set the variable on the
+                frontend service and redeploy — values are inlined at build
+                time, so a restart alone will not pick it up.
+              </p>
             </div>
-            <p>
-              You&rsquo;re seeing this sign-in form because the build does not
-              have <span className="mono">NEXT_PUBLIC_DEMO_MODE</span> set to
-              <span className="mono"> true</span>. To expose the public demo
-              (auto-sign-in + role switcher), set that variable on the
-              frontend service and rebuild. <span className="mono">
-              NEXT_PUBLIC_*</span> values are inlined at build time, so a
-              variable change requires a full rebuild — not just a restart.
-            </p>
           </div>
         ) : null}
 
@@ -198,7 +215,7 @@ function LoginPageInner() {
             <span className="font-mono text-text">{DEMO_PASSWORD}</span>
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -228,13 +228,16 @@ def test_playwright_has_real_flow_specs():
 # --------------------------------------------------------------------------
 
 
-def test_operations_page_captures_completed_at_and_auto_dismisses_flash():
+def test_operations_page_captures_completed_at_and_routes_status_via_toasts():
     path = FRONTEND / "app" / "(app)" / "operations" / "page.tsx"
     text = path.read_text(encoding="utf-8")
     # Timestamp captured at completion, not recomputed on render.
     assert "completedAt" in text
-    # Auto-dismiss behaviour for non-error flashes.
-    assert "setTimeout" in text
+    # Status messaging goes through the shared toast stack; the
+    # auto-dismiss timer lives inside Toast.tsx rather than every page
+    # reimplementing setTimeout.
+    assert "useToast" in text
+    assert "toast.push" in text
     # Empty state guidance before the first run.
     assert "No cleanup has run yet" in text
 

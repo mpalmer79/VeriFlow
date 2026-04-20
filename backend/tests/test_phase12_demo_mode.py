@@ -65,21 +65,29 @@ def test_login_page_redirects_away_in_demo_mode():
     assert 'router.replace("/enter")' in text
 
 
-def test_roles_page_exists_and_covers_four_roles():
-    path = FRONTEND / "app" / "(app)" / "roles" / "page.tsx"
-    assert path.is_file()
-    text = path.read_text(encoding="utf-8")
-    assert "DEMO_ROLES" in text
-    assert "demoSignInAs" in text
-    # Non-demo deploys see an empty state, not a role switcher.
-    assert "Role switcher not available" in text
+def test_role_switcher_moves_to_user_menu_dropdown():
+    # The standalone /roles route is retired in favour of a dropdown on
+    # the top-right user cluster. The dropdown must cover all four demo
+    # roles so the walkthrough flow is unchanged; clicking a role runs
+    # demoSignInAs under the hood.
+    roles_path = FRONTEND / "app" / "(app)" / "roles" / "page.tsx"
+    assert not roles_path.exists(), "/roles route should be removed"
+
+    menu = (FRONTEND / "components" / "UserMenu.tsx").read_text(encoding="utf-8")
+    assert "DEMO_ROLES" in menu
+    assert "Switch role" in menu
+    assert "Sign out" in menu
 
 
-def test_appshell_nav_includes_roles_for_demo_and_relabels_signout():
+def test_appshell_drops_roles_nav_and_uses_usermenu():
     text = (FRONTEND / "components" / "AppShell.tsx").read_text(encoding="utf-8")
-    assert "demoOnly" in text
-    assert '"/roles"' in text
-    assert 'demo ? "Reset demo" : "Sign out"' in text
+    # Roles no longer lives in the top-level nav.
+    assert '"/roles"' not in text
+    assert "demoOnly" not in text
+    # User cluster routes through the new UserMenu component, not the
+    # bare "Reset demo" button.
+    assert "UserMenu" in text
+    assert '"Reset demo"' not in text
 
 
 def test_api_client_fails_loudly_when_base_url_missing():

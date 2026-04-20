@@ -4,40 +4,39 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { clearSession, readToken, readUser } from "@/lib/auth";
-import { isDemoMode } from "@/lib/demo";
-import type { UserPublic } from "@/lib/types";
 import { Logomark } from "@/components/ui/Logomark";
+import { UserMenu } from "@/components/UserMenu";
+import { clearSession, readToken, readUser } from "@/lib/auth";
+import { DEMO_ROLES, isDemoMode, demoSignInAs } from "@/lib/demo";
+import type { UserPublic, UserRole } from "@/lib/types";
+import { useToast } from "@/components/ui/Toast";
 
 interface NavItem {
   href: string;
   label: string;
   adminOnly?: boolean;
-  demoOnly?: boolean;
 }
-
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/records", label: "Records" },
   { href: "/operations", label: "Operations", adminOnly: true },
-  { href: "/roles", label: "Roles", demoOnly: true },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const toast = useToast();
   const [user, setUser] = useState<UserPublic | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState<UserRole | null>(null);
   const demo = isDemoMode();
 
   useEffect(() => {
     const token = readToken();
     if (!token) {
-      // In demo mode the root route auto-signs-in; bouncing there is
-      // kinder than landing on the sign-in form that the demo hides.
       router.replace(
-        demo ? "/" : `/login?next=${encodeURIComponent(pathname || "/dashboard")}`
+        demo ? "/" : `/login?next=${encodeURIComponent(pathname || "/dashboard")}`,
       );
       return;
     }
@@ -53,11 +52,38 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  function handleLogout() {
+  function handleSignOut() {
     clearSession();
-    // Demo deploys re-enter at the root (which auto-signs-in); every
-    // other deploy goes back to the sign-in form.
     router.replace(demo ? "/" : "/login");
+  }
+
+  async function handleSwitchRole(role: UserRole) {
+    if (switchingRole) return;
+    const entry = DEMO_ROLES.find((r) => r.role === role);
+    if (!entry) return;
+    setSwitchingRole(role);
+    try {
+      clearSession();
+      const freshUser = await demoSignInAs(role);
+      // demoSignInAs already persists the new session; just update the
+      // shell's local copy so the menu reflects the new role.
+      setUser(freshUser);
+      toast.push({
+        kind: "success",
+        text: `Signed in as ${entry.label}.`,
+      });
+      router.replace("/dashboard");
+    } catch (err) {
+      toast.push({
+        kind: "error",
+        text:
+          err instanceof Error
+            ? err.message
+            : "Role switch failed. Check that the backend is reachable.",
+      });
+    } finally {
+      setSwitchingRole(null);
+    }
   }
 
   return (
@@ -76,7 +102,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="flex items-center gap-1">
             {NAV_ITEMS.filter((item) => {
               if (item.adminOnly && user?.role !== "admin") return false;
-              if (item.demoOnly && !demo) return false;
               return true;
             }).map((item) => {
               const active =
@@ -98,14 +123,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
           <div className="ml-auto flex items-center gap-3">
             {user ? (
-              <div className="text-right text-xs">
-                <div className="font-medium text-text">{user.full_name}</div>
-                <div className="text-text-muted">{user.role}</div>
-              </div>
+              <UserMenu
+                user={user}
+                demo={demo}
+                switchingRole={switchingRole}
+                onSwitchRole={handleSwitchRole}
+                onSignOut={handleSignOut}
+              />
             ) : null}
-            <button type="button" className="btn-secondary" onClick={handleLogout}>
-              {demo ? "Reset demo" : "Sign out"}
-            </button>
           </div>
         </div>
       </header>
