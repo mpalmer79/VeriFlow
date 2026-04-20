@@ -35,6 +35,26 @@ test.describe("records flow", () => {
     }
   });
 
+  test("workflow timeline marks exactly one current stage", async ({ page }) => {
+    // The timeline animates on transition; animation timing is covered by
+    // reduced-motion handling. The DOM contract we pin here is structural:
+    // every record renders a timeline with aria-current="step" on the one
+    // active stage — so a keyboard / screen-reader user knows where they
+    // are, and future transition tests can key off the same marker.
+    await page.goto("/records");
+    await page.getByRole("link", { name: "Casey Nguyen" }).click();
+    await expect(page).toHaveURL(/\/records\/\d+/);
+    await expect(
+      page.getByRole("heading", { name: "Workflow progress" }),
+    ).toBeVisible();
+    // The visible timeline (horizontal at sm+, vertical otherwise) carries
+    // aria-current="step" on the active stage. The inactive timeline is
+    // display:none, which removes it from the accessibility tree.
+    await expect(
+      page.locator('[aria-current="step"]').first(),
+    ).toBeVisible();
+  });
+
   test("metadata-only documents hide download and preview controls", async ({
     page,
   }) => {

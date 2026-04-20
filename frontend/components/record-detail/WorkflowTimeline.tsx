@@ -138,6 +138,7 @@ function HorizontalTimeline({
           <motion.li
             layout
             key={item.stage.id}
+            aria-current={item.kind === "current" ? "step" : undefined}
             className="relative flex flex-1 flex-col items-center text-center last:flex-none"
           >
             {inbound ? (
@@ -186,6 +187,7 @@ function VerticalTimeline({
           <motion.li
             layout
             key={item.stage.id}
+            aria-current={item.kind === "current" ? "step" : undefined}
             className="relative flex items-start gap-3"
           >
             <div className="relative flex w-5 shrink-0 flex-col items-center">
