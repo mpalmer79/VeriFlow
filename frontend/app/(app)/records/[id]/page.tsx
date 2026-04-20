@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
@@ -90,6 +91,10 @@ export default function RecordDetailPage() {
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  const [rejectTarget, setRejectTarget] = useState<DocumentRead | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<DocumentRead | null>(null);
 
   const refreshAll = useCallback(
     async (opts: { silent?: boolean } = {}) => {
@@ -255,15 +260,20 @@ export default function RecordDetailPage() {
     }
   }
 
-  async function handleReject(doc: DocumentRead) {
-    const reason =
-      typeof window !== "undefined"
-        ? window.prompt("Rejection reason (optional):")
-        : null;
+  function handleReject(doc: DocumentRead) {
+    setRejectReason("");
+    setRejectTarget(doc);
+  }
+
+  async function confirmReject() {
+    if (!rejectTarget) return;
+    const doc = rejectTarget;
     setBusyDocId(doc.id);
     setFlash(null);
     try {
-      await documents.reject(doc.id, reason ?? undefined);
+      await documents.reject(doc.id, rejectReason.trim() || undefined);
+      setRejectTarget(null);
+      setRejectReason("");
       await refreshAll({ silent: true });
       setFlash({
         kind: "info",
@@ -307,13 +317,13 @@ export default function RecordDetailPage() {
     }
   }
 
-  async function handleDelete(doc: DocumentRead) {
-    if (typeof window !== "undefined") {
-      const confirmed = window.confirm(
-        `Delete ${DOCUMENT_TYPE_LABELS[doc.document_type]}? This removes the document and any stored content.`
-      );
-      if (!confirmed) return;
-    }
+  function handleDelete(doc: DocumentRead) {
+    setDeleteTarget(doc);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    const doc = deleteTarget;
     setBusyDocId(doc.id);
     setFlash(null);
     try {
@@ -323,6 +333,7 @@ export default function RecordDetailPage() {
         delete next[doc.id];
         return next;
       });
+      setDeleteTarget(null);
       await refreshAll({ silent: true });
       setFlash({
         kind: "info",
@@ -519,9 +530,48 @@ export default function RecordDetailPage() {
       {preview ? (
         <PreviewOverlay preview={preview} onClose={closePreview} />
       ) : previewLoading ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 text-sm text-text-muted">
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 text-sm text-text-muted"
+        >
           Loading preview…
         </div>
+      ) : null}
+
+      {rejectTarget ? (
+        <ConfirmDialog
+          title={`Reject ${DOCUMENT_TYPE_LABELS[rejectTarget.document_type]}?`}
+          description="A rejection prevents the requirement from being satisfied until a new document is uploaded."
+          confirmLabel="Reject document"
+          tone="danger"
+          busy={busyDocId === rejectTarget.id}
+          inputLabel="Reason (optional)"
+          inputValue={rejectReason}
+          inputPlaceholder="e.g. Photo does not match subject"
+          onInputChange={setRejectReason}
+          onConfirm={confirmReject}
+          onCancel={() => {
+            if (busyDocId === rejectTarget.id) return;
+            setRejectTarget(null);
+            setRejectReason("");
+          }}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <ConfirmDialog
+          title={`Delete ${DOCUMENT_TYPE_LABELS[deleteTarget.document_type]}?`}
+          description="This removes the document metadata and any stored content. Audit history is retained."
+          confirmLabel="Delete document"
+          tone="danger"
+          busy={busyDocId === deleteTarget.id}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            if (busyDocId === deleteTarget.id) return;
+            setDeleteTarget(null);
+          }}
+        />
       ) : null}
     </div>
   );

@@ -1,9 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app import __version__
 from app.api.routes import audit as audit_routes
 from app.api.routes import auth, documents, records, workflows
+from app.core import database as db_module
 from app.core.config import get_settings
 
 
@@ -78,7 +82,40 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["health"])
     def health() -> dict:
+        """Liveness probe: confirms the process is accepting requests."""
         return {"status": "ok", "service": settings.app_name, "version": __version__}
+
+    @app.get("/health/readiness", tags=["health"])
+    def readiness() -> JSONResponse:
+        """Readiness probe: confirms the database is reachable.
+
+        Used by hosted deployments (Railway, Kubernetes, etc.) to decide
+        when to route traffic. Returns 503 on DB failure so the platform
+        can back off instead of sending live requests to a broken node.
+        """
+        try:
+            with db_module.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+        except SQLAlchemyError as exc:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "status": "unavailable",
+                    "service": settings.app_name,
+                    "version": __version__,
+                    "database": "unreachable",
+                    "detail": str(exc.__class__.__name__),
+                },
+            )
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "ready",
+                "service": settings.app_name,
+                "version": __version__,
+                "database": "ok",
+            },
+        )
 
     return app
 

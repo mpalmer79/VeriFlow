@@ -18,13 +18,17 @@ intake, vendor onboarding, claims triage, and similar workflows.
   tests). Code-driven rule registry, risk scoring, stage-gated
   transitions, tamper-evident audit chain (SHA-256 per row, chained by
   `previous_hash`), optimistic concurrency via `version` on records,
-  and a local evidence store with real content hashing at ingest and
-  re-hashing at verification.
+  a local evidence store with real content hashing at ingest and
+  re-hashing at verification, and liveness (`/health`) + readiness
+  (`/health/readiness` with a live DB ping) probes for hosted deploys.
 - **Frontend.** Next.js 14 + TypeScript + Tailwind. The record detail
   page is componentized into focused pieces (header, action bar,
   evaluation panel, workflow timeline, evidence panel with upload +
   preview + integrity check + download + delete, audit trail, preview
-  modal with accessible dialog semantics).
+  modal with accessible dialog semantics). Destructive confirmations
+  use a shared in-app `ConfirmDialog` rather than native browser
+  dialogs, and admins get an `/operations` console for audit-chain
+  verification, managed-storage inventory, and bounded orphan cleanup.
 - **Evidence.** Real streaming upload writes straight to a server-
   controlled storage root with chunked SHA-256; verification re-reads
   and re-hashes those bytes; content delivery supports HTTP `Range`
@@ -133,7 +137,8 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 - Interactive API docs: <http://localhost:8000/docs>
-- Health check: <http://localhost:8000/health>
+- Liveness check: <http://localhost:8000/health>
+- Readiness check (DB ping): <http://localhost:8000/health/readiness>
 
 Frontend:
 
@@ -254,10 +259,17 @@ storage tempdir, and the rate-limit buckets to avoid state bleed.
   document integrity metadata, real upload + verification + integrity
   check + record-level cleanup + secure content delivery + range
   support + evidence preview + signed URLs + orphan sweep.
-- **Phase 7 (this pass)** — backend modularity (document service
+- **Phase 7** — backend modularity (document service
   split), frontend componentization and polish, CI workflow with
   PostgreSQL matrix, Dockerfiles + Compose, JWT-secret and CORS
   tightening, rate limiting, and a PostgreSQL test path.
+- **Phase 8 (this pass)** — productization and deployment readiness:
+  shared in-app `ConfirmDialog` replacing native `window.confirm` /
+  `window.prompt`, admin-gated `/operations` UI for audit-chain
+  verification and storage inventory + orphan cleanup, dev-only seed
+  gating with an explicit opt-in override, readiness endpoint with a
+  live DB ping, Railway configuration for both services, deployment
+  docs, and Playwright groundwork.
 
 ## Known limitations
 
@@ -267,17 +279,16 @@ storage tempdir, and the rate-limit buckets to avoid state bleed.
 - **Evidence storage is local only.** No S3 / GCS. The storage
   interface is small enough that a cloud-backed implementation can
   live behind `evidence_storage` without schema changes.
-- **Frontend has no automated tests.** Build + type-check are the
-  current guardrails; adding Playwright or Testing Library is the
-  natural next step.
-- **Accessibility coverage** ends at the preview dialog. Other modal
-  prompts (rejection reason, delete confirm) still use native browser
-  dialogs.
+- **Frontend tests are scaffolded, not exhaustive.** A minimal
+  Playwright harness lives under `frontend/tests/e2e/`; run it against
+  a running stack via `npm run test:e2e`. Type-check and Next build
+  are still the primary CI guardrails.
 - **Signed content-access tokens can be replayed** until they expire
   (default 120s). A `jti` denylist would make them strict one-shot.
-- **Alembic is not invoked at app startup.** Production deployments
-  must run `alembic upgrade head` as part of their entrypoint (the
-  provided docker-compose does this).
+- **Alembic runs at start-up** in both the local compose stack and
+  hosted deployments (see `docs/deployment.md`). There is no separate
+  release phase — risky schema changes should ship as a two-step
+  deploy so the running revision tolerates both schemas.
 
 ## References
 
@@ -286,3 +297,4 @@ storage tempdir, and the rate-limit buckets to avoid state bleed.
 - [`docs/document_evidence.md`](./docs/document_evidence.md) — document model and hybrid rule contract
 - [`docs/product_overview.md`](./docs/product_overview.md) — problem framing and product capabilities
 - [`docs/migrations.md`](./docs/migrations.md) — Alembic layout and evolution strategy
+- [`docs/deployment.md`](./docs/deployment.md) — Railway deployment wiring and release workflow

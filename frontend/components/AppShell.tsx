@@ -7,9 +7,17 @@ import { useEffect, useState, type ReactNode } from "react";
 import { clearSession, readToken, readUser } from "@/lib/auth";
 import type { UserPublic } from "@/lib/types";
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string;
+  label: string;
+  adminOnly?: boolean;
+}
+
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/records", label: "Records" },
+  { href: "/operations", label: "Operations", adminOnly: true },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -53,7 +61,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             VeriFlow
           </Link>
           <nav className="flex items-center gap-1">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.filter(
+              (item) => !item.adminOnly || user?.role === "admin"
+            ).map((item) => {
               const active =
                 pathname === item.href || pathname?.startsWith(`${item.href}/`);
               return (

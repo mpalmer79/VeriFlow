@@ -4,6 +4,7 @@
 // calling `fetch` directly.
 
 import type {
+  AuditChainReport,
   AuditEntry,
   DocumentRead,
   DocumentStatusResponse,
@@ -15,6 +16,8 @@ import type {
   RecordRead,
   RuleEvaluationRow,
   SignedAccessGrant,
+  StorageCleanupReport,
+  StorageInventoryReport,
   TokenResponse,
   TransitionResponse,
   UserPublic,
@@ -254,6 +257,13 @@ export const documents = {
 export const audit = {
   list: (recordId: number, limit = 100) =>
     request<AuditEntry[]>(`/records/${recordId}/audit?limit=${limit}`),
+  verifyChain: () => request<AuditChainReport>("/audit/verify"),
+  storageInventory: () => request<StorageInventoryReport>("/audit/storage-inventory"),
+  storageCleanup: (dryRun: boolean) =>
+    request<StorageCleanupReport>(
+      `/audit/storage-cleanup?dry_run=${dryRun ? "true" : "false"}`,
+      { method: "POST" }
+    ),
 };
 
 // --- workflows ----------------------------------------------------------

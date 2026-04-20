@@ -4,15 +4,22 @@ Idempotent: safe to run multiple times. Creates one organization, four users
 covering each role, the Healthcare Intake workflow with its nine stages,
 the initial rule set, and a small set of demo records exercising different
 states.
+
+Gated: refuses to execute against a non-dev environment unless the operator
+opts in explicitly via ``VERIFLOW_ALLOW_SEED=true``. This keeps Railway /
+production deploys from accidentally materializing the demo accounts, whose
+shared password is well known.
 """
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import SessionLocal, engine
 from app.core.security import hash_password
 from app.models import (
@@ -500,7 +507,23 @@ def seed(db: Session) -> None:
     db.commit()
 
 
-def run() -> None:
+class SeedNotAllowedError(RuntimeError):
+    """Raised when `run()` is invoked outside a dev-like environment."""
+
+
+def _seed_allowed() -> bool:
+    if get_settings().is_dev_like:
+        return True
+    override = os.getenv("VERIFLOW_ALLOW_SEED", "").strip().lower()
+    return override in {"1", "true", "yes", "on"}
+
+
+def run(*, force: bool = False) -> None:
+    if not force and not _seed_allowed():
+        raise SeedNotAllowedError(
+            "Refusing to seed: APP_ENV is not dev-like. "
+            "Set VERIFLOW_ALLOW_SEED=true to override."
+        )
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:
         seed(db)
@@ -508,4 +531,10 @@ def run() -> None:
 
 
 if __name__ == "__main__":
-    run()
+    import sys
+
+    try:
+        run()
+    except SeedNotAllowedError as exc:
+        print(f"seed_data: {exc}", file=sys.stderr)
+        sys.exit(2)
