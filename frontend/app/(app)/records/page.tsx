@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -10,16 +10,18 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ApiError, records as recordsApi, workflows as workflowsApi } from "@/lib/api";
+import { ApiError, records as recordsApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import {
+  loadStagesForRecords,
+  stageMapKey,
+  type StageMap,
+} from "@/lib/workflow-stages";
 import type {
   RecordRead,
   RecordStatus,
   RiskBand,
-  WorkflowStage,
 } from "@/lib/types";
-
-type StageMap = Map<number, WorkflowStage>;
 
 const RISK_BAND_OPTIONS: { value: RiskBand; label: string }[] = [
   { value: "low", label: "Low" },
@@ -37,17 +39,44 @@ const STATUS_OPTIONS: { value: RecordStatus; label: string }[] = [
 ];
 
 export default function RecordsPage() {
+  return (
+    <Suspense fallback={null}>
+      <RecordsPageInner />
+    </Suspense>
+  );
+}
+
+function RecordsPageInner() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [rows, setRows] = useState<RecordRead[]>([]);
   const [stageMap, setStageMap] = useState<StageMap>(new Map());
   const [loading, setLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const [search, setSearch] = useState<string>("");
-  const [stageId, setStageId] = useState<string>("all");
-  const [riskBand, setRiskBand] = useState<string>("all");
-  const [status, setStatus] = useState<string>("all");
+  // Filters live in the URL so refresh, back button, and shared links
+  // reproduce the same view. Reads are direct on each render; writes go
+  // through router.replace so the URL updates without a history push.
+  const search = searchParams.get("q") ?? "";
+  const stageId = searchParams.get("stage") ?? "all";
+  const riskBand = searchParams.get("risk") ?? "all";
+  const status = searchParams.get("status") ?? "all";
+
+  const updateFilter = useCallback(
+    (key: "q" | "stage" | "risk" | "status", value: string) => {
+      const next = new URLSearchParams(searchParams.toString());
+      if (!value || value === "all") {
+        next.delete(key);
+      } else {
+        next.set(key, value);
+      }
+      const qs = next.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [pathname, router, searchParams],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,20 +84,7 @@ export default function RecordsPage() {
     try {
       const list = await recordsApi.list({ limit: 500 });
       setRows(list);
-      if (list.length > 0) {
-        try {
-          const workflow = await workflowsApi.get(list[0].workflow_id);
-          const nextMap: StageMap = new Map();
-          for (const stage of workflow.stages) {
-            nextMap.set(stage.id, stage);
-          }
-          setStageMap(nextMap);
-        } catch {
-          setStageMap(new Map());
-        }
-      } else {
-        setStageMap(new Map());
-      }
+      setStageMap(await loadStagesForRecords(list));
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -89,7 +105,14 @@ export default function RecordsPage() {
   }, [load]);
 
   const stageOptions = useMemo(() => {
-    return Array.from(stageMap.values()).sort(
+    // Filter dropdown de-duplicates by stage name so a multi-workflow map
+    // does not show the same label multiple times. Filter matching still
+    // keys on stage_id, so selecting a name applies to just that workflow.
+    const seen = new Map<string, (typeof stageMap extends Map<infer _K, infer V> ? V : never)>();
+    for (const stage of stageMap.values()) {
+      if (!seen.has(stage.name)) seen.set(stage.name, stage);
+    }
+    return Array.from(seen.values()).sort(
       (a, b) => a.order_index - b.order_index,
     );
   }, [stageMap]);
@@ -117,9 +140,9 @@ export default function RecordsPage() {
     });
   }, [rows, search, stageId, riskBand, status]);
 
-  const stageNameFor = (id: number): string => {
-    const stage = stageMap.get(id);
-    return stage ? stage.name : `Stage #${id}`;
+  const stageNameFor = (workflowId: number, stageId: number): string => {
+    const stage = stageMap.get(stageMapKey(workflowId, stageId));
+    return stage ? stage.name : `Stage #${stageId}`;
   };
 
   return (
@@ -135,14 +158,16 @@ export default function RecordsPage() {
         <input
           type="text"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => updateFilter("q", e.target.value)}
           placeholder="Search by subject or reference"
           className="input max-w-xs"
+          aria-label="Search records"
         />
         <select
           value={stageId}
-          onChange={(e) => setStageId(e.target.value)}
+          onChange={(e) => updateFilter("stage", e.target.value)}
           className="input w-auto"
+          aria-label="Filter by stage"
         >
           <option value="all">All stages</option>
           {stageOptions.map((stage) => (
@@ -153,8 +178,9 @@ export default function RecordsPage() {
         </select>
         <select
           value={riskBand}
-          onChange={(e) => setRiskBand(e.target.value)}
+          onChange={(e) => updateFilter("risk", e.target.value)}
           className="input w-auto"
+          aria-label="Filter by risk band"
         >
           <option value="all">All risk bands</option>
           {RISK_BAND_OPTIONS.map((opt) => (
@@ -165,8 +191,9 @@ export default function RecordsPage() {
         </select>
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) => updateFilter("status", e.target.value)}
           className="input w-auto"
+          aria-label="Filter by status"
         >
           <option value="all">All statuses</option>
           {STATUS_OPTIONS.map((opt) => (
@@ -247,7 +274,7 @@ export default function RecordsPage() {
                           ) : null}
                         </td>
                         <td className="px-4 py-3 align-top text-text">
-                          {stageNameFor(record.current_stage_id)}
+                          {stageNameFor(record.workflow_id, record.current_stage_id)}
                         </td>
                         <td className="px-4 py-3 align-top">
                           <StatusBadge status={record.status} />

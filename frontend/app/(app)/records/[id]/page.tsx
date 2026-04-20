@@ -15,7 +15,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
-import { ActionBar, FlashKind } from "@/components/record-detail/ActionBar";
+import { ActionBar } from "@/components/record-detail/ActionBar";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DocumentEvidencePanel } from "@/components/record-detail/DocumentEvidencePanel";
 import { EvaluationPanel } from "@/components/record-detail/EvaluationPanel";
@@ -25,6 +25,7 @@ import {
 } from "@/components/record-detail/PreviewOverlay";
 import { RecordHeader } from "@/components/record-detail/RecordHeader";
 import { WorkflowTimeline } from "@/components/record-detail/WorkflowTimeline";
+import { useToast } from "@/components/ui/Toast";
 import { ApiError, audit, documents, records, workflows } from "@/lib/api";
 import { DOCUMENT_TYPE_LABELS } from "@/lib/format";
 import type {
@@ -51,13 +52,8 @@ interface WorkflowData {
 }
 
 
-interface Flash {
-  kind: FlashKind;
-  text: string;
-}
-
-
 export default function RecordDetailPage() {
+  const toast = useToast();
   const params = useParams<{ id: string }>();
   const recordId = Number(params.id);
 
@@ -76,7 +72,6 @@ export default function RecordDetailPage() {
   const [evaluating, setEvaluating] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [targetStageId, setTargetStageId] = useState<number | "">("");
-  const [flash, setFlash] = useState<Flash | null>(null);
   const [busyDocId, setBusyDocId] = useState<number | null>(null);
 
   const [uploading, setUploading] = useState(false);
@@ -140,13 +135,6 @@ export default function RecordDetailPage() {
     refreshAll();
   }, [refreshAll]);
 
-  // Auto-dismiss non-error flashes; errors stay so operators don't miss them.
-  useEffect(() => {
-    if (!flash || flash.kind === "error") return;
-    const t = window.setTimeout(() => setFlash(null), 6000);
-    return () => window.clearTimeout(t);
-  }, [flash]);
-
   const stagesById = useMemo(() => {
     const map = new Map<number, WorkflowStage>();
     workflow?.stages.forEach((s) => map.set(s.id, s));
@@ -188,19 +176,19 @@ export default function RecordDetailPage() {
   async function handleEvaluate() {
     if (!record) return;
     setEvaluating(true);
-    setFlash(null);
+    
     try {
       const result = await records.evaluate(record.id);
       setDecision(result);
       await refreshAll({ silent: true });
-      setFlash({
+      toast.push({
         kind: result.can_progress ? "success" : "info",
         text: result.can_progress
           ? `Evaluation complete — no blocking issues (risk ${result.risk_score} / ${result.risk_band}).`
           : `Evaluation complete — ${result.violations.length} blocking issue(s) (risk ${result.risk_score} / ${result.risk_band}).`,
       });
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text:
           err instanceof ApiError ? err.detail ?? err.message : "Evaluation failed.",
@@ -213,7 +201,7 @@ export default function RecordDetailPage() {
   async function handleTransition() {
     if (!record || targetStageId === "") return;
     setTransitioning(true);
-    setFlash(null);
+    
     try {
       const result = await records.transition(
         record.id,
@@ -224,19 +212,19 @@ export default function RecordDetailPage() {
       await refreshAll({ silent: true });
       if (result.success) {
         const newStage = stagesById.get(result.updated_stage_id);
-        setFlash({
+        toast.push({
           kind: "success",
           text: `Transition complete → ${newStage?.name ?? `stage #${result.updated_stage_id}`}.`,
         });
         setTargetStageId("");
       } else {
-        setFlash({
+        toast.push({
           kind: "error",
           text: `Transition blocked: ${result.decision.summary}`,
         });
       }
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text:
           err instanceof ApiError ? err.detail ?? err.message : "Transition failed.",
@@ -248,16 +236,16 @@ export default function RecordDetailPage() {
 
   async function handleVerify(doc: DocumentRead) {
     setBusyDocId(doc.id);
-    setFlash(null);
+    
     try {
       await documents.verify(doc.id);
       await refreshAll({ silent: true });
-      setFlash({
+      toast.push({
         kind: "success",
         text: `Verified ${DOCUMENT_TYPE_LABELS[doc.document_type]}.`,
       });
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text:
           err instanceof ApiError ? err.detail ?? err.message : "Verification failed.",
@@ -276,18 +264,18 @@ export default function RecordDetailPage() {
     if (!rejectTarget) return;
     const doc = rejectTarget;
     setBusyDocId(doc.id);
-    setFlash(null);
+    
     try {
       await documents.reject(doc.id, rejectReason.trim() || undefined);
       setRejectTarget(null);
       setRejectReason("");
       await refreshAll({ silent: true });
-      setFlash({
+      toast.push({
         kind: "info",
         text: `Rejected ${DOCUMENT_TYPE_LABELS[doc.document_type]}.`,
       });
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text:
           err instanceof ApiError ? err.detail ?? err.message : "Rejection failed.",
@@ -301,7 +289,7 @@ export default function RecordDetailPage() {
     event.preventDefault();
     if (!record || !uploadFile || uploading) return;
     setUploading(true);
-    setFlash(null);
+    
     try {
       await documents.upload(record.id, uploadFile, {
         document_type: uploadType,
@@ -310,12 +298,12 @@ export default function RecordDetailPage() {
       setUploadFile(null);
       setUploadLabel("");
       await refreshAll({ silent: true });
-      setFlash({
+      toast.push({
         kind: "success",
         text: `Uploaded ${DOCUMENT_TYPE_LABELS[uploadType]}.`,
       });
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text: err instanceof ApiError ? err.detail ?? err.message : "Upload failed.",
       });
@@ -332,7 +320,7 @@ export default function RecordDetailPage() {
     if (!deleteTarget) return;
     const doc = deleteTarget;
     setBusyDocId(doc.id);
-    setFlash(null);
+    
     try {
       await documents.remove(doc.id);
       setIntegrityResults((prev) => {
@@ -342,12 +330,12 @@ export default function RecordDetailPage() {
       });
       setDeleteTarget(null);
       await refreshAll({ silent: true });
-      setFlash({
+      toast.push({
         kind: "info",
         text: `Deleted ${DOCUMENT_TYPE_LABELS[doc.document_type]}.`,
       });
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text: err instanceof ApiError ? err.detail ?? err.message : "Deletion failed.",
       });
@@ -358,12 +346,12 @@ export default function RecordDetailPage() {
 
   async function handleIntegrityCheck(doc: DocumentRead) {
     setBusyDocId(doc.id);
-    setFlash(null);
+    
     try {
       const result = await documents.integrityCheck(doc.id);
       setIntegrityResults((prev) => ({ ...prev, [doc.id]: result }));
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text:
           err instanceof ApiError
@@ -377,7 +365,7 @@ export default function RecordDetailPage() {
 
   async function handleDownload(doc: DocumentRead) {
     setBusyDocId(doc.id);
-    setFlash(null);
+    
     try {
       const grant = await documents.signedAccess(doc.id, {
         disposition: "attachment",
@@ -393,7 +381,7 @@ export default function RecordDetailPage() {
       a.click();
       a.remove();
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text: err instanceof ApiError ? err.detail ?? err.message : "Download failed.",
       });
@@ -409,7 +397,7 @@ export default function RecordDetailPage() {
     if (!doc.has_stored_content) return;
     previewTriggerRef.current = trigger;
     setPreviewLoading(true);
-    setFlash(null);
+    
     try {
       const grant = await documents.signedAccess(doc.id, {
         disposition: "inline",
@@ -421,7 +409,7 @@ export default function RecordDetailPage() {
         documentId: doc.id,
       });
     } catch (err) {
-      setFlash({
+      toast.push({
         kind: "error",
         text: err instanceof ApiError ? err.detail ?? err.message : "Preview failed.",
       });
@@ -492,7 +480,6 @@ export default function RecordDetailPage() {
         onRefresh={() => refreshAll({ silent: true })}
         evaluating={evaluating}
         transitioning={transitioning}
-        flash={flash}
       />
 
       <EvaluationPanel

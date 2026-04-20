@@ -1,19 +1,33 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import {
+  Activity,
+  AlertOctagon,
+  AlertTriangle,
+  Clock,
+} from "@/components/icons";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StageBadge } from "@/components/StageBadge";
-import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ApiError, records as recordsApi, workflows as workflowsApi } from "@/lib/api";
+import { KPICard } from "@/components/ui/KPICard";
+import { MotionList } from "@/components/ui/MotionList";
+import { ApiError, records as recordsApi } from "@/lib/api";
+import { fadeRise, SPRING_DEFAULT, staggerParent } from "@/lib/motion";
 import { formatDateTime } from "@/lib/format";
-import type { RecordRead, WorkflowStage } from "@/lib/types";
+import {
+  loadStagesForRecords,
+  stageMapKey,
+  type StageMap,
+} from "@/lib/workflow-stages";
+import type { RecordRead } from "@/lib/types";
 
 function formatClockTime(date: Date | null): string {
   if (!date) return "—";
@@ -42,31 +56,23 @@ function sortRecent(a: RecordRead, b: RecordRead): number {
 
 export default function DashboardPage() {
   const [data, setData] = useState<RecordRead[] | null>(null);
-  const [stagesById, setStagesById] = useState<Map<number, WorkflowStage>>(
-    new Map()
-  );
+  const [stageMap, setStageMap] = useState<StageMap>(new Map());
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [stale, setStale] = useState(false);
+  const initialLoadDone = useRef(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (opts?: { background?: boolean }) => {
+    const background = opts?.background === true;
+    if (!background) setLoading(true);
     setError(null);
     try {
       const result = await recordsApi.list({ limit: 200 });
       setData(result);
       setLastRefreshed(new Date());
-      const firstWorkflowId = result[0]?.workflow_id;
-      if (firstWorkflowId !== undefined) {
-        try {
-          const wf = await workflowsApi.get(firstWorkflowId);
-          const map = new Map<number, WorkflowStage>();
-          wf.stages.forEach((s) => map.set(s.id, s));
-          setStagesById(map);
-        } catch {
-          // Non-fatal — the dashboard still renders without stage names.
-        }
-      }
+      setStageMap(await loadStagesForRecords(result));
+      setStale(false);
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -74,15 +80,64 @@ export default function DashboardPage() {
           : err instanceof Error
             ? err.message
             : "Failed to load dashboard data.";
-      setError(message);
-      setData(null);
+      if (background) {
+        // Background polls preserve the last good snapshot and flip the
+        // pill to STALE so the operator knows the numbers are aging.
+        setStale(true);
+      } else {
+        setError(message);
+        setData(null);
+      }
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
+      initialLoadDone.current = true;
     }
   }, []);
 
   useEffect(() => {
     void fetchData();
+  }, [fetchData]);
+
+  // 30s polling gated by tab visibility. Backgrounded tabs do not poll
+  // so we do not churn hosted Postgres; returning to the tab triggers an
+  // immediate refresh so the operator sees current numbers.
+  useEffect(() => {
+    const POLL_MS = 30_000;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          void fetchData({ background: true });
+        }
+      }, POLL_MS);
+    };
+
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (initialLoadDone.current) {
+          void fetchData({ background: true });
+        }
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchData]);
 
   const stats = useMemo(() => {
@@ -136,6 +191,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <LiveIndicator stale={stale} />
           <span className="text-xs text-text-muted">
             Last refreshed:{" "}
             <span className="tabular-nums text-text">
@@ -155,52 +211,70 @@ export default function DashboardPage() {
 
       {error ? <ErrorBanner message={error} /> : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Total records"
-          value={loading || !data ? "—" : stats.total}
-          sublabel={
-            data ? `${stats.total === 1 ? "record" : "records"} in view` : "loading…"
-          }
-          tone="neutral"
-        />
-        <StatCard
-          label="In progress"
-          value={loading || !data ? "—" : stats.inProgress}
-          sublabel={
-            data
-              ? stats.inProgress > 0
-                ? "moving through stages"
-                : "nothing in flight"
-              : "loading…"
-          }
-          tone="neutral"
-        />
-        <StatCard
-          label="Blocked"
-          value={loading || !data ? "—" : stats.blocked}
-          sublabel={
-            data
-              ? stats.blocked > 0
-                ? "resolution required"
-                : "no active blocks"
-              : "loading…"
-          }
-          tone="critical"
-        />
-        <StatCard
-          label="High or critical risk"
-          value={loading || !data ? "—" : stats.highRisk}
-          sublabel={
-            data
-              ? stats.highRisk > 0
-                ? "review recommended"
-                : "risk contained"
-              : "loading…"
-          }
-          tone="warning"
-        />
-      </div>
+      <motion.div
+        variants={staggerParent}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      >
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="Total records"
+            value={loading || !data ? "—" : stats.total}
+            sublabel={
+              data ? `${stats.total === 1 ? "record" : "records"} in view` : "loading…"
+            }
+            icon={Activity}
+            tone="neutral"
+          />
+        </motion.div>
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="In progress"
+            value={loading || !data ? "—" : stats.inProgress}
+            sublabel={
+              data
+                ? stats.inProgress > 0
+                  ? "moving through stages"
+                  : "nothing in flight"
+                : "loading…"
+            }
+            icon={Clock}
+            tone="neutral"
+          />
+        </motion.div>
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="Blocked"
+            value={loading || !data ? "—" : stats.blocked}
+            sublabel={
+              data
+                ? stats.blocked > 0
+                  ? "resolution required"
+                  : "no active blocks"
+                : "loading…"
+            }
+            icon={AlertOctagon}
+            tone="critical"
+            highlighted={!!data && stats.blocked > 0}
+          />
+        </motion.div>
+        <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
+          <KPICard
+            label="High or critical risk"
+            value={loading || !data ? "—" : stats.highRisk}
+            sublabel={
+              data
+                ? stats.highRisk > 0
+                  ? "review recommended"
+                  : "risk contained"
+                : "loading…"
+            }
+            icon={AlertTriangle}
+            tone="warning"
+          />
+        </motion.div>
+      </motion.div>
 
       {loading && !error ? (
         <div className="grid gap-6 lg:grid-cols-3">
@@ -250,18 +324,28 @@ export default function DashboardPage() {
                       <th className="py-2 font-medium">Updated</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <MotionList as="tbody" staggerWhen="children-change" tight>
                     {attentionRows.map((r) => {
-                      const stage = stagesById.get(r.current_stage_id);
+                      const stage = stageMap.get(
+                        stageMapKey(r.workflow_id, r.current_stage_id),
+                      );
+                      const blocked = r.status === "blocked";
                       return (
-                        <tr
+                        <motion.tr
                           key={r.id}
-                          className="border-t border-surface-border align-middle"
+                          layout
+                          variants={fadeRise}
+                          transition={SPRING_DEFAULT}
+                          className={`group border-t border-surface-border align-middle transition-colors hover:bg-surface-muted/40 ${
+                            blocked
+                              ? "border-l-2 border-l-severity-critical/70 hover:border-l-severity-critical"
+                              : "border-l-2 border-l-transparent hover:border-l-brand-400"
+                          }`}
                         >
-                          <td className="py-2 pr-4">
+                          <td className="py-2 pr-4 pl-3">
                             <Link
                               href={`/records/${r.id}`}
-                              className="font-medium text-text hover:text-accent hover:underline"
+                              className="font-medium text-text transition-colors hover:text-brand-300"
                             >
                               {r.subject_full_name}
                             </Link>
@@ -296,10 +380,10 @@ export default function DashboardPage() {
                           <td className="py-2 text-xs text-text-muted">
                             {formatDateTime(r.updated_at)}
                           </td>
-                        </tr>
+                        </motion.tr>
                       );
                     })}
-                  </tbody>
+                  </MotionList>
                 </table>
               </div>
             )}
@@ -339,5 +423,31 @@ export default function DashboardPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function LiveIndicator({ stale }: { stale: boolean }) {
+  const toneCls = stale
+    ? "border-severity-high/40 bg-severity-high/10 text-severity-high"
+    : "border-verified/40 bg-verified/10 text-verified";
+  const dotCls = stale ? "bg-severity-high" : "bg-verified animate-chain-pulse";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${toneCls}`}
+      aria-live="polite"
+    >
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotCls}`} aria-hidden />
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={stale ? "stale" : "live"}
+          initial={{ opacity: 0, y: 2 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -2 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          {stale ? "Stale" : "Live"}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }

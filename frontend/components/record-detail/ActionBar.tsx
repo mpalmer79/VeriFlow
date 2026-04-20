@@ -1,7 +1,5 @@
 import type { WorkflowStage } from "@/lib/types";
 
-export type FlashKind = "success" | "error" | "info";
-
 interface ActionBarProps {
   stages: WorkflowStage[];
   currentStageId: number;
@@ -12,7 +10,6 @@ interface ActionBarProps {
   onRefresh: () => void;
   evaluating: boolean;
   transitioning: boolean;
-  flash: { kind: FlashKind; text: string } | null;
 }
 
 export function ActionBar({
@@ -25,7 +22,6 @@ export function ActionBar({
   onRefresh,
   evaluating,
   transitioning,
-  flash,
 }: ActionBarProps) {
   const available = stages
     .slice()
@@ -83,21 +79,6 @@ export function ActionBar({
           Refresh
         </button>
       </div>
-
-      {flash ? (
-        <div
-          role="status"
-          className={`mt-3 rounded-md border px-3 py-2 text-sm ${
-            flash.kind === "success"
-              ? "border-severity-low/40 bg-severity-low/10 text-severity-low"
-              : flash.kind === "error"
-              ? "border-severity-critical/40 bg-severity-critical/10 text-severity-critical"
-              : "border-accent/40 bg-accent/10 text-accent"
-          }`}
-        >
-          {flash.text}
-        </div>
-      ) : null}
     </section>
   );
 }
