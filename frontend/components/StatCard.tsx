@@ -1,11 +1,11 @@
 "use client";
 
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { useEffect } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 
 import type { LucideIcon } from "@/components/icons";
 import { ArrowRight } from "@/components/icons";
-import { DURATION_LONG, EASE_OUT_EXPO, DURATION_MEDIUM } from "@/lib/motion";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { DURATION_MEDIUM, EASE_OUT_EXPO } from "@/lib/motion";
 
 export type StatCardTone = "neutral" | "critical" | "warning" | "ok";
 
@@ -72,7 +72,7 @@ export function StatCard({
       ) : null}
       <div className="field-label">{label}</div>
       <div className={`mt-2 text-3xl font-semibold tabular-nums ${toneText[tone]}`}>
-        <AnimatedValue value={value} />
+        <AnimatedNumber value={value} />
       </div>
       {trend ? (
         <div className="mt-1 flex items-center gap-1.5 text-xs text-text-muted">
@@ -92,30 +92,6 @@ export function StatCard({
       ) : null}
     </div>
   );
-}
-
-function AnimatedValue({ value }: { value: string | number }) {
-  const reduce = useReducedMotion();
-  const motionValue = useMotionValue(typeof value === "number" ? 0 : 0);
-  const rounded = useTransform(motionValue, (v) => Math.round(v).toString());
-
-  useEffect(() => {
-    if (typeof value !== "number") return;
-    if (reduce) {
-      motionValue.set(value);
-      return;
-    }
-    const controls = animate(motionValue, value, {
-      duration: DURATION_LONG,
-      ease: EASE_OUT_EXPO,
-    });
-    return controls.stop;
-  }, [value, reduce, motionValue]);
-
-  if (typeof value !== "number") {
-    return <span>{value}</span>;
-  }
-  return <motion.span>{rounded}</motion.span>;
 }
 
 const SPARK_WIDTH = 72;
