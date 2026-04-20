@@ -9,7 +9,7 @@ test.describe("operations admin", () => {
 
     await expect(page).toHaveURL(/\/operations/);
     await expect(
-      page.getByRole("heading", { name: "Operations" })
+      page.getByRole("heading", { name: "Operations", exact: true })
     ).toBeVisible();
     for (const heading of [
       "Audit chain",
