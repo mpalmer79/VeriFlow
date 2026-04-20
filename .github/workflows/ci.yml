@@ -118,3 +118,102 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  e2e:
+    # Browser smoke. Chromium only, single worker, no retries. Runs the
+    # small Playwright suite that covers auth/shell, records list ->
+    # detail + metadata-only gating, the confirm-dialog flow, the
+    # operations admin surface, and the typography/motion wiring.
+    # Scoped to PRs (and main) because it requires a real stack; the
+    # job self-hosts backend+frontend in background processes.
+    name: e2e (playwright, chromium)
+    runs-on: ubuntu-latest
+    needs: [backend-sqlite, frontend]
+    env:
+      APP_ENV: development
+      JWT_SECRET: ci-e2e-secret
+      DATABASE_URL: sqlite+pysqlite:///./_ci_e2e.db
+      EVIDENCE_STORAGE_DIR: ./_ci_e2e_evidence
+      CORS_ORIGINS: http://localhost:3000
+      VERIFLOW_ALLOW_SEED: "true"
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Apply migrations and seed
+        working-directory: backend
+        run: |
+          alembic upgrade head
+          python -m app.seed.seed_data
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Start backend
+        working-directory: backend
+        run: |
+          nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 \
+            > backend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health/readiness >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Backend failed to become ready" >&2
+          tail -n 200 backend.log >&2 || true
+          exit 1
+
+      - name: Start frontend
+        working-directory: frontend
+        run: |
+          nohup npx next start -p 3000 > frontend.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/login >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Frontend failed to become ready" >&2
+          tail -n 200 frontend.log >&2 || true
+          exit 1
+
+      - name: Run Playwright
+        working-directory: frontend
+        run: npx playwright test --workers=1
+
+      - name: Upload Playwright trace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-trace
+          path: frontend/test-results
+          if-no-files-found: ignore

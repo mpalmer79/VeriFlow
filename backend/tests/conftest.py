@@ -36,6 +36,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core import database as db_module  # noqa: E402
+from app.core.content_access import reset_content_access_guard  # noqa: E402
 from app.core.database import get_db  # noqa: E402
 from app.core.rate_limit import reset_rate_limits  # noqa: E402
 from app.main import app  # noqa: E402
@@ -107,6 +108,9 @@ def _reset_database(engine, session_factory):
     # Each test starts with an empty rate-limit bucket so budgets from
     # one test cannot bleed into another.
     reset_rate_limits()
+    # Same reset for the signed-access replay guard so one test's jti
+    # tracking can't influence another's.
+    reset_content_access_guard()
 
     with session_factory() as db:
         seed(db)

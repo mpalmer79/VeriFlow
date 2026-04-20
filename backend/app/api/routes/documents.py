@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core import evidence_storage
 from app.core.config import get_settings
+from app.core.content_access import consume_signed_access_jti
 from app.core.database import get_db
 from app.core.rate_limit import rate_limit
 from app.core.security import (
@@ -348,6 +349,21 @@ async def download_signed_content(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)
         ) from exc
+
+    jti = claims.get("jti")
+    exp = claims.get("exp")
+    if not isinstance(jti, str) or not isinstance(exp, (int, float)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token is missing required replay-protection claims.",
+        )
+    # One-shot consumption: the first valid request wins. Bounded
+    # in-memory; see `app.core.content_access`.
+    if not consume_signed_access_jti(jti, float(exp)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Signed access token has already been used.",
+        )
 
     document_id = int(claims["doc"])
     organization_id = int(claims["org"])

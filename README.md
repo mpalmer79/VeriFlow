@@ -1,44 +1,80 @@
 # VeriFlow
 
-VeriFlow is a workflow intelligence platform. It enforces process
-compliance, detects operational risk, and explains — in plain language —
-why a record is blocked, warned, or ready to proceed.
+VeriFlow is a workflow and evidence-control platform for
+compliance-heavy operations. It enforces staged progression against a
+code-driven rule registry, scores operational risk, and produces a
+tamper-evident audit trail and verifiable evidence chain so every
+decision on a record is explainable after the fact.
 
-It is **not** an EHR, scheduling system, or CRM. VeriFlow tracks records
-as they move through controlled workflow stages and evaluates each
-transition against rules that determine whether progression is allowed,
-what risk has accumulated, and what the user must resolve next. The
-first reference scenario is a healthcare intake and compliance
-workflow; the engine is domain-agnostic and designed to host loan
-intake, vendor onboarding, claims triage, and similar workflows.
+The engine is domain-agnostic. The first reference scenario is a
+healthcare intake workflow, but the same data model handles loan
+intake, vendor onboarding, claims triage, and any process where
+controlled state transitions and verifiable document evidence matter
+more than throughput. VeriFlow is **not** an EHR, scheduling system,
+or CRM.
+
+## What it actually does
+
+1. **Controlled state transitions.** Records move through an ordered
+   set of workflow stages. Transitions are evaluated against the rule
+   registry; failing rules either block progression or record a
+   warning with explicit risk weight.
+2. **Explainable risk scoring.** Every evaluation persists the rules
+   it ran, each rule's outcome, and the risk it contributed, so a
+   record's score is reconstructable from evidence, not opaque.
+3. **Append-only audit trail with a hash chain.** Every domain event
+   (stage transitions, document status changes, storage cleanups)
+   writes a row whose `entry_hash` is SHA-256 over a canonical payload
+   plus the previous row's hash. `/api/audit/verify` walks the chain
+   and reports any broken link — a tamper-evident property the
+   `/operations` console surfaces to admins directly.
+4. **Document evidence with real hashing.** Uploads stream to a
+   server-controlled storage root, compute SHA-256 in chunks during
+   ingest, and re-hash on verification / integrity check so any
+   rewrite of an on-disk file is visible. Metadata-only documents are
+   distinguished throughout the UI and API from upload-backed
+   evidence.
+5. **Signed short-lived content access.** Browsers fetch preview and
+   download URLs via one-use signed tokens (distinct JWT audience,
+   short TTL, bounded single-node replay prevention) so the browser
+   can load content directly without leaking the Authorization
+   header.
 
 ## Architecture at a glance
 
-- **Backend.** FastAPI + SQLAlchemy 2.x on PostgreSQL (SQLite for local
-  tests). Code-driven rule registry, risk scoring, stage-gated
-  transitions, tamper-evident audit chain (SHA-256 per row, chained by
-  `previous_hash`), optimistic concurrency via `version` on records,
-  a local evidence store with real content hashing at ingest and
-  re-hashing at verification, and liveness (`/health`) + readiness
-  (`/health/readiness` with a live DB ping) probes for hosted deploys.
-- **Frontend.** Next.js 14 + TypeScript + Tailwind. The record detail
-  page is componentized into focused pieces (header, action bar,
-  evaluation panel, workflow timeline, evidence panel with upload +
-  preview + integrity check + download + delete, audit trail, preview
-  modal with accessible dialog semantics). Destructive confirmations
-  use a shared in-app `ConfirmDialog` rather than native browser
-  dialogs, and admins get an `/operations` console for audit-chain
-  verification, managed-storage inventory, and bounded orphan cleanup.
-- **Evidence.** Real streaming upload writes straight to a server-
+- **Backend.** FastAPI + SQLAlchemy 2.x on PostgreSQL (SQLite for
+  local tests). Code-driven rule registry, stage-gated transitions,
+  risk scoring, optimistic concurrency via `version` on records,
+  tamper-evident audit chain (SHA-256 per row, chained by
+  `previous_hash`), a local evidence store with real content hashing
+  at ingest and re-hashing at verification, liveness (`/health`) and
+  readiness (`/health/readiness` with a live DB ping) probes for
+  hosted deploys.
+- **Frontend.** Next.js 14 + TypeScript + Tailwind with Inter and
+  JetBrains Mono via `next/font`. The record detail page is
+  componentized into focused pieces (header, action bar, evaluation
+  panel, workflow timeline, evidence panel with upload + preview +
+  integrity check + download + delete, audit trail, preview modal
+  with accessible dialog semantics). Destructive confirmations use a
+  shared in-app `ConfirmDialog` rather than native browser dialogs.
+  Admins get an `/operations` console for audit-chain verification,
+  managed-storage inventory, and bounded orphan cleanup. Motion is
+  minimal and `prefers-reduced-motion` is respected.
+- **Evidence.** Streaming upload writes straight to a server-
   controlled storage root with chunked SHA-256; verification re-reads
   and re-hashes those bytes; content delivery supports HTTP `Range`
   and short-lived signed URLs so browsers load preview/download
-  directly without prefetching the full blob.
+  directly without prefetching the full blob. A bounded in-memory
+  jti guard enforces one-use semantics on signed URLs within the
+  token's TTL (single-replica; swap for Redis to scale horizontally).
 - **Security.** JWT with explicit `iss` / `aud` / `typ` / `jti`;
-  separate audience for short-lived content-access tokens; app-wide
-  security headers and a tight CSP; environment-driven CORS; role-
-  gated admin/debug routes; in-memory sliding-window rate limiter on
-  auth, upload, and signed-access issuance.
+  separate audience for short-lived content-access tokens;
+  one-use-within-TTL replay prevention on signed URLs; app-wide
+  security headers and a tight CSP; environment-driven CORS;
+  role-gated admin routes; in-memory sliding-window rate limiter on
+  auth, upload, and signed-access issuance; `APP_ENV`-gated refusal
+  to run with the default JWT secret; dev-only demo seed with an
+  explicit `VERIFLOW_ALLOW_SEED` override for staging.
 
 ## Capabilities
 
@@ -203,6 +239,14 @@ backend jobs are scoped so neither pays for the other's work:
   nullable columns, `IntegrityError` surfaced via psycopg2, native enum
   types, and the baseline migration shape.
 - **`frontend`** — `npm ci`, `npm run type-check`, `npm run build`.
+- **`e2e (playwright, chromium)`** — depends on `backend-sqlite` and
+  `frontend`. Installs Chromium with system dependencies, applies
+  migrations, seeds SQLite, builds the frontend, and boots both
+  services in background processes before running the Playwright
+  suite with a single worker (auth/shell, records list → detail +
+  metadata-only gating, confirm-dialog, operations admin,
+  typography/motion wiring). Chromium-only on purpose; Firefox and
+  WebKit are not worth the doubled runtime at current coverage.
 
 Adding a test that depends on PostgreSQL-only semantics? Tag it with
 `@pytest.mark.postgres` (or `@pytest.mark.migration` for migration file
@@ -318,18 +362,27 @@ the required stack setup.
   from manual, and a restrained UX pass on the operations admin
   surface (captured run timestamp, auto-dismissed flashes, explicit
   pre-run empty state).
-- **Phase 10 (this pass)** — runtime + product refinement: the
-  backend broad suite drops from ~5 min to ~20 s by swapping the test
-  `CryptContext` from bcrypt to `plaintext` at session scope and
-  binding the app to the test engine once per session instead of per
-  test; typography system (Inter + JetBrains Mono via
-  `next/font/google`, body-wide `tabular-nums`, `.mono` utility for
-  identifiers); controlled motion system (Tailwind keyframes for
-  page, overlay, dialog, and section fades; a ~1.6 s fade for the
-  initial login landing; route-change fade for the app main area);
+- **Phase 10** — runtime + product refinement: the backend broad
+  suite drops from ~5 min to ~20 s by swapping the test `CryptContext`
+  from bcrypt to `plaintext` at session scope and binding the app to
+  the test engine once per session; typography system (Inter +
+  JetBrains Mono via `next/font/google`, body-wide `tabular-nums`,
+  `.mono` utility for identifiers); controlled motion system;
   product polish on identifiers, integrity hashes, and record
   references; two new Playwright specs for the confirm-dialog flow
   and the typography/motion wiring.
+- **Phase 11 (this pass)** — trust-hardening + browser confidence:
+  a bounded, single-node jti replay guard on signed content-access
+  tokens with a short grace window so a captured URL can no longer be
+  replayed after the browser finishes loading it; a dedicated
+  `e2e (playwright, chromium)` CI job that installs Chromium, boots
+  the real stack in background processes, and runs the small
+  Playwright suite against it; operations-admin polish (explicit
+  "Read-only checks" vs "Destructive operations" grouping, pluralised
+  audit-count copy, stronger destructive confirm copy that quotes
+  the exact file count, better preamble on the cleanup panel);
+  README reframed around evidence control and audit-chain
+  verifiability rather than generic "workflow intelligence" framing.
 
 ## Known limitations
 
@@ -339,13 +392,18 @@ the required stack setup.
 - **Evidence storage is local only.** No S3 / GCS. The storage
   interface is small enough that a cloud-backed implementation can
   live behind `evidence_storage` without schema changes.
-- **Playwright is local-only.** The e2e suite in
-  `frontend/tests/e2e/` is small and runs against a locally-hosted
-  stack (`docker compose up` + `npm run dev`). CI does not currently
-  spin Playwright up; type-check and Next build remain the in-CI
-  guardrails for the frontend.
-- **Signed content-access tokens can be replayed** until they expire
-  (default 120s). A `jti` denylist would make them strict one-shot.
+- **Playwright in CI is chromium-only and single-replica.** The
+  `e2e (playwright, chromium)` job boots backend+frontend in
+  background processes against SQLite and runs the small spec suite.
+  Firefox and WebKit are not covered in CI by design; the
+  return-on-CI-minutes is not worth the doubled runtime. Locally,
+  run `npm run test:e2e` against any running stack.
+- **Signed content-access jti tracking is single-node.** The bounded
+  in-memory replay guard prevents reuse of a captured URL after a
+  short grace window, but it only enforces that within one backend
+  process. A multi-replica deployment would need to swap in a shared
+  store (e.g. Redis) for the guard; the module boundary in
+  `app.core.content_access` is intentionally small enough for that.
 - **Alembic runs at start-up** in both the local compose stack and
   hosted deployments (see `docs/deployment.md`). There is no separate
   release phase — risky schema changes should ship as a two-step

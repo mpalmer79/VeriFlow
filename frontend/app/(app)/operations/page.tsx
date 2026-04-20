@@ -148,8 +148,9 @@ export default function OperationsPage() {
             Operations
           </h1>
           <p className="mt-1 text-sm text-text-muted">
-            Read-only audit chain verification and managed-storage inventory,
-            plus a bounded cleanup workflow for orphaned evidence files.
+            Audit-chain verification and managed-storage inventory are
+            read-only. Orphan cleanup is destructive and runs only against
+            files inside the managed storage root.
           </p>
         </div>
         <button
@@ -179,6 +180,11 @@ export default function OperationsPage() {
         </div>
       ) : null}
 
+      <SectionHeader
+        label="Read-only checks"
+        description="Safe to run at any time. No writes occur."
+      />
+
       <Panel
         title="Audit chain"
         description="Recomputes every organization-scoped audit row and reports any broken entry hash or previous-hash link."
@@ -198,7 +204,10 @@ export default function OperationsPage() {
                 {chain.ok ? "Chain intact" : "Chain broken"}
               </span>
               <span className="text-text-muted">
-                {chain.checked.toLocaleString()} event(s) verified
+                <span className="mono text-text">
+                  {chain.checked.toLocaleString()}
+                </span>{" "}
+                event{chain.checked === 1 ? "" : "s"} verified
               </span>
             </div>
             {!chain.ok ? (
@@ -268,9 +277,15 @@ export default function OperationsPage() {
         ) : null}
       </Panel>
 
+      <SectionHeader
+        label="Destructive operations"
+        description="Require an explicit confirmation step. Run a dry-run first."
+        tone="warn"
+      />
+
       <Panel
         title="Orphan cleanup"
-        description="Dry-run first; destructive cleanup removes only files inside the managed storage root that no live document references."
+        description="Sweeps files inside the managed storage root that no live document row references. A dry-run is always free; the destructive run is bounded and auditable."
       >
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
@@ -338,13 +353,17 @@ export default function OperationsPage() {
 
       {confirming ? (
         <ConfirmDialog
-          title="Remove orphaned evidence files?"
+          title="Delete orphaned evidence files?"
           description={
             inventory
-              ? `This deletes ${inventory.orphaned_files} file(s) under the managed storage root that no live document row references. File paths that escape the root are ignored. Audit history is not affected.`
-              : "This removes orphaned files from the managed storage root."
+              ? `This permanently deletes ${inventory.orphaned_files} file(s) from the managed storage root that no live document row references. Paths outside the root are ignored. Audit history is not affected, and a storage.cleanup audit event is recorded.`
+              : "This permanently removes orphaned files from the managed storage root."
           }
-          confirmLabel="Delete orphans"
+          confirmLabel={
+            inventory && inventory.orphaned_files > 0
+              ? `Delete ${inventory.orphaned_files} file(s)`
+              : "Delete orphans"
+          }
           tone="danger"
           busy={cleaning}
           onConfirm={confirmDestructiveCleanup}
@@ -417,6 +436,32 @@ function ReportCell({ label, value }: { label: string; value: string | number })
     <div>
       <dt className="field-label">{label}</dt>
       <dd className="mt-0.5 text-sm font-medium tabular-nums">{value}</dd>
+    </div>
+  );
+}
+
+
+function SectionHeader({
+  label,
+  description,
+  tone,
+}: {
+  label: string;
+  description: string;
+  tone?: "warn";
+}) {
+  const accentCls =
+    tone === "warn" ? "text-severity-high" : "text-text-muted";
+  return (
+    <div className="flex items-baseline gap-3 border-b border-surface-border pb-2">
+      <h2
+        className={`field-label ${
+          tone === "warn" ? "text-severity-high" : "text-text"
+        }`}
+      >
+        {label}
+      </h2>
+      <p className={`text-xs ${accentCls}`}>{description}</p>
     </div>
   );
 }
