@@ -1,8 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -59,17 +59,19 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const [stale, setStale] = useState(false);
+  const initialLoadDone = useRef(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async (opts?: { background?: boolean }) => {
+    const background = opts?.background === true;
+    if (!background) setLoading(true);
     setError(null);
     try {
       const result = await recordsApi.list({ limit: 200 });
       setData(result);
       setLastRefreshed(new Date());
-      // Stage names resolved per-workflow so records from different
-      // workflows do not collide on matching stage_ids.
       setStageMap(await loadStagesForRecords(result));
+      setStale(false);
     } catch (err) {
       const message =
         err instanceof ApiError
@@ -77,15 +79,64 @@ export default function DashboardPage() {
           : err instanceof Error
             ? err.message
             : "Failed to load dashboard data.";
-      setError(message);
-      setData(null);
+      if (background) {
+        // Background polls preserve the last good snapshot and flip the
+        // pill to STALE so the operator knows the numbers are aging.
+        setStale(true);
+      } else {
+        setError(message);
+        setData(null);
+      }
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
+      initialLoadDone.current = true;
     }
   }, []);
 
   useEffect(() => {
     void fetchData();
+  }, [fetchData]);
+
+  // 30s polling gated by tab visibility. Backgrounded tabs do not poll
+  // so we do not churn hosted Postgres; returning to the tab triggers an
+  // immediate refresh so the operator sees current numbers.
+  useEffect(() => {
+    const POLL_MS = 30_000;
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    const start = () => {
+      if (timer) return;
+      timer = setInterval(() => {
+        if (document.visibilityState === "visible") {
+          void fetchData({ background: true });
+        }
+      }, POLL_MS);
+    };
+
+    const stop = () => {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        if (initialLoadDone.current) {
+          void fetchData({ background: true });
+        }
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, [fetchData]);
 
   const stats = useMemo(() => {
@@ -139,6 +190,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <LiveIndicator stale={stale} />
           <span className="text-xs text-text-muted">
             Last refreshed:{" "}
             <span className="tabular-nums text-text">
@@ -362,5 +414,31 @@ export default function DashboardPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function LiveIndicator({ stale }: { stale: boolean }) {
+  const toneCls = stale
+    ? "border-severity-high/40 bg-severity-high/10 text-severity-high"
+    : "border-verified/40 bg-verified/10 text-verified";
+  const dotCls = stale ? "bg-severity-high" : "bg-verified animate-chain-pulse";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${toneCls}`}
+      aria-live="polite"
+    >
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotCls}`} aria-hidden />
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={stale ? "stale" : "live"}
+          initial={{ opacity: 0, y: 2 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -2 }}
+          transition={{ duration: 0.18, ease: "easeOut" }}
+        >
+          {stale ? "Stale" : "Live"}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }
