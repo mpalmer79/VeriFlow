@@ -471,6 +471,11 @@ export default function RecordDetailPage() {
         onRefresh={() => refreshAll({ silent: true })}
         evaluating={evaluating}
         transitioning={transitioning}
+        transitionBlockedReason={
+          derivedDecision && derivedDecision.violations.length > 0
+            ? "Resolve blocking issues first"
+            : null
+        }
       />
 
       <EvaluationPanel
