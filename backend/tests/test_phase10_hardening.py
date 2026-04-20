@@ -161,9 +161,13 @@ def test_app_shell_and_panel_and_login_carry_controlled_motion():
     panel = (FRONTEND / "components" / "Panel.tsx").read_text(encoding="utf-8")
     assert "animate-fade-in" in panel
 
+    # The old 1600ms animate-page-in CSS fade on /login was retired in
+    # favour of a short Framer Motion entrance (fadeRise + SPRING_DEFAULT
+    # + useReducedMotion). The contract now pins the new vocabulary.
     login = (FRONTEND / "app" / "login" / "page.tsx").read_text(encoding="utf-8")
-    # The explicit ~2s initial landing animation on /login.
-    assert "animate-page-in" in login
+    assert "animate-page-in" not in login
+    assert "fadeRise" in login
+    assert "useReducedMotion" in login
 
 
 # --------------------------------------------------------------------------
