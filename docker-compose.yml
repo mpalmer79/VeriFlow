@@ -1,0 +1,65 @@
+# Local development composition.
+# Spins up Postgres, runs the backend against it, and optionally runs
+# the Next.js frontend. Seed data is loaded by the backend entrypoint
+# the first time the container starts; subsequent runs see the existing
+# schema.
+#
+# Usage:
+#   docker compose up --build
+#
+# The backend exposes :8000; the frontend expects the API at that URL.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: veriflow
+      POSTGRES_PASSWORD: veriflow
+      POSTGRES_DB: veriflow
+    volumes:
+      - veriflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veriflow -d veriflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg2://veriflow:veriflow@db:5432/veriflow
+      JWT_SECRET: local-dev-only-change-me
+      CORS_ORIGINS: http://localhost:3000
+      EVIDENCE_STORAGE_DIR: /var/lib/veriflow/evidence
+    volumes:
+      - veriflow-evidence:/var/lib/veriflow/evidence
+    ports:
+      - "8000:8000"
+    command:
+      - bash
+      - -lc
+      - |
+        alembic upgrade head &&
+        python -m app.seed.seed_data &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api
+    ports:
+      - "3000:3000"
+
+volumes:
+  veriflow-db:
+  veriflow-evidence:
