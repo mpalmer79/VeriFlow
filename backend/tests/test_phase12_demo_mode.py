@@ -43,8 +43,12 @@ def test_demo_helper_module_exposes_roles_and_autosignin():
         assert email in text
 
 
-def test_root_page_autosignin_path():
-    text = (FRONTEND / "app" / "page.tsx").read_text(encoding="utf-8")
+def test_enter_page_autosignin_path():
+    # The UI elevation pass moved the root route's auto-signin logic out
+    # of /page.tsx (now the product landing) and into a dedicated /enter
+    # route. The demo-signin contract lives there now; the landing just
+    # redirects authenticated visitors to /dashboard.
+    text = (FRONTEND / "app" / "enter" / "page.tsx").read_text(encoding="utf-8")
     assert "isDemoMode" in text
     assert 'demoSignInAs("admin")' in text
     # If auto-sign-in fails, the UI surfaces the error rather than
@@ -55,7 +59,10 @@ def test_root_page_autosignin_path():
 def test_login_page_redirects_away_in_demo_mode():
     text = (FRONTEND / "app" / "login" / "page.tsx").read_text(encoding="utf-8")
     assert "isDemoMode" in text
-    assert 'router.replace("/")' in text
+    # Demo-mode visitors landing on /login are bounced to /enter so the
+    # auto-signin flow kicks in, rather than the landing page which is
+    # designed for anonymous first-touch traffic.
+    assert 'router.replace("/enter")' in text
 
 
 def test_roles_page_exists_and_covers_four_roles():

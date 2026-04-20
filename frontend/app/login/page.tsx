@@ -45,11 +45,10 @@ function LoginPageInner() {
       router.replace(resolveNext(nextParam));
       return;
     }
-    // Demo deployments never show the sign-in form; the root auto-
-    // signs-in and directs to the dashboard, and `/roles` is the way
-    // to swap roles from there.
+    // Demo deployments never show the sign-in form; /enter owns the
+    // auto-signin path and /roles is the way to swap roles afterwards.
     if (isDemoMode()) {
-      router.replace("/");
+      router.replace("/enter");
       return;
     }
     // If we're landing on /login from a hosted origin but demo mode
