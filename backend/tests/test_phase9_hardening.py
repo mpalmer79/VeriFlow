@@ -239,9 +239,20 @@ def test_operations_page_captures_completed_at_and_auto_dismisses_flash():
     assert "No cleanup has run yet" in text
 
 
-def test_record_detail_auto_dismisses_flash_like_operations():
+def test_record_detail_emits_status_via_toasts():
+    # The UI elevation pass replaced the record-detail inline-flash
+    # surface with toasts (shared stack at the (app) layout, own
+    # auto-dismiss). The record-detail page must route success, info,
+    # and error status through useToast so the experience matches the
+    # rest of the app.
     path = FRONTEND / "app" / "(app)" / "records" / "[id]" / "page.tsx"
     text = path.read_text(encoding="utf-8")
-    # Same auto-dismiss pattern as /operations so the two surfaces match.
-    assert 'kind === "error"' in text
-    assert "setTimeout" in text
+    assert "useToast" in text
+    assert "toast.push" in text
+
+    toast = (FRONTEND / "components" / "ui" / "Toast.tsx").read_text(
+        encoding="utf-8"
+    )
+    # Toast provider owns the auto-dismiss for non-error notifications.
+    assert "setTimeout" in toast
+    assert 'kind === "error"' in toast

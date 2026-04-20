@@ -1,4 +1,11 @@
+"use client";
+
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+
 import { DocumentStatusChip } from "@/components/DocumentStatusChip";
+import { Loader2, MoreHorizontal, type LucideIcon } from "@/components/icons";
+import { DURATION_MICRO, EASE_OUT } from "@/lib/motion";
 import { formatDateTime } from "@/lib/format";
 import type { DocumentRead, IntegrityCheckResult } from "@/lib/types";
 
@@ -13,6 +20,7 @@ export const PREVIEWABLE_MIME_TYPES = new Set([
 interface DocumentRowsProps {
   docs: DocumentRead[];
   busyDocId: number | null;
+  previewLoadingDocId?: number | null;
   integrityResults: Record<number, IntegrityCheckResult>;
   onVerify: (doc: DocumentRead) => void;
   onReject: (doc: DocumentRead) => void;
@@ -26,6 +34,7 @@ interface DocumentRowsProps {
 export function DocumentRows({
   docs,
   busyDocId,
+  previewLoadingDocId,
   integrityResults,
   onVerify,
   onReject,
@@ -41,6 +50,7 @@ export function DocumentRows({
           key={doc.id}
           doc={doc}
           busy={busyDocId === doc.id}
+          previewing={previewLoadingDocId === doc.id}
           integrity={integrityResults[doc.id]}
           onVerify={onVerify}
           onReject={onReject}
@@ -58,6 +68,7 @@ export function DocumentRows({
 function DocumentRow({
   doc,
   busy,
+  previewing,
   integrity,
   onVerify,
   onReject,
@@ -68,6 +79,7 @@ function DocumentRow({
 }: {
   doc: DocumentRead;
   busy: boolean;
+  previewing: boolean;
   integrity: IntegrityCheckResult | undefined;
   onVerify: (doc: DocumentRead) => void;
   onReject: (doc: DocumentRead) => void;
@@ -78,8 +90,22 @@ function DocumentRow({
 }) {
   const stored = doc.has_stored_content;
   const previewable = Boolean(
-    doc.mime_type && PREVIEWABLE_MIME_TYPES.has(doc.mime_type)
+    doc.mime_type && PREVIEWABLE_MIME_TYPES.has(doc.mime_type),
   );
+
+  const overflow: OverflowAction[] = [];
+  if (stored) {
+    overflow.push({
+      label: "Integrity check",
+      onClick: () => onIntegrityCheck(doc),
+    });
+  }
+  overflow.push({
+    label: "Delete",
+    tone: "danger",
+    onClick: () => onDelete(doc),
+  });
+
   return (
     <li className="grid gap-3 px-3 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
       <div className="flex flex-col gap-1">
@@ -139,7 +165,7 @@ function DocumentRow({
             <dd
               className={
                 integrity.is_match
-                  ? "text-severity-low"
+                  ? "text-verified"
                   : "text-severity-critical"
               }
             >
@@ -164,37 +190,22 @@ function DocumentRow({
       </dl>
 
       <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-        {stored && doc.status !== "verified" ? (
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => onVerify(doc)}
-            disabled={busy}
-            title="Re-hash stored bytes and mark verified on match"
-          >
-            {busy ? "…" : "Verify"}
-          </button>
-        ) : null}
-        {stored ? (
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => onIntegrityCheck(doc)}
-            disabled={busy}
-            title="Compare stored bytes against the ingest hash"
-          >
-            {busy ? "…" : "Integrity check"}
-          </button>
-        ) : null}
         {stored && previewable ? (
           <button
             type="button"
             className="btn-secondary text-xs"
             onClick={(e) => onPreview(doc, e.currentTarget)}
-            disabled={busy}
+            disabled={busy || previewing}
             title="Preview the stored evidence in an overlay"
           >
-            {busy ? "…" : "Preview"}
+            {previewing ? (
+              <>
+                <Loader2 size={12} className="animate-spin" aria-hidden />
+                Loading…
+              </>
+            ) : (
+              "Preview"
+            )}
           </button>
         ) : null}
         {stored ? (
@@ -208,6 +219,17 @@ function DocumentRow({
             {busy ? "…" : "Download"}
           </button>
         ) : null}
+        {stored && doc.status !== "verified" ? (
+          <button
+            type="button"
+            className="btn-secondary text-xs"
+            onClick={() => onVerify(doc)}
+            disabled={busy}
+            title="Re-hash stored bytes and mark verified on match"
+          >
+            {busy ? "…" : "Verify"}
+          </button>
+        ) : null}
         {doc.status !== "rejected" ? (
           <button
             type="button"
@@ -218,16 +240,130 @@ function DocumentRow({
             {busy ? "…" : "Reject"}
           </button>
         ) : null}
-        <button
-          type="button"
-          className="btn-secondary text-xs"
-          onClick={() => onDelete(doc)}
-          disabled={busy}
-          title="Remove the document record and any stored content"
-        >
-          {busy ? "…" : "Delete"}
-        </button>
+        <OverflowMenu actions={overflow} disabled={busy} />
       </div>
     </li>
+  );
+}
+
+
+interface OverflowAction {
+  label: string;
+  onClick: () => void;
+  icon?: LucideIcon;
+  tone?: "default" | "danger";
+}
+
+function OverflowMenu({
+  actions,
+  disabled,
+}: {
+  actions: OverflowAction[];
+  disabled: boolean;
+}) {
+  const reduce = useReducedMotion();
+  const [open, setOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const firstItem = menuRef.current?.querySelector<HTMLButtonElement>("button");
+    firstItem?.focus();
+
+    function onMouseDown(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        menuRef.current?.contains(target) ||
+        buttonRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    }
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        buttonRef.current?.focus();
+      } else if (e.key === "Tab") {
+        setOpen(false);
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const items = Array.from(
+          menuRef.current?.querySelectorAll<HTMLButtonElement>(
+            'button[role="menuitem"]',
+          ) ?? [],
+        );
+        if (items.length === 0) return;
+        const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+        const next =
+          e.key === "ArrowDown"
+            ? (idx + 1) % items.length
+            : (idx - 1 + items.length) % items.length;
+        items[next]?.focus();
+      }
+    }
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="More actions"
+        disabled={disabled}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-surface-border text-text-muted transition-colors hover:border-text-subtle hover:text-text focus:outline-none focus:ring-1 focus:ring-brand-400 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <MoreHorizontal size={14} aria-hidden />
+      </button>
+      <AnimatePresence>
+        {open ? (
+          <motion.div
+            ref={menuRef}
+            role="menu"
+            initial={reduce ? false : { opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={reduce ? undefined : { opacity: 0, scale: 0.95 }}
+            transition={
+              reduce ? { duration: 0 } : { duration: DURATION_MICRO, ease: EASE_OUT }
+            }
+            className="absolute right-0 top-full z-10 mt-1 min-w-[10rem] origin-top-right overflow-hidden rounded-md border border-surface-border bg-surface-panel py-1 shadow-lg shadow-black/40"
+          >
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  action.onClick();
+                  setOpen(false);
+                  buttonRef.current?.focus();
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-surface-muted focus:bg-surface-muted focus:outline-none ${
+                  action.tone === "danger"
+                    ? "text-severity-critical"
+                    : "text-text"
+                }`}
+              >
+                {action.icon ? <action.icon size={12} aria-hidden /> : null}
+                {action.label}
+              </button>
+            ))}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
   );
 }

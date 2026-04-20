@@ -32,6 +32,7 @@ interface DocumentEvidencePanelProps {
 
   rows: {
     busyDocId: number | null;
+    previewLoadingDocId?: number | null;
     integrityResults: Record<number, IntegrityCheckResult>;
     onVerify: (doc: DocumentRead) => void;
     onReject: (doc: DocumentRead) => void;

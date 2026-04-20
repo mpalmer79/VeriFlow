@@ -15,6 +15,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { ActionBar } from "@/components/record-detail/ActionBar";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DocumentEvidencePanel } from "@/components/record-detail/DocumentEvidencePanel";
@@ -84,7 +85,9 @@ export default function RecordDetailPage() {
   >({});
 
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewLoadingDocId, setPreviewLoadingDocId] = useState<number | null>(
+    null,
+  );
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const [rejectTarget, setRejectTarget] = useState<DocumentRead | null>(null);
@@ -396,8 +399,8 @@ export default function RecordDetailPage() {
   ) {
     if (!doc.has_stored_content) return;
     previewTriggerRef.current = trigger;
-    setPreviewLoading(true);
-    
+    setPreviewLoadingDocId(doc.id);
+
     try {
       const grant = await documents.signedAccess(doc.id, {
         disposition: "inline",
@@ -414,7 +417,7 @@ export default function RecordDetailPage() {
         text: err instanceof ApiError ? err.detail ?? err.message : "Preview failed.",
       });
     } finally {
-      setPreviewLoading(false);
+      setPreviewLoadingDocId(null);
     }
   }
 
@@ -428,12 +431,7 @@ export default function RecordDetailPage() {
   if (loading && !record) {
     return (
       <div className="space-y-6">
-        <Link
-          href="/records"
-          className="text-sm text-text-muted hover:text-text"
-        >
-          ← All records
-        </Link>
+        <Breadcrumbs items={[{ label: "Records", href: "/records" }, { label: "Loading…" }]} />
         <LoadingSkeleton rows={10} />
       </div>
     );
@@ -442,12 +440,7 @@ export default function RecordDetailPage() {
   if (notFound) {
     return (
       <div className="space-y-6">
-        <Link
-          href="/records"
-          className="text-sm text-text-muted hover:text-text"
-        >
-          ← All records
-        </Link>
+        <Breadcrumbs items={[{ label: "Records", href: "/records" }, { label: "Not found" }]} />
         <EmptyState
           title="Record not found"
           description="This record does not exist or is not visible to your organization."
@@ -480,6 +473,11 @@ export default function RecordDetailPage() {
         onRefresh={() => refreshAll({ silent: true })}
         evaluating={evaluating}
         transitioning={transitioning}
+        transitionBlockedReason={
+          derivedDecision && derivedDecision.violations.length > 0
+            ? "Resolve blocking issues first"
+            : null
+        }
       />
 
       <EvaluationPanel
@@ -509,6 +507,7 @@ export default function RecordDetailPage() {
         }}
         rows={{
           busyDocId,
+          previewLoadingDocId,
           integrityResults,
           onVerify: handleVerify,
           onReject: handleReject,
@@ -519,19 +518,9 @@ export default function RecordDetailPage() {
         }}
       />
 
-      <AuditTrail entries={auditEntries} />
+      <AuditTrail entries={auditEntries} stagesById={stagesById} />
 
-      {preview ? (
-        <PreviewOverlay preview={preview} onClose={closePreview} />
-      ) : previewLoading ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 text-sm text-text-muted"
-        >
-          Loading preview…
-        </div>
-      ) : null}
+      <PreviewOverlay preview={preview} onClose={closePreview} />
 
       {rejectTarget ? (
         <ConfirmDialog
