@@ -18,6 +18,7 @@ import { RiskBadge } from "@/components/RiskBadge";
 import { StageBadge } from "@/components/StageBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { KPICard } from "@/components/ui/KPICard";
+import { MotionList } from "@/components/ui/MotionList";
 import { ApiError, records as recordsApi } from "@/lib/api";
 import { fadeRise, SPRING_DEFAULT, staggerParent } from "@/lib/motion";
 import { formatDateTime } from "@/lib/format";
@@ -323,20 +324,28 @@ export default function DashboardPage() {
                       <th className="py-2 font-medium">Updated</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <MotionList as="tbody" staggerWhen="children-change" tight>
                     {attentionRows.map((r) => {
                       const stage = stageMap.get(
                         stageMapKey(r.workflow_id, r.current_stage_id),
                       );
+                      const blocked = r.status === "blocked";
                       return (
-                        <tr
+                        <motion.tr
                           key={r.id}
-                          className="border-t border-surface-border align-middle"
+                          layout
+                          variants={fadeRise}
+                          transition={SPRING_DEFAULT}
+                          className={`group border-t border-surface-border align-middle transition-colors hover:bg-surface-muted/40 ${
+                            blocked
+                              ? "border-l-2 border-l-severity-critical/70 hover:border-l-severity-critical"
+                              : "border-l-2 border-l-transparent hover:border-l-brand-400"
+                          }`}
                         >
-                          <td className="py-2 pr-4">
+                          <td className="py-2 pr-4 pl-3">
                             <Link
                               href={`/records/${r.id}`}
-                              className="font-medium text-text hover:text-accent hover:underline"
+                              className="font-medium text-text transition-colors hover:text-brand-300"
                             >
                               {r.subject_full_name}
                             </Link>
@@ -371,10 +380,10 @@ export default function DashboardPage() {
                           <td className="py-2 text-xs text-text-muted">
                             {formatDateTime(r.updated_at)}
                           </td>
-                        </tr>
+                        </motion.tr>
                       );
                     })}
-                  </tbody>
+                  </MotionList>
                 </table>
               </div>
             )}
