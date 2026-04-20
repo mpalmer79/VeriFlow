@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 
 import { DocumentStatusChip } from "@/components/DocumentStatusChip";
-import { MoreHorizontal, type LucideIcon } from "@/components/icons";
+import { Loader2, MoreHorizontal, type LucideIcon } from "@/components/icons";
 import { DURATION_MICRO, EASE_OUT } from "@/lib/motion";
 import { formatDateTime } from "@/lib/format";
 import type { DocumentRead, IntegrityCheckResult } from "@/lib/types";
@@ -20,6 +20,7 @@ export const PREVIEWABLE_MIME_TYPES = new Set([
 interface DocumentRowsProps {
   docs: DocumentRead[];
   busyDocId: number | null;
+  previewLoadingDocId?: number | null;
   integrityResults: Record<number, IntegrityCheckResult>;
   onVerify: (doc: DocumentRead) => void;
   onReject: (doc: DocumentRead) => void;
@@ -33,6 +34,7 @@ interface DocumentRowsProps {
 export function DocumentRows({
   docs,
   busyDocId,
+  previewLoadingDocId,
   integrityResults,
   onVerify,
   onReject,
@@ -48,6 +50,7 @@ export function DocumentRows({
           key={doc.id}
           doc={doc}
           busy={busyDocId === doc.id}
+          previewing={previewLoadingDocId === doc.id}
           integrity={integrityResults[doc.id]}
           onVerify={onVerify}
           onReject={onReject}
@@ -65,6 +68,7 @@ export function DocumentRows({
 function DocumentRow({
   doc,
   busy,
+  previewing,
   integrity,
   onVerify,
   onReject,
@@ -75,6 +79,7 @@ function DocumentRow({
 }: {
   doc: DocumentRead;
   busy: boolean;
+  previewing: boolean;
   integrity: IntegrityCheckResult | undefined;
   onVerify: (doc: DocumentRead) => void;
   onReject: (doc: DocumentRead) => void;
@@ -190,10 +195,17 @@ function DocumentRow({
             type="button"
             className="btn-secondary text-xs"
             onClick={(e) => onPreview(doc, e.currentTarget)}
-            disabled={busy}
+            disabled={busy || previewing}
             title="Preview the stored evidence in an overlay"
           >
-            {busy ? "…" : "Preview"}
+            {previewing ? (
+              <>
+                <Loader2 size={12} className="animate-spin" aria-hidden />
+                Loading…
+              </>
+            ) : (
+              "Preview"
+            )}
           </button>
         ) : null}
         {stored ? (

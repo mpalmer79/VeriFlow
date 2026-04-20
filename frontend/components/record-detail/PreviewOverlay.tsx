@@ -1,6 +1,9 @@
 "use client";
 
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef } from "react";
+
+import { DURATION_MICRO, EASE_OUT, dialogPop, overlayFade } from "@/lib/motion";
 
 
 export interface PreviewTarget {
@@ -15,9 +18,25 @@ export function PreviewOverlay({
   preview,
   onClose,
 }: {
+  preview: PreviewTarget | null;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence mode="wait">
+      {preview ? <PreviewOverlayInner preview={preview} onClose={onClose} /> : null}
+    </AnimatePresence>
+  );
+}
+
+
+function PreviewOverlayInner({
+  preview,
+  onClose,
+}: {
   preview: PreviewTarget;
   onClose: () => void;
 }) {
+  const reduce = useReducedMotion();
   const isImage = preview.mimeType.startsWith("image/");
   const isPdf = preview.mimeType === "application/pdf";
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -39,8 +58,8 @@ export function PreviewOverlay({
       if (!node) return;
       const focusable = Array.from(
         node.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        )
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+        ),
       ).filter((el) => !el.hasAttribute("aria-hidden"));
       if (focusable.length === 0) return;
       const first = focusable[0];
@@ -57,19 +76,33 @@ export function PreviewOverlay({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  const overlayTransition = reduce
+    ? { duration: 0 }
+    : { duration: DURATION_MICRO, ease: EASE_OUT };
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 animate-overlay-in"
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
       onClick={onClose}
       role="presentation"
+      variants={overlayFade}
+      initial="hidden"
+      animate="visible"
+      exit="hidden"
+      transition={overlayTransition}
     >
-      <div
+      <motion.div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="preview-title"
-        className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-surface-border bg-surface-panel shadow-xl animate-dialog-in"
+        className="relative flex h-full max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-md border border-surface-border bg-surface-panel shadow-xl"
         onClick={(e) => e.stopPropagation()}
+        variants={dialogPop}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        transition={overlayTransition}
       >
         <header className="flex items-center justify-between gap-3 border-b border-surface-border px-4 py-2">
           <div id="preview-title" className="truncate text-sm font-medium">
@@ -108,7 +141,7 @@ export function PreviewOverlay({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }

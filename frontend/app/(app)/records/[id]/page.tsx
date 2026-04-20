@@ -85,7 +85,9 @@ export default function RecordDetailPage() {
   >({});
 
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewLoadingDocId, setPreviewLoadingDocId] = useState<number | null>(
+    null,
+  );
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const [rejectTarget, setRejectTarget] = useState<DocumentRead | null>(null);
@@ -397,8 +399,8 @@ export default function RecordDetailPage() {
   ) {
     if (!doc.has_stored_content) return;
     previewTriggerRef.current = trigger;
-    setPreviewLoading(true);
-    
+    setPreviewLoadingDocId(doc.id);
+
     try {
       const grant = await documents.signedAccess(doc.id, {
         disposition: "inline",
@@ -415,7 +417,7 @@ export default function RecordDetailPage() {
         text: err instanceof ApiError ? err.detail ?? err.message : "Preview failed.",
       });
     } finally {
-      setPreviewLoading(false);
+      setPreviewLoadingDocId(null);
     }
   }
 
@@ -505,6 +507,7 @@ export default function RecordDetailPage() {
         }}
         rows={{
           busyDocId,
+          previewLoadingDocId,
           integrityResults,
           onVerify: handleVerify,
           onReject: handleReject,
@@ -517,17 +520,7 @@ export default function RecordDetailPage() {
 
       <AuditTrail entries={auditEntries} stagesById={stagesById} />
 
-      {preview ? (
-        <PreviewOverlay preview={preview} onClose={closePreview} />
-      ) : previewLoading ? (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 text-sm text-text-muted"
-        >
-          Loading preview…
-        </div>
-      ) : null}
+      <PreviewOverlay preview={preview} onClose={closePreview} />
 
       {rejectTarget ? (
         <ConfirmDialog
