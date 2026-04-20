@@ -75,13 +75,13 @@ export function WorkflowTimeline({
       {!stages ? (
         <LoadingSkeleton rows={1} />
       ) : (
-        <TimelineBody stages={stages} currentStageId={currentStageId} />
+        <WorkflowTimelineBody stages={stages} currentStageId={currentStageId} />
       )}
     </Panel>
   );
 }
 
-function TimelineBody({
+export function WorkflowTimelineBody({
   stages,
   currentStageId,
 }: {

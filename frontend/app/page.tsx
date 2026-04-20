@@ -8,6 +8,7 @@ import { useEffect, useState, type MouseEvent } from "react";
 import { ChainMotif } from "@/components/landing/ChainMotif";
 import { RiskBadge } from "@/components/RiskBadge";
 import { SeverityPanel } from "@/components/SeverityPanel";
+import { WorkflowTimelineBody } from "@/components/record-detail/WorkflowTimeline";
 import { Logomark } from "@/components/ui/Logomark";
 import {
   ArrowRight,
@@ -17,6 +18,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "@/components/icons";
+import type { WorkflowStage } from "@/lib/types";
 import { readToken } from "@/lib/auth";
 import {
   fadeRise,
@@ -65,17 +67,18 @@ const MOCK_WARNINGS = [
   },
 ];
 
-const HEALTHCARE_STAGES = [
-  "New intake",
-  "Identity verification",
-  "Insurance review",
-  "Consent & authorization",
-  "Clinical history review",
-  "Provider triage",
-  "Ready for scheduling",
-  "Blocked",
-  "Closed",
+const HEALTHCARE_STAGES: WorkflowStage[] = [
+  { id: 1, name: "New intake", slug: "new_intake", order_index: 0, is_terminal: false },
+  { id: 2, name: "Identity verification", slug: "identity_verification", order_index: 1, is_terminal: false },
+  { id: 3, name: "Insurance review", slug: "insurance_review", order_index: 2, is_terminal: false },
+  { id: 4, name: "Consent & authorization", slug: "consent", order_index: 3, is_terminal: false },
+  { id: 5, name: "Clinical history", slug: "clinical_history", order_index: 4, is_terminal: false },
+  { id: 6, name: "Provider triage", slug: "provider_triage", order_index: 5, is_terminal: false },
+  { id: 7, name: "Ready", slug: "ready", order_index: 6, is_terminal: false },
+  { id: 8, name: "Blocked", slug: "blocked", order_index: 7, is_terminal: true },
+  { id: 9, name: "Closed", slug: "closed", order_index: 8, is_terminal: true },
 ];
+const LANDING_CURRENT_STAGE = 3;
 
 export default function Landing() {
   const router = useRouter();
@@ -321,35 +324,12 @@ function HealthcareSection() {
           stages. Swap it for loan intake, vendor onboarding, or claims
           triage and the engine does not know the difference.
         </p>
-        {/* TODO(phase-4): replace with the rebuilt WorkflowTimeline once
-            Phase 4 lands; the pill row is a placeholder that reads as
-            "ordered sequence" without pretending to be the real control. */}
-        <ol className="mt-12 flex flex-wrap items-center gap-2 text-sm">
-          {HEALTHCARE_STAGES.map((stage, idx) => {
-            const terminal = stage === "Blocked" || stage === "Closed";
-            const toneCls = terminal
-              ? stage === "Blocked"
-                ? "border-severity-critical/40 bg-severity-critical/10 text-severity-critical"
-                : "border-slate-600/40 bg-slate-700/30 text-slate-400"
-              : "border-surface-border bg-surface-muted text-text";
-            return (
-              <li key={stage} className="flex items-center gap-2">
-                <span
-                  className={`rounded-full border px-3 py-1 ${toneCls}`}
-                >
-                  {stage}
-                </span>
-                {idx < HEALTHCARE_STAGES.length - 1 ? (
-                  <ChevronRight
-                    size={14}
-                    className="text-text-subtle"
-                    aria-hidden
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
+        <div className="mt-12 rounded-lg border border-surface-border bg-surface-panel/50 p-5">
+          <WorkflowTimelineBody
+            stages={HEALTHCARE_STAGES}
+            currentStageId={LANDING_CURRENT_STAGE}
+          />
+        </div>
       </div>
     </motion.section>
   );
