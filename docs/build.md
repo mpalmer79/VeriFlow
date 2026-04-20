@@ -1,47 +1,71 @@
-You are acting as a staff-level full-stack engineer performing Phase 6 hardening on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
+You are acting as a staff-level full-stack engineer performing Phase 7 hardening and productization on an existing FastAPI + SQLAlchemy + PostgreSQL + Next.js project named VeriFlow.
 
-Phase 1 through Phase 5 already landed. The repo now has:
-- optimistic concurrency on records
-- tamper-evident audit chaining
-- stronger JWT claims/validation
-- real evidence storage on local disk
-- multipart document upload
-- verification-time re-hash
-- document integrity-check endpoint
-- blocked-transition risk mutation fix
-- Alembic bootstrap with a baseline migration
-- frontend upload flow
-- frontend integrity-check visibility
-- evidence deletion with local file cleanup
-- stronger file type validation at ingest
-- secure content delivery endpoint
-- streaming upload hashing and storage
-- record-level managed file cleanup
-- audit chain verification endpoint
-- inline preview UX for PDF / PNG / JPEG
-- range request support on the content endpoint
-- record-scoped evidence summary
-- org-scoped storage inventory endpoint
+Phase 1 through Phase 6 already landed. The project now has strong workflow, audit, evidence, integrity, preview, cleanup, and signed-access foundations.
 
-Your job in Phase 6 is to improve access control, retention/cleanup operations, accessibility, and browser/app security posture without breaking the current architecture.
+Phase 7 is about turning the current codebase from a strong systems demo into a more credible product and engineering artifact.
 
-This is not a rewrite. This is a focused security and operational-maturity pass.
+This phase must address:
+- backend modularity
+- frontend product quality
+- CI/CD foundation
+- security posture tightening
+- deployment credibility
+- test confidence beyond SQLite-only assumptions
+
+This is not a rewrite. This is a structured hardening and productization pass.
 
 ==================================================
 OBJECTIVE
 ==================================================
 
-Implement the following Phase 6 upgrades:
+Implement Phase 7 as a focused multi-part improvement pass covering:
 
-1. Short-lived signed content access flow for preview/download
-2. Safe orphan cleanup workflow and retention-oriented storage tooling
-3. Role-based protection for admin/debug reporting routes
-4. Accessibility pass for the preview modal and related evidence UI
-5. App-wide security header / CSP hardening where appropriate
-6. Tests covering the new behavior
-7. Explicit incremental Alembic migration only if schema changes are required
+1. Backend module decomposition for document logic
+2. Frontend product-quality UI/UX pass with deliberate polish
+3. CI workflow foundation
+4. Deployment / containerization baseline
+5. Security posture tightening
+6. Better environment/config safety
+7. Test strategy improvement toward PostgreSQL realism
+8. Incremental Alembic migration only if schema changes are actually required
 
-Do not stop at analysis. Inspect the repo, reconcile to actual file paths, and implement completely.
+Do not stop at analysis. Inspect the repository, reconcile to actual file paths, and implement completely.
+
+==================================================
+VERY IMPORTANT UI/UX DIRECTION
+==================================================
+
+The frontend must start receiving deliberate polish.
+
+This does NOT mean:
+- flashy gradients
+- generic AI slop
+- empty visual dressing
+- icons everywhere
+- emoji usage
+- gimmicky dashboards
+- fake enterprise chrome
+
+It DOES mean:
+- strong spacing rhythm
+- clearer hierarchy
+- better grouping of information
+- better density decisions
+- cleaner typography choices within existing stack
+- more intentional states, actions, and layouts
+- more professional interaction design
+- better component structure
+- less scaffold feel, more product feel
+
+Style requirements:
+- no emojis
+- no gratuitous icons
+- no decorative icon packs just to look busy
+- no AI-generated feeling labels or filler copy
+- keep it serious, product-like, and restrained
+- focus on clarity, confidence, and operational usability
+
+The result should feel like a real internal operations product, not a hackathon demo and not a dribbble concept.
 
 ==================================================
 NON-NEGOTIABLE EXECUTION RULES
@@ -49,58 +73,47 @@ NON-NEGOTIABLE EXECUTION RULES
 
 1. Inspect the repo first.
    - Read the current backend and frontend structure fully.
-   - Identify the actual files for:
-     - auth/security helpers
-     - user model / roles / auth dependencies
-     - content delivery route
-     - document routes
-     - audit/storage inventory routes
-     - evidence storage helper
-     - document service
-     - config/settings
-     - app startup / middleware
-     - frontend API helpers/types
-     - record detail page
-     - preview modal UI
-     - tests
+   - Identify actual files for:
+     - document service and related routes
+     - record detail page and document/evidence UI
+     - frontend API layer and shared types
+     - auth/security/config
+     - CORS setup
+     - tests and fixtures
      - migrations
-   - Confirm the current preview/download flow before changing it.
+     - GitHub Actions / CI if present
+     - Dockerfile / deployment assets if present
+     - README and project docs
 
 2. Preserve the current architecture.
    - Keep FastAPI + SQLAlchemy + local evidence storage
-   - Keep Next.js app structure as-is
-   - Do not introduce cloud storage
-   - Do not introduce background workers
-   - Do not redesign the core auth architecture unless required for role checks
-   - Do not redesign the data model unless truly necessary
+   - Keep Next.js app structure
+   - Do not introduce cloud services
+   - Do not redesign the entire auth system
+   - Do not replace the core workflow engine
 
 3. Prefer modifying existing files.
-   - Avoid duplicate components and helpers
-   - Reuse existing patterns for API calls, UI state, auth dependencies, and route organization
+   - Avoid duplication
+   - Extract modules/components where necessary
+   - Reuse current patterns unless they are actively harmful
 
-4. Keep security and correctness ahead of convenience.
-   - Do not expose raw filesystem paths
-   - Do not allow unsafe cleanup of managed storage
-   - Do not weaken existing org-scoped authorization
-   - Do not create long-lived signed access that effectively bypasses auth
-   - Do not add destructive admin actions without deliberate safeguards
+4. Keep correctness ahead of appearance.
+   - UI polish must not reduce capability clarity
+   - CI must run meaningful checks, not fake green workflows
+   - security hardening must not be purely cosmetic
 
-5. No fake UX.
-   - If signed preview/download links are introduced, they must actually enforce expiry and scope
-   - If retention tooling is dry-run only, the UI and API must say so
-   - Do not imply automatic cleanup exists if only reporting exists
+5. Do not half-implement platform features.
+   - If you add CI, it must actually run
+   - If you add Docker, it must be coherent
+   - If you tighten secrets/config, do it correctly
+   - If you refactor services/components, remove the old god-file patterns cleanly
 
-6. No half-finished migration work.
-   - If schema changes are needed, add a proper incremental Alembic revision
-   - Do not modify the baseline migration
-   - Do not break migration history
-
-7. Minimal comments.
+6. Minimal comments.
    - No AI-style comments
    - No tutorial comments
    - Only concise human comments where needed
 
-8. At the end, provide:
+7. At the end, provide:
    - concise summary
    - exact files changed
    - exact files added
@@ -182,19 +195,6 @@ These must agree on:
 - defaults
 
 ----------------------------------------
-SAFE EVOLUTION
-----------------------------------------
-
-For changes affecting existing rows:
-
-Prefer:
-1. Add column nullable
-2. Backfill if needed
-3. Later enforce constraints
-
-Avoid destructive one-step changes.
-
-----------------------------------------
 NO BASELINE MODIFICATION
 ----------------------------------------
 
@@ -209,17 +209,6 @@ If you think it needs to change:
 → create a new migration
 
 ----------------------------------------
-TEST COMPATIBILITY
-----------------------------------------
-
-Tests may still use metadata.create_all.
-
-You MUST:
-- not break test setup
-- keep models as schema source of truth
-- ensure Alembic works for real DB usage
-
-----------------------------------------
 OUTPUT REQUIREMENT
 ----------------------------------------
 
@@ -232,238 +221,297 @@ If NO schema change:
 → explicitly say: "No new migration required"
 
 ==================================================
-PHASE 6 REQUIREMENTS
+PHASE 7A — BACKEND MODULARITY
 ==================================================
 
-----------------------------------------
-A. SHORT-LIVED SIGNED CONTENT ACCESS
-----------------------------------------
-
 Goal:
-Improve preview/download UX by allowing direct media loading without requiring the frontend to fetch the entire blob with a bearer token first.
+Reduce god-object risk and improve maintainability.
 
-You must inspect the current auth and content-delivery implementation first.
+Known concern:
+- `document_service.py` is too large and approaching god-object territory
 
 Required behavior:
-Implement a short-lived signed access flow for document content.
+Refactor the current document service layer into smaller, coherent modules without changing external behavior unnecessarily.
 
-Preferred approach:
-1. Add a backend endpoint that issues a short-lived signed access token or signed URL descriptor for a specific document content request
-2. Add a content-serving path that validates the signed token and serves only the intended document, for a short time window
-3. Support both preview and download semantics safely
+Preferred split:
+- upload / ingest concerns
+- verification concerns
+- integrity-check concerns
+- content delivery resolution concerns
+- deletion / cleanup concerns
+- summary / reporting concerns
 
 Requirements:
-- token/link must be short-lived
-- token/link must be scoped to:
-  - one document
-  - one disposition mode if appropriate
-  - one organization or user context if feasible within existing auth model
-- signed content route must still enforce managed-path safety
-- metadata-only documents must not be eligible
-- do not expose filesystem paths
-- signed access must not become a general auth bypass
-
-Good acceptable options:
-- JWT-like signed content token
-- HMAC-signed query parameters with expiry
-- another lightweight signed mechanism that fits the repo
-
-Preferred route style:
-- POST /api/documents/{id}/signed-access
-- GET /api/documents/content/signed?...   or equivalent
-
-Frontend:
-- update preview/download flow to use short-lived signed access for upload-backed docs where appropriate
-- reduce or eliminate full-blob prefetch for preview if cleanly possible
-
-Do not:
-- create long-lived tokens
-- persist signed links unnecessarily
-- weaken org/user scoping
-- add a full CDN architecture
-
-----------------------------------------
-B. SAFE ORPHAN CLEANUP / RETENTION TOOLING
-----------------------------------------
-
-Goal:
-Move from orphan reporting to a safe operational cleanup workflow.
-
-You must inspect existing storage inventory behavior first.
-
-Required behavior:
-Implement a safe, bounded cleanup capability for managed orphaned files OR a structured dry-run + explicit cleanup workflow.
-
-Preferred design:
-1. Add a dry-run report for orphaned managed files
-2. Add a separate explicit cleanup action that only removes:
-   - files under the managed root
-   - files not referenced by any live document row
-3. Return counts/totals, not raw internal paths unless the route is clearly admin-only and even then be cautious
-
-Requirements:
-- must never delete outside the managed storage root
-- must only consider files managed by the app
-- must tolerate race conditions where a file disappears between scan and delete
-- must be scoped safely
-- cleanup should be deliberate, not automatic by default
-
-Preferred route shape:
-- GET /api/audit/storage-inventory   existing report
-- POST /api/audit/storage-cleanup?dry_run=true|false   or equivalent
-
-If destructive cleanup is added:
-- require admin-level protection
-- return structured counts:
-  - files_examined
-  - orphaned_found
-  - orphaned_deleted
-  - bytes_reclaimed
-  - errors
-
-Do not:
-- automatically sweep at startup
-- build a scheduler
-- delete files referenced by live rows
-- trust unvalidated storage URIs
-
-----------------------------------------
-C. ROLE-BASED PROTECTION FOR ADMIN/DEBUG ROUTES
-----------------------------------------
-
-Goal:
-Stop treating all authenticated users the same for operational routes.
-
-You must inspect the current auth dependency and user/role model first.
-
-Required behavior:
-Protect admin/debug routes such as:
-- audit chain verification
-- storage inventory
-- storage cleanup if added
-- any other operational-only routes
-
-Requirements:
-- use existing role model if present
-- if roles already exist, wire proper authorization checks
-- if a minimal admin role concept already exists but is unused, activate it
-- if no viable role mechanism exists, add the smallest correct role-based guard consistent with the current auth model
-
-Preferred behavior:
-- normal users can access record/document routes within their org
-- admin/debug routes require elevated role
-
-Do not:
-- redesign the full RBAC model unless necessary
-- add giant permissions matrices
-- leave operational routes broadly exposed
-
-If schema changes are required for roles:
-- use a proper incremental migration
-- keep the change minimal
-
-----------------------------------------
-D. ACCESSIBILITY PASS FOR PREVIEW MODAL / EVIDENCE UI
-----------------------------------------
-
-Goal:
-Fix the known accessibility weakness in the preview UX.
-
-Required behavior:
-Improve the preview modal and related controls so they behave more like a real accessible dialog.
-
-At minimum:
-- keyboard focus moves into the modal on open
-- Escape closes the modal
-- focus returns to the trigger on close
-- tab focus stays trapped inside the modal while open
-- dialog has appropriate labels / semantics
-- close control is keyboard accessible
-
-Also review:
-- button labels for Preview / Download / Integrity check
-- status chips for metadata-only docs
-- screen-reader-friendly text where needed
-
-Do not:
-- introduce a giant component library unless already present
-- rebuild the whole page layout
-
-Preferred approach:
-- use current frontend patterns
-- keep modal lightweight and accessible
-
-----------------------------------------
-E. APP-WIDE SECURITY HEADER / CSP HARDENING
-----------------------------------------
-
-Goal:
-Improve browser-facing security posture at the app level.
-
-You must inspect current FastAPI app startup / middleware first.
-
-Required behavior:
-Add deliberate application-level security headers where appropriate.
-
-Consider:
-- Content-Security-Policy
-- X-Frame-Options or frame-ancestors via CSP
-- Referrer-Policy if not already app-wide
-- X-Content-Type-Options if not already app-wide
-- Permissions-Policy where practical
-
-Requirements:
-- do not break the current preview flow
-- if PDF/image preview requires inline rendering, ensure CSP is compatible
-- keep the policy realistic for the current app
-- avoid a fake “secure headers” patch that breaks functionality
+1. Inspect current `document_service.py`
+2. Split it into smaller modules under a coherent package structure
+3. Keep route layer thin
+4. Keep business logic discoverable
+5. Avoid circular imports
+6. Preserve current tests and route behavior
 
 Preferred outcome:
-- app-level middleware or equivalent sets a coherent baseline
-- content route can still apply route-specific headers if needed
+- `document_service.py` becomes a lightweight orchestration layer or disappears into a package
+- no single document module should feel like a new god object
 
 Do not:
-- add a CSP that breaks the frontend
-- claim security hardening without validating app behavior after the change
+- rewrite all route signatures unless necessary
+- duplicate helpers across files
+- change behavior casually during refactor
 
-----------------------------------------
-F. FRONTEND/API CONTRACT CLEANUP
-----------------------------------------
+==================================================
+PHASE 7B — FRONTEND PRODUCTIZATION / UI POLISH
+==================================================
 
 Goal:
-Reflect signed access, admin scoping, and preview improvements correctly in the UI.
+Move the frontend from scaffold/demo quality toward a credible product surface.
+
+Known concern:
+- records detail page is too large and needs extraction
+- frontend currently demonstrates capability more than product quality
 
 Required behavior:
-1. Update frontend API helpers and types as needed
-2. Prefer signed access flow for preview/download if implemented
-3. Ensure metadata-only docs never offer false preview/download actions
-4. Keep capability-driven rendering
-5. If admin-only features are surfaced in UI, show them only when appropriate
+Refactor the current record detail page into smaller components and improve the UI/UX in a restrained, serious way.
+
+Minimum required component extraction:
+- record header / summary section
+- workflow status / stage panel
+- evidence summary strip
+- document list / document actions section
+- upload section
+- preview modal
+- integrity result display or related interactions
+
+Requirements:
+1. Break the large page file into coherent components
+2. Improve visual hierarchy
+3. Improve spacing and grouping
+4. Improve action clarity
+5. Make important operational information easier to scan
+6. Maintain current capabilities:
+   - upload
+   - preview
+   - download
+   - verify
+   - integrity check
+   - delete
+   - evidence summary
+
+UI requirements:
+- no emojis
+- no gratuitous icons
+- no ornamental UI
+- no generic AI product language
+- no fake analytics tiles
+- no noisy gradients or visual clutter
+- use typography, spacing, borders, and layout to create polish
+- keep the aesthetic calm, operational, and believable
+
+UX requirements:
+- action placement should feel intentional
+- metadata-only vs upload-backed distinction should remain obvious
+- loading, empty, and error states should look deliberate
+- modal/dialog interactions should remain accessible
+- avoid giant dense walls of UI in one screen region
 
 Do not:
-- assume admin status without backend truth
-- leave stale blob/object URL cleanup bugs behind
-- create inconsistent fallback behavior
+- turn it into a marketing page
+- add design fluff without informational value
+- remove operational density to the point of hiding useful detail
 
-----------------------------------------
-G. TESTING
-----------------------------------------
+==================================================
+PHASE 7C — CI WORKFLOW FOUNDATION
+==================================================
 
-Extend the current test suite.
+Goal:
+Add real CI so the project has an actual engineering story.
+
+Known concern:
+- no visible CI/CD is a credibility gap
+
+Required behavior:
+Add a GitHub Actions CI workflow that runs meaningful checks.
+
+Minimum CI expectations:
+1. Backend:
+   - install dependencies
+   - run tests
+2. Frontend:
+   - install dependencies
+   - run build
+3. If lint/typecheck already exists and is stable:
+   - include it
+4. Keep workflow reliable and not overly broad
+
+Preferred structure:
+- one workflow file, possibly split into backend/frontend jobs
+- caching where appropriate
+- clear failure visibility
+
+Important:
+- CI must actually run the real commands the repo supports
+- do not invent commands that do not exist
+- if the backend test matrix can support PostgreSQL service containers, strongly consider it
+
+Preferred enhancement:
+- if feasible and stable, run backend tests against PostgreSQL in CI
+- if full conversion is too risky in one pass, at minimum structure CI so PostgreSQL-backed tests can be added cleanly next
+
+Do not:
+- add fake placeholder CI
+- add deployment automation unless it is coherent and minimal
+- make CI depend on secrets unnecessarily
+
+==================================================
+PHASE 7D — DEPLOYMENT / CONTAINERIZATION BASELINE
+==================================================
+
+Goal:
+Close the conspicuous deployment-story gap.
+
+Known concern:
+- no visible Dockerfile or deployment story
+
+Required behavior:
+Add a minimal, credible containerization/deployment baseline.
+
+Minimum acceptable outcome:
+- backend Dockerfile
+- frontend Dockerfile if project structure supports it cleanly
+OR
+- a clearly documented single-service strategy if only backend containerization is appropriate right now
+
+Requirements:
+1. Inspect current app startup and build assumptions
+2. Add Dockerfile(s) that are coherent with the actual app
+3. Add `.dockerignore` as needed
+4. Update README with concise local/container run guidance
+
+Optional but useful:
+- `docker-compose.yml` or equivalent local dev composition if it fits current repo without overcomplicating things
+
+Do not:
+- fake a production-ready orchestration stack
+- add Kubernetes manifests
+- add bloated deployment assets with no validation
+
+==================================================
+PHASE 7E — SECURITY POSTURE TIGHTENING
+==================================================
+
+Goal:
+Address the current obvious security gaps.
+
+Known concerns:
+- SQLite-only testing
+- permissive CORS
+- no visible rate limiting
+- JWT secret default behavior too forgiving
+
+Required behavior:
+
+1. JWT secret safety
+- inspect current config behavior
+- if secret currently falls back to a known default in unsafe environments, fix it
+- fail loudly in non-dev / non-test contexts if required secret is unset
+- keep local dev and tests workable, but do not silently allow unsafe production behavior
+
+2. CORS tightening
+- inspect current CORS setup
+- reduce permissiveness from `allow_methods=["*"]` and `allow_headers=["*"]` if that is still present
+- make the config environment-driven and realistic
+- preserve current frontend dev flow
+
+3. Rate limiting
+- add a lightweight rate-limiting approach if it can be done coherently
+- prioritize sensitive endpoints:
+  - auth
+  - upload
+  - maybe signed content access issuance if appropriate
+- if the chosen stack does not already support easy rate limiting, use the smallest credible solution
+- do not build a whole distributed rate-limiter architecture
+
+Requirements:
+- keep the changes practical
+- do not break current development flow
+- document important environment expectations
+
+Do not:
+- hardcode production origins
+- introduce a giant security framework casually
+- add fake rate limiting that does nothing real
+
+==================================================
+PHASE 7F — TEST STRATEGY IMPROVEMENT
+==================================================
+
+Goal:
+Reduce confidence gaps caused by SQLite-only coverage.
+
+Known concern:
+- PostgreSQL behavior differences are not exercised
+
+Required behavior:
+Improve the project’s path toward realistic DB testing.
+
+Acceptable approaches:
+1. Add PostgreSQL-backed CI test job if feasible
+2. Add a separate test target or fixture path for PostgreSQL-compatible tests
+3. Refactor tests/config so PostgreSQL execution becomes straightforward and documented
+
+Requirements:
+- do not break current fast local SQLite test loop unless necessary
+- preserve fast default tests if that is the current workflow
+- improve confidence where feasible
+- document what is and is not covered
+
+Do not:
+- claim PostgreSQL parity without actually exercising it
+- rip out SQLite-only tests if they are still useful for quick feedback
+
+==================================================
+PHASE 7G — README / ENGINEERING STORY
+==================================================
+
+Goal:
+Make the repo tell a more complete and credible story.
+
+Known concern:
+- backend is advanced but project story is incomplete without CI/deploy/testing/security context
+
+Required behavior:
+Update README and/or docs to include:
+- architecture summary
+- current capabilities
+- local run instructions
+- CI overview
+- migration workflow
+- deployment/container story
+- security/config expectations
+- testing limitations and current DB coverage truthfully stated
+
+Requirements:
+- concise and honest
+- no marketing fluff
+- no exaggerated claims
+
+==================================================
+TESTING REQUIREMENTS
+==================================================
+
+Extend the current test suite as needed.
 
 At minimum add/update tests for:
-1. signed content access succeeds for the intended document and expires correctly
-2. signed access cannot be reused outside scope or after expiry
-3. metadata-only docs cannot get signed access
-4. admin/debug routes are denied to non-admins
-5. storage cleanup dry-run vs destructive mode behaves correctly
-6. cleanup never deletes outside managed storage root
-7. accessibility-critical frontend behavior is at least covered where current test setup allows, or clearly explain if frontend test infra is absent
-8. app-level security headers are present and do not break core content flows
-9. range/preview/download still work after the signed-access and header changes
+1. refactored document-service boundaries still preserve behavior
+2. frontend extraction does not break current flows
+3. CI commands used in workflow are valid
+4. tightened config/secret behavior works correctly by environment
+5. CORS config remains functional but less permissive
+6. any rate limiting added is actually enforced
+7. PostgreSQL-oriented test path or CI path works if implemented
+8. Docker/container files are coherent at least structurally
 
-Use existing test patterns and fixtures.
-Do not create a new framework.
+Use existing test patterns where possible.
+Do not create a new framework unless absolutely necessary.
 
 ==================================================
 IMPLEMENTATION DISCOVERY STEPS
@@ -471,22 +519,22 @@ IMPLEMENTATION DISCOVERY STEPS
 
 Before editing:
 1. Read current backend files for:
-   - auth/security helpers
-   - user model / roles
-   - document routes
-   - audit routes
-   - evidence storage helper
-   - app startup / middleware
+   - document service and related modules
    - config
+   - security
+   - CORS setup
+   - main startup
+   - tests
    - migrations
 2. Read current frontend files for:
-   - records detail page
+   - record detail page
    - API client
    - shared types
-   - preview modal implementation
-3. Determine whether any role mechanism already exists.
-4. Determine whether signed access can reuse existing token utilities safely.
-5. Determine current testing patterns for backend and frontend.
+   - evidence UI pieces
+3. Determine current role/auth model
+4. Determine existing npm/python scripts and valid CI commands
+5. Determine whether Docker assets already exist in any form
+6. Determine current README state
 
 Then implement the changes.
 
@@ -494,12 +542,16 @@ Then implement the changes.
 ACCEPTANCE CRITERIA
 ==================================================
 
-- upload-backed evidence can be previewed/downloaded through a short-lived signed access flow or an equally safe direct mechanism
-- metadata-only docs cannot obtain content access
-- orphan cleanup workflow is safe, deliberate, and root-bounded
-- admin/debug routes are no longer broadly exposed
-- preview modal accessibility is materially improved
-- app-level security headers are deliberate and compatible with current behavior
+- document service is materially less monolithic
+- record detail page is componentized and more product-like
+- frontend polish improves clarity without generic AI slop
+- CI workflow exists and runs meaningful checks
+- deployment/container story is materially improved
+- JWT secret behavior is safer
+- CORS is tighter and environment-driven
+- some real rate-limiting protection exists or a clearly justified minimal alternative is implemented
+- PostgreSQL confidence is improved or the path is concretely established
+- README/project docs tell a credible engineering story
 - tests cover the critical new behavior
 - imports are clean
 - no obvious runtime mismatch remains
