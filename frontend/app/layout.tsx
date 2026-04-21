@@ -25,9 +25,10 @@ const fraunces = Fraunces({
 });
 
 // Runs before React hydrates so the first paint already has the right
-// data-theme. Phase 5 default is "dark" (matching the pre-Phase-5
-// app). Phase 6 flips the no-preference default to "light".
-const THEME_FLASH_SUPPRESSION = `(function(){try{var s=localStorage.getItem("veriflow.theme");var t=(s==="light"||s==="dark")?s:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches?"light":"dark");document.documentElement.dataset.theme=t;}catch(_e){document.documentElement.dataset.theme="dark";}})();`;
+// data-theme. Phase 6 default is "light" — the app's real default
+// theme. Operators who prefer dark via the OS still get it via the
+// prefers-color-scheme check; anyone else sees light.
+const THEME_FLASH_SUPPRESSION = `(function(){try{var s=localStorage.getItem("veriflow.theme");var t=(s==="light"||s==="dark")?s:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=t;}catch(_e){document.documentElement.dataset.theme="light";}})();`;
 
 export const metadata: Metadata = {
   title: "VeriFlow",

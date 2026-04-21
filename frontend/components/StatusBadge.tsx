@@ -3,8 +3,10 @@ import { RECORD_STATUS_LABELS } from "@/lib/format";
 
 const styles: Record<RecordStatus, { chip: string; dot: string }> = {
   draft: {
-    chip: "border-slate-500/40 bg-slate-500/15 text-slate-300",
-    dot: "bg-slate-400",
+    // Neutral state. Token-backed so light and dark themes both pick
+    // up a muted-surface chip rather than a hard-coded slate palette.
+    chip: "border-surface-border bg-surface-muted text-text-muted",
+    dot: "bg-text-subtle",
   },
   in_progress: {
     chip: "border-accent/40 bg-accent/15 text-accent",
@@ -19,8 +21,9 @@ const styles: Record<RecordStatus, { chip: string; dot: string }> = {
     dot: "bg-severity-low",
   },
   closed: {
-    chip: "border-slate-600/40 bg-slate-700/30 text-slate-400",
-    dot: "bg-slate-500",
+    // Terminal-archival state. Slightly more recessed than draft.
+    chip: "border-surface-border bg-surface-sunken text-text-subtle",
+    dot: "bg-text-subtle/70",
   },
 };
 
