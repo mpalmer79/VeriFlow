@@ -49,6 +49,10 @@ class WorkflowStage(Base, TimestampMixin):
     is_terminal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     workflow: Mapped["Workflow"] = relationship(back_populates="stages")
+    # Deleting a stage must NOT silently delete the rules scoped to it
+    # (that would be a policy loss with no audit trail). Service-layer
+    # code refuses to delete stages that still carry live rules; this
+    # cascade only persists in-memory changes.
     rules: Mapped[List["Rule"]] = relationship(  # noqa: F821
-        back_populates="stage", cascade="all, delete-orphan"
+        back_populates="stage", cascade="all, save-update"
     )

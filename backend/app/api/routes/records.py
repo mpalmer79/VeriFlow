@@ -166,6 +166,22 @@ def list_evaluations(
     return evaluation_service.current_evaluations(db, record)
 
 
+@router.get("/{record_id}/decision", response_model=EvaluationDecisionRead)
+def get_decision(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read-only counterpart to /evaluate: returns the current decision
+    shape from the persisted rule_evaluations + record state without
+    running evaluators or mutating anything."""
+    record = record_service.get_record(db, current_user, record_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
+    decision = evaluation_service.decision_from_current_state(db, record)
+    return _decision_to_schema(decision)
+
+
 @router.post("/{record_id}/transition", response_model=TransitionResponse)
 def transition_record(
     record_id: int,
