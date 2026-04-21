@@ -252,3 +252,24 @@ def test_rule_evaluation_persists_new_fields(db_session):
     assert evaluation.action_applied == RuleActionApplied.WARN
     assert evaluation.risk_applied == 15
     assert evaluation.explanation.startswith("Document")
+
+
+# --- RecordUpdate rejects client-writable status -----------------------
+
+
+def test_update_record_rejects_status_payload(client, auth_headers):
+    """Phase 1A: status is owned by the transition service; a PATCH that
+    sets it directly must be rejected by the schema, not silently dropped.
+    """
+    listing = client.get("/api/records", headers=auth_headers).json()
+    record = listing[0]
+
+    response = client.patch(
+        f"/api/records/{record['id']}",
+        headers=auth_headers,
+        json={
+            "status": "closed",
+            "expected_version": record["version"],
+        },
+    )
+    assert response.status_code == 422

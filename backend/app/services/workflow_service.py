@@ -26,12 +26,17 @@ from app.services.audit_payloads import (
     transition_completed,
 )
 from app.services.evaluation_service import EvaluationDecision
-from app.services.record_service import (
-    StageNotFound,
-    StageWorkflowMismatch,
-    VersionConflict,
-    get_record,
-)
+from app.models.workflow import Workflow
+from app.services.record_service import VersionConflict, get_record
+
+
+def get_workflow_for_actor(
+    db: Session, actor: User, workflow_id: int
+) -> Optional[Workflow]:
+    workflow = workflow_repository.get_workflow(db, workflow_id)
+    if workflow is None or workflow.organization_id != actor.organization_id:
+        return None
+    return workflow
 
 
 class TransitionError(Exception):
@@ -51,14 +56,9 @@ class TransitionResult:
 
 
 def _load_target_stage(db: Session, workflow_id: int, target_stage_id: int):
-    stage = workflow_repository.get_stage(db, target_stage_id)
-    if stage is None:
-        raise StageNotFound(f"Stage {target_stage_id} not found")
-    if stage.workflow_id != workflow_id:
-        raise StageWorkflowMismatch(
-            f"Stage {target_stage_id} does not belong to workflow {workflow_id}"
-        )
-    return stage
+    return workflow_repository.get_stage_for_workflow(
+        db, workflow_id, target_stage_id
+    )
 
 
 def transition_record(

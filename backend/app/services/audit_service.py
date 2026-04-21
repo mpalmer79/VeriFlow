@@ -17,12 +17,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditLog
+from app.models.record import Record
 
 
 def _canonical_payload(payload: Optional[Dict[str, Any]]) -> str:
@@ -121,6 +122,18 @@ def verify_chain(
         "broken_entries": broken_entries,
         "broken_links": broken_links,
     }
+
+
+def list_for_record(
+    db: Session, record: Record, *, limit: int = 100
+) -> List[AuditLog]:
+    stmt = (
+        select(AuditLog)
+        .where(AuditLog.record_id == record.id)
+        .order_by(AuditLog.id.desc())
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 def record_event(

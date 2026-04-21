@@ -56,7 +56,7 @@ WORKFLOW_STAGES: List[Dict] = [
     {"name": "Consent & Authorization", "slug": "consent_authorization", "is_terminal": False},
     {"name": "Clinical History Review", "slug": "clinical_history_review", "is_terminal": False},
     {"name": "Provider Triage", "slug": "provider_triage", "is_terminal": False},
-    {"name": "Ready for Scheduling", "slug": "ready_for_scheduling", "is_terminal": True},
+    {"name": "Ready for Scheduling", "slug": "ready_for_scheduling", "is_terminal": False},
     {"name": "Blocked", "slug": "blocked", "is_terminal": True},
     {"name": "Closed", "slug": "closed", "is_terminal": True},
 ]

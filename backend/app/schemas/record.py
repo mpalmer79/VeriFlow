@@ -33,6 +33,13 @@ class RecordCreate(RecordBase):
 
 
 class RecordUpdate(BaseModel):
+    # `status` is intentionally absent: it is owned by the transition
+    # service and the blocked-detection path. A client PATCH must not be
+    # able to fast-forward a record to `ready` or `closed` without
+    # going through evaluation + audit. extra="forbid" surfaces a 422
+    # if a caller tries to send it (or any other unknown field).
+    model_config = ConfigDict(extra="forbid")
+
     expected_version: int = Field(ge=1)
     subject_full_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     subject_dob: Optional[date] = None
@@ -40,7 +47,6 @@ class RecordUpdate(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=2000)
     assigned_user_id: Optional[int] = None
     current_stage_id: Optional[int] = None
-    status: Optional[RecordStatus] = None
     insurance_status: Optional[InsuranceStatus] = None
     consent_status: Optional[ConsentStatus] = None
     medical_history_status: Optional[MedicalHistoryStatus] = None

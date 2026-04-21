@@ -102,7 +102,6 @@ def verify_document(
     doc.rejected_by_user_id = None
     doc.rejected_at = None
     doc.rejection_reason = None
-    doc.verified_content_hash = recomputed
     if notes is not None:
         doc.notes = notes
     db.flush()

@@ -26,7 +26,6 @@ class Document(Base, TimestampMixin):
     mime_type: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     size_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
     content_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
-    verified_content_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

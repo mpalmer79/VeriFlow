@@ -39,6 +39,7 @@ from app.schemas.evaluation import (
 )
 from app.schemas.record import RecordCreate, RecordRead, RecordUpdate
 from app.services import (
+    audit_service,
     document_service,
     evaluation_service,
     record_service,
@@ -309,18 +310,7 @@ def list_audit(
     record = record_service.get_record(db, current_user, record_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Record not found")
-
-    from sqlalchemy import select as sa_select
-
-    from app.models.audit import AuditLog
-
-    stmt = (
-        sa_select(AuditLog)
-        .where(AuditLog.record_id == record_id)
-        .order_by(AuditLog.id.desc())
-        .limit(limit)
-    )
-    return list(db.execute(stmt).scalars().all())
+    return audit_service.list_for_record(db, record, limit=limit)
 
 
 @router.get(

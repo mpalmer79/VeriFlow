@@ -18,7 +18,6 @@ class DocumentRead(BaseModel):
     mime_type: Optional[str]
     size_bytes: Optional[int]
     content_hash: Optional[str]
-    verified_content_hash: Optional[str]
     expires_at: Optional[datetime]
     status: DocumentStatus
     notes: Optional[str]
@@ -44,9 +43,6 @@ class DocumentCreate(BaseModel):
 
 
 class DocumentVerifyRequest(BaseModel):
-    # `verified_content_hash` is not accepted here. The verified hash is
-    # recomputed server-side from the stored bytes; a client cannot attest
-    # to content it has not supplied.
     notes: Optional[str] = Field(default=None, max_length=1000)
 
 
