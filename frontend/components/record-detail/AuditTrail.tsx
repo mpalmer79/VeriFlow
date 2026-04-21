@@ -21,6 +21,8 @@ import { formatDateTime } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { AuditEntry, WorkflowStage } from "@/lib/types";
 
+import { ChainOfCustody3D } from "./ChainOfCustody3D";
+
 const SEMANTIC_KEYS = [
   "prior_stage_id",
   "new_stage_id",
@@ -98,11 +100,48 @@ interface AuditTrailProps {
 }
 
 export function AuditTrail({ entries, stagesById }: AuditTrailProps) {
+  const reduce = useReducedMotion();
+  const [showChain, setShowChain] = useState(false);
+
   return (
     <Panel
       title="Audit trail"
       description="Append-only. Most recent events first."
     >
+      <div className="mb-3 border-b border-surface-border pb-3">
+        <button
+          type="button"
+          onClick={() => setShowChain((v) => !v)}
+          aria-expanded={showChain}
+          className="inline-flex items-center gap-1.5 text-sm text-text-muted transition-colors hover:text-text focus:outline-none"
+        >
+          <motion.span
+            animate={reduce ? undefined : { rotate: showChain ? 90 : 0 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.18 }}
+            className="inline-flex"
+          >
+            <ChevronRight size={14} aria-hidden />
+          </motion.span>
+          Evidence chain visualization
+        </button>
+        <AnimatePresence initial={false}>
+          {showChain ? (
+            <motion.div
+              key="chain"
+              initial={reduce ? false : { opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={reduce ? undefined : { opacity: 0, height: 0 }}
+              transition={reduce ? { duration: 0 } : { duration: 0.22, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3">
+                <ChainOfCustody3D entries={entries} />
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </div>
+
       {entries.length === 0 ? (
         <EmptyState
           title="No audit history yet"
