@@ -98,10 +98,33 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       typeof (parsed as { detail: unknown }).detail === "string"
         ? (parsed as { detail: string }).detail
         : response.statusText;
+    if (response.status === 401 && !options.skipAuth) {
+      // Stale session: clear cached credentials so the next render
+      // does not keep showing the signed-in shell against a dead
+      // backend session. The hard redirect lands the operator on
+      // /login with next= set to wherever they were trying to go.
+      clearStaleSession();
+    }
     throw new ApiError(response.status, detail, detail);
   }
 
   return parsed as T;
+}
+
+function clearStaleSession() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem("veriflow.token");
+    window.localStorage.removeItem("veriflow.user");
+  } catch {
+    // localStorage may be unavailable.
+  }
+  const current = window.location.pathname + window.location.search;
+  // /login and / are already anonymous surfaces; don't loop through
+  // a redirect on them.
+  if (current === "/login" || current === "/" || current === "/enter") return;
+  const next = encodeURIComponent(current);
+  window.location.replace(`/login?next=${next}`);
 }
 
 // --- auth ---------------------------------------------------------------
