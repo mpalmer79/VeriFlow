@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "sh -c 'alembic upgrade head && (python -m app.seed.seed_data || true) && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'",
+    "startCommand": "sh -c 'python -m scripts.ensure_alembic_baseline && alembic upgrade head && (python -m app.seed.seed_data || true) && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'",
     "healthcheckPath": "/health/readiness",
     "healthcheckTimeout": 30,
     "numReplicas": 1,
