@@ -5,8 +5,11 @@ from sqlalchemy.orm import Session
 from app.models.enums import RecordStatus
 from app.models.record import Record
 from app.models.user import User
-from app.models.workflow import WorkflowStage
 from app.repositories import record_repository, workflow_repository
+from app.repositories.workflow_repository import (
+    StageNotFound,
+    StageWorkflowMismatch,
+)
 from app.schemas.record import RecordCreate, RecordUpdate
 from app.services import audit_service
 
@@ -19,12 +22,10 @@ class WorkflowNotFound(RecordServiceError):
     pass
 
 
-class StageNotFound(RecordServiceError):
-    pass
-
-
-class StageWorkflowMismatch(RecordServiceError):
-    """Raised when a stage does not belong to the target workflow."""
+# StageNotFound / StageWorkflowMismatch are re-exported from
+# workflow_repository so callers that historically caught them as
+# `record_service.StageNotFound` keep working. The repository is the
+# single source of truth for the invariant.
 
 
 class VersionConflict(RecordServiceError):
@@ -37,19 +38,6 @@ class VersionConflict(RecordServiceError):
         self.record_id = record_id
         self.expected_version = expected
         self.current_version = current
-
-
-def _load_stage_for_workflow(
-    db: Session, workflow_id: int, stage_id: int
-) -> WorkflowStage:
-    stage = workflow_repository.get_stage(db, stage_id)
-    if stage is None:
-        raise StageNotFound(f"Stage {stage_id} not found")
-    if stage.workflow_id != workflow_id:
-        raise StageWorkflowMismatch(
-            f"Stage {stage_id} does not belong to workflow {workflow_id}"
-        )
-    return stage
 
 
 def list_records(db: Session, actor: User, limit: int = 100, offset: int = 0) -> List[Record]:
@@ -71,7 +59,9 @@ def create_record(db: Session, actor: User, payload: RecordCreate) -> Record:
         raise WorkflowNotFound("Workflow not found for this organization")
 
     if payload.current_stage_id is not None:
-        stage = _load_stage_for_workflow(db, workflow.id, payload.current_stage_id)
+        stage = workflow_repository.get_stage_for_workflow(
+            db, workflow.id, payload.current_stage_id
+        )
     else:
         stage = workflow_repository.get_first_stage(db, workflow.id)
         if stage is None:
@@ -192,7 +182,9 @@ def update_record(
 
     new_stage_id = changes.get("current_stage_id")
     if new_stage_id is not None:
-        _load_stage_for_workflow(db, record.workflow_id, new_stage_id)
+        workflow_repository.get_stage_for_workflow(
+            db, record.workflow_id, new_stage_id
+        )
 
     for field, value in changes.items():
         setattr(record, field, value)

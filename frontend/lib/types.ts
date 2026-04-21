@@ -123,7 +123,6 @@ export interface DocumentRead {
   mime_type: string | null;
   size_bytes: number | null;
   content_hash: string | null;
-  verified_content_hash: string | null;
   expires_at: string | null;
   status: DocumentStatus;
   notes: string | null;

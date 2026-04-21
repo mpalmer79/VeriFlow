@@ -407,16 +407,16 @@ def test_document_metadata_persists_and_serializes(
     assert doc["mime_type"] == "image/png"
     assert doc["size_bytes"] == 128_000
     assert doc["content_hash"] == "a" * 64
-    assert doc["verified_content_hash"] is None
     assert doc["expires_at"] is not None
 
 
-def test_verification_records_verified_content_hash(
+def test_verification_rehashes_stored_bytes_and_marks_verified(
     client, auth_headers, db_session
 ):
-    # Phase 2: the verified hash is recomputed from stored bytes, never
-    # defaulted from ingest metadata. Use the multipart upload path so
-    # the server owns real bytes to re-hash at verify time.
+    # Phase 2 invariant preserved: verification re-reads the stored bytes
+    # and re-hashes them to confirm integrity. The ingest content_hash
+    # and the recomputed hash must match. We no longer persist the
+    # recomputed hash on a second column (it was dead — never read).
     import hashlib
 
     record = _create_record(client, auth_headers, _workflow(db_session).id)
@@ -435,5 +435,5 @@ def test_verification_records_verified_content_hash(
         headers=auth_headers,
         json={},
     ).json()
-    assert verify["verified_content_hash"] == expected
+    assert verify["content_hash"] == expected
     assert verify["status"] == "verified"

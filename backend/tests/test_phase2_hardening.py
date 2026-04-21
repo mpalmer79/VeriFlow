@@ -105,8 +105,6 @@ def test_ingest_computes_sha256_and_size_from_bytes(
     doc = _upload_bytes(client, auth_headers, record["id"], "photo_id", content)
     assert doc["size_bytes"] == len(content)
     assert doc["content_hash"] == expected_hash
-    # Ingest does not set verified_content_hash.
-    assert doc["verified_content_hash"] is None
     assert doc["status"] == "uploaded"
 
 
@@ -198,7 +196,7 @@ def test_verification_rehashes_stored_bytes_and_succeeds(
     assert verify.status_code == 200, verify.text
     body = verify.json()
     assert body["status"] == "verified"
-    assert body["verified_content_hash"] == expected
+    assert body["content_hash"] == expected
 
 
 def test_verification_fails_when_stored_bytes_are_altered(
@@ -222,7 +220,6 @@ def test_verification_fails_when_stored_bytes_are_altered(
     fresh = db_session.get(Document, doc["id"])
     db_session.refresh(fresh)
     assert fresh.status.value == "rejected"
-    assert fresh.verified_content_hash is None
     assert fresh.rejection_reason and "integrity mismatch" in fresh.rejection_reason.lower()
 
 
@@ -336,7 +333,6 @@ def test_integrity_check_does_not_mutate_document(
     ).json()
     matching = [d for d in refetch if d["id"] == doc["id"]][0]
     assert matching["status"] == before_status
-    assert matching["verified_content_hash"] is None
 
 
 # --------------------------------------------------------------------------
