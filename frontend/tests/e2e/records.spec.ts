@@ -55,6 +55,31 @@ test.describe("records flow", () => {
     ).toBeVisible();
   });
 
+  test("document overflow menu is keyboard accessible", async ({ page }) => {
+    // The overflow trigger focuses via Tab and opens with Enter; once
+    // open, Escape closes and returns focus to the trigger. These are
+    // the guarantees Phase 6 made when it moved Delete / Integrity
+    // check off the primary row.
+    await page.goto("/records");
+    await page.getByRole("link", { name: "Casey Nguyen" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Document evidence" }),
+    ).toBeVisible();
+
+    const trigger = page
+      .getByRole("button", { name: /^More actions$/i })
+      .first();
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu").first();
+    await expect(menu).toBeVisible();
+    // The "Delete" menuitem is always present per Phase 6 spec.
+    await expect(menu.getByRole("menuitem", { name: /^Delete$/i })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(menu).toBeHidden();
+  });
+
   test("metadata-only documents hide download and preview controls", async ({
     page,
   }) => {
