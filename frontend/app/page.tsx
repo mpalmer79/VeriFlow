@@ -9,6 +9,7 @@ import { ChainMotif } from "@/components/landing/ChainMotif";
 import { RiskBadge } from "@/components/RiskBadge";
 import { SeverityPanel } from "@/components/SeverityPanel";
 import { WorkflowTimelineBody } from "@/components/record-detail/WorkflowTimeline";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Logomark } from "@/components/ui/Logomark";
 import {
   ArrowRight,
@@ -121,8 +122,11 @@ function HeroSection({
     <section
       id="hero"
       aria-labelledby="hero-heading"
-      className="textured brand-gradient relative overflow-hidden"
+      className="textured bg-gradient-hero relative overflow-hidden"
     >
+      <div className="absolute right-6 top-6 z-20">
+        <ThemeToggle variant="full" />
+      </div>
       <div className="relative mx-auto flex min-h-[92vh] max-w-6xl flex-col items-center justify-center px-6 py-24 text-center">
         <ChainMotif
           className="pointer-events-none absolute right-[-4rem] top-16 hidden text-brand-500 opacity-40 md:block"
@@ -173,7 +177,7 @@ function HeroSection({
             <motion.div whileHover={{ y: -1 }} whileTap={{ y: 1 }}>
               <Link
                 href="/enter"
-                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-300"
+                className="bg-gradient-cta inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-brand-300"
               >
                 Enter demo
                 <ArrowRight size={16} aria-hidden />

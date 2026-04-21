@@ -157,6 +157,7 @@ function HorizontalTimeline({
               justBecameCurrent={
                 justAdvancedToId === item.stage.id && item.kind === "current"
               }
+              orientation="horizontal"
             />
             <Label name={item.stage.name} kind={item.kind} horizontal />
           </motion.li>
@@ -209,6 +210,7 @@ function VerticalTimeline({
                 justBecameCurrent={
                   justAdvancedToId === item.stage.id && item.kind === "current"
                 }
+                orientation="vertical"
               />
             </div>
             <Label name={item.stage.name} kind={item.kind} horizontal={false} />
@@ -230,11 +232,13 @@ function Node({
   terminalTone,
   isTerminal,
   justBecameCurrent,
+  orientation,
 }: {
   kind: StageKind;
   terminalTone: Enriched["terminalTone"];
   isTerminal: boolean;
   justBecameCurrent: boolean;
+  orientation: "horizontal" | "vertical";
 }) {
   const reduce = useReducedMotion();
 
@@ -257,15 +261,19 @@ function Node({
 
   return (
     <span className="relative flex h-2 w-2 items-center justify-center">
-      {/* Ring around the current node. Scales in on transition. */}
+      {/* Gradient halo around the current node. One of the three
+       * gradient uses in the app; Phase 7 pairs it with a
+       * layoutId="workflow-active-ring" so the ring slides between
+       * nodes on transition. Scales in on first mount. */}
       {kind === "current" ? (
         <motion.span
           aria-hidden
-          className="absolute inset-[-3px] rounded-full border-2 border-brand-400/80"
+          layoutId={`workflow-active-ring-${orientation}`}
+          className="bg-gradient-accent-ring absolute inset-[-4px] rounded-full opacity-70"
           initial={
             reduce || !justBecameCurrent ? false : { scale: 0.6, opacity: 0 }
           }
-          animate={{ scale: 1, opacity: 1 }}
+          animate={{ scale: 1, opacity: 0.7 }}
           transition={reduce ? { duration: 0 } : SPRING_SOFT}
           style={isTerminal ? { borderRadius: 4 } : undefined}
         />

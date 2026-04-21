@@ -140,6 +140,27 @@ dot (`components/StatusBadge.tsx`) and the dashboard LIVE pill dot
 (`app/(app)/dashboard/page.tsx`). Perpetual, JS-free, respects the
 Tailwind global reduced-motion rule in `app/globals.css`.
 
+## Phase 7 additions
+
+| File | Component | Purpose | Preset / transition | Reduced-motion path |
+|------|-----------|---------|---------------------|---------------------|
+| `components/theme/ThemeToggle.tsx` | Segmented pill | Active-option indicator slides between Light / Dark via `layoutId="theme-toggle-pill"` | `{ type: "spring", stiffness: 380, damping: 30 }` | `{ duration: 0 }` — pill snaps to the new option |
+| `components/record-detail/WorkflowTimeline.tsx` | Active-ring migration | Ring slides between nodes on stage change via `layoutId="workflow-active-ring-${orientation}"` (scope-per-orientation so horizontal + vertical renders don't collide) | `SPRING_SOFT` (inherited from the existing scale-in) | `{ duration: 0 }` |
+| `components/ui/Toast.tsx` | Toast enter / exit | Slight y:4 rise on enter, fade + y:4 drop on exit (replaces prior x-axis slide) | `SPRING_DEFAULT` enter, `DURATION_MICRO` + `EASE_OUT` exit | Instant |
+| `app/(app)/records/[id]/page.tsx` | Top-level panel stagger | On mount only: RecordHeader → ActionBar → EvaluationPanel → WorkflowTimeline → DocumentEvidencePanel → AuditTrail reveal in sequence via `staggerChildren: 0.04` on the parent, each panel fades up with `fadeRise` + `DURATION_MEDIUM` + `EASE_OUT_EXPO` | Each `MountPanel` uses `fadeRise` | `{ duration: 0 }` via the variant's default transition when reduce is set on consumers |
+
+## Gradient uses (Phase 7)
+
+Three gradient tokens, used in exactly one place each:
+
+| Token | Site | Effect |
+|-------|------|--------|
+| `--gradient-hero` | Landing hero `<section>` wash | `near-white → brand-50` (light) / `brand-900 → surface-bg` (dark) |
+| `--gradient-cta` | Landing hero "Enter demo" button fill | `brand-500 → brand-600` at 135deg; hover: `brand-600 → brand-700` |
+| `--gradient-accent-ring` | Workflow timeline active-stage halo | `brand-400 → brand-600` at 135deg (light) / `brand-300 → brand-500` (dark) |
+
+Adding a fourth gradient use is a design-language regression — stop and reconsider.
+
 ## When adding new motion
 
 1. Is there a named variant that fits? Use it.

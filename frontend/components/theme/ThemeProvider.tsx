@@ -23,10 +23,10 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export const THEME_STORAGE_KEY = "veriflow.theme";
 
 // Matches the inline flash-suppression script in app/layout.tsx.
-// Phase 5 defaults to "dark" when no preference is stored so the
-// app is visually identical to pre-Phase-5 main. Phase 6 flips the
-// default to "light".
-export const DEFAULT_THEME: Theme = "dark";
+// Phase 6 default is "light" — the app's true default theme. Dark
+// is available via OS preference, localStorage, or the toggle that
+// lands in Phase 7.
+export const DEFAULT_THEME: Theme = "light";
 
 function readStoredTheme(): Theme | null {
   if (typeof window === "undefined") return null;
@@ -43,12 +43,10 @@ function readInitialTheme(): Theme {
   const stored = readStoredTheme();
   if (stored) return stored;
   if (typeof window !== "undefined" && window.matchMedia) {
-    // Respect OS preference only when it explicitly indicates light.
-    // Everything else — dark, no-preference, matchMedia unsupported —
-    // falls back to the Phase 5 default so the app keeps its current
-    // look on first load.
-    if (window.matchMedia("(prefers-color-scheme: light)").matches) {
-      return "light";
+    // Honor explicit OS preference. No explicit preference falls
+    // back to the app default (light).
+    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return "dark";
     }
   }
   return DEFAULT_THEME;

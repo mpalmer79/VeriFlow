@@ -133,9 +133,9 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number)
     <motion.div
       role={toast.kind === "error" ? "alert" : "status"}
       layout
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 24, transition: exitTransition }}
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 4, transition: exitTransition }}
       transition={enterTransition}
       className={`pointer-events-auto flex items-start gap-3 rounded-md border px-3 py-2.5 shadow-lg shadow-black/40 ${wrapper}`}
     >
