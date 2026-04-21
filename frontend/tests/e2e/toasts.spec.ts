@@ -12,24 +12,25 @@ test.describe("toast notifications", () => {
       page.getByRole("heading", { name: "Evaluation" }),
     ).toBeVisible();
 
-    // Trigger an evaluation; success / info toasts stick around for 6s.
-    await page.getByRole("button", { name: /^Run evaluation$/i }).click();
+    // "Run evaluation" appears both in the ActionBar (primary) and in
+    // the EvaluationPanel empty state. Scope to the ActionBar region
+    // so we always click the one the page intends as the action.
+    const actionBar = page.getByRole("region", { name: /record actions/i });
+    await actionBar.getByRole("button", { name: /^Run evaluation$/i }).click();
 
     const viewport = page.getByRole("region", { name: /notifications/i }).or(
       page.locator('[aria-label="Notifications"]'),
     );
-    // A status or alert element appears inside the viewport.
     const toast = viewport.locator('[role="status"], [role="alert"]').first();
     await expect(toast).toBeVisible();
-    // Final text contains "Evaluation complete" — match loosely so both
-    // the "no blocking issues" and "N blocking" variants pass.
     await expect(toast).toContainText(/evaluation/i);
   });
 
   test("toast can be dismissed manually", async ({ page }) => {
     await page.goto("/records");
     await page.getByRole("link", { name: "Casey Nguyen" }).click();
-    await page.getByRole("button", { name: /^Run evaluation$/i }).click();
+    const actionBar = page.getByRole("region", { name: /record actions/i });
+    await actionBar.getByRole("button", { name: /^Run evaluation$/i }).click();
 
     const viewport = page.locator('[aria-label="Notifications"]');
     const toast = viewport.locator('[role="status"], [role="alert"]').first();
