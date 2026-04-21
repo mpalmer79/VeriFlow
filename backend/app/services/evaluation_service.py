@@ -15,12 +15,14 @@ history lives in the append-only audit log (`record.evaluated`,
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core import metrics
 from app.models.enums import RiskBand, RuleActionApplied
 from app.models.record import Record
 from app.models.rule import RuleEvaluation
@@ -141,6 +143,7 @@ def evaluate_and_persist(
     # Import locally to avoid a circular import through rule_engine_service.
     from app.services.audit_payloads import record_evaluated, risk_recalculated
 
+    started = time.perf_counter()
     results = rule_engine_service.evaluate_record(
         db, record, stage_context=stage_context
     )
@@ -192,6 +195,7 @@ def evaluate_and_persist(
         db.commit()
         db.refresh(record)
 
+    metrics.observe_evaluation(time.perf_counter() - started)
     return decision
 
 

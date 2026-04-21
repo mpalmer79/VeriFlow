@@ -1,0 +1,119 @@
+/* VeriFlow theme tokens.
+ *
+ * Every surface / text / brand / status color, every shadow, and
+ * every radius flows from one of these CSS custom properties.
+ * Tailwind resolves its utility classes against these vars, so
+ * flipping data-theme on the html element reskins the app without
+ * touching any component class string.
+ *
+ * Color values are stored as space-separated RGB channels so
+ * Tailwind's `/<alpha-value>` syntax (e.g. bg-brand-500/15) works
+ * via `rgb(var(--color-brand-500) / <alpha-value>)`.
+ *
+ * :root carries the LIGHT theme (the new default — applied in
+ * Phase 6). `html[data-theme="dark"]` carries the DARK theme,
+ * intentionally tuned to match today's look as closely as possible
+ * so Phase 5 ships with no visible change (the flash-suppression
+ * script defaults to dark until the operator opts in elsewhere).
+ */
+
+:root {
+  /* Light theme — designed for daylight operations work. Warm
+   * off-white backgrounds so the eye doesn't fatigue; elevated
+   * surfaces are pure white with a hairline border rather than a
+   * shadow. Brand teal stays the same hue, slightly deeper so it
+   * passes AA contrast on white. */
+  --color-bg: 250 250 249;
+  --color-bg-elevated: 255 255 255;
+  --color-bg-sunken: 244 244 242;
+  --color-surface-border: 220 216 212;
+  --color-surface-muted: 244 243 241;
+
+  --color-text: 28 25 23;
+  --color-text-muted: 87 83 78;
+  --color-text-subtle: 120 113 108;
+
+  --color-brand-50: 237 250 253;
+  --color-brand-100: 210 241 246;
+  --color-brand-200: 170 225 236;
+  --color-brand-300: 117 202 219;
+  --color-brand-400: 46 157 179;
+  --color-brand-500: 22 125 146;
+  --color-brand-600: 14 108 125;
+  --color-brand-700: 15 92 120;
+  --color-brand-800: 19 77 99;
+  --color-brand-900: 18 64 79;
+
+  --color-accent-from: 22 125 146;
+  --color-accent-to: 14 108 125;
+
+  /* Status palette, AA against --color-bg-elevated (255 255 255). */
+  --color-danger: 185 28 28;
+  --color-danger-bg: 254 242 242;
+  --color-danger-border: 252 165 165;
+  --color-warning: 154 86 16;
+  --color-warning-bg: 255 247 237;
+  --color-warning-border: 253 186 116;
+  --color-success: 21 128 61;
+  --color-success-bg: 240 253 244;
+  --color-success-border: 134 239 172;
+  --color-info: 14 108 125;
+  --color-info-bg: 237 250 253;
+  --color-info-border: 170 225 236;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.08), 0 1px 3px -1px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 12px 28px -8px rgb(0 0 0 / 0.12), 0 6px 12px -6px rgb(0 0 0 / 0.06);
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+html[data-theme="dark"] {
+  /* Dark theme — deliberate port of the values the app has shipped
+   * with. Keeps `/dashboard`, `/records`, and record detail visually
+   * indistinguishable from pre-Phase-5 main. */
+  --color-bg: 11 18 32;
+  --color-bg-elevated: 15 23 42;
+  --color-bg-sunken: 8 14 24;
+  --color-surface-border: 31 42 68;
+  --color-surface-muted: 17 28 51;
+
+  --color-text: 230 237 243;
+  --color-text-muted: 148 163 184;
+  --color-text-subtle: 100 116 139;
+
+  --color-brand-50: 237 250 253;
+  --color-brand-100: 210 241 246;
+  --color-brand-200: 170 225 236;
+  --color-brand-300: 117 202 219;
+  --color-brand-400: 61 171 196;
+  --color-brand-500: 28 141 168;
+  --color-brand-600: 14 116 144;
+  --color-brand-700: 15 92 120;
+  --color-brand-800: 19 77 99;
+  --color-brand-900: 18 64 79;
+
+  --color-accent-from: 28 141 168;
+  --color-accent-to: 14 116 144;
+
+  /* Status palette, AA against --color-bg-elevated (15 23 42). */
+  --color-danger: 248 113 113;
+  --color-danger-bg: 67 16 16;
+  --color-danger-border: 153 27 27;
+  --color-warning: 251 146 60;
+  --color-warning-bg: 67 34 8;
+  --color-warning-border: 154 52 18;
+  --color-success: 74 222 128;
+  --color-success-bg: 5 46 22;
+  --color-success-border: 22 101 52;
+  --color-info: 61 171 196;
+  --color-info-bg: 11 54 66;
+  --color-info-border: 15 92 120;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 1px 3px -1px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 28px -8px rgb(0 0 0 / 0.55), 0 6px 12px -6px rgb(0 0 0 / 0.4);
+}
