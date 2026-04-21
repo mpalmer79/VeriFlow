@@ -50,16 +50,34 @@ or CRM.
   at ingest and re-hashing at verification, liveness (`/health`) and
   readiness (`/health/readiness` with a live DB ping) probes for
   hosted deploys.
-- **Frontend.** Next.js 14 + TypeScript + Tailwind with Inter and
-  JetBrains Mono via `next/font`. The record detail page is
-  componentized into focused pieces (header, action bar, evaluation
-  panel, workflow timeline, evidence panel with upload + preview +
-  integrity check + download + delete, audit trail, preview modal
-  with accessible dialog semantics). Destructive confirmations use a
-  shared in-app `ConfirmDialog` rather than native browser dialogs.
-  Admins get an `/operations` console for audit-chain verification,
-  managed-storage inventory, and bounded orphan cleanup. Motion is
-  minimal and `prefers-reduced-motion` is respected.
+- **Frontend.** Next.js 14 + TypeScript + Tailwind with Inter,
+  JetBrains Mono, and Fraunces (display) via `next/font`, a brand
+  teal ramp for CTAs and hero surfaces, and Framer Motion as the
+  single motion primitive. The root `/` is a product landing page
+  with a real `SeverityPanel` mock and an animated hash-chain motif;
+  `/enter` preserves the demo-signin path. The dashboard is an
+  operations-intelligence surface: KPI hero cards with count-up
+  animation, 30s visibility-gated polling with a LIVE / STALE pill,
+  and a `Needs attention` table that stagger-reveals on mount and
+  smoothly reflows on poll changes. The record detail page is
+  componentized into focused pieces (header with breadcrumbs and
+  display-font subject name, action bar with a brand-primary
+  "Attempt transition" CTA gated on blocking issues, evaluation
+  panel with can-progress and risk-score bars that animate between
+  states, a rebuilt `WorkflowTimeline` with animated advance,
+  evidence panel with a keyboard-accessible overflow menu for
+  secondary document actions, audit trail with human-readable
+  events and copyable rule-code badges, preview modal with
+  accessible dialog semantics). Destructive confirmations use the
+  shared in-app `ConfirmDialog`. Admins get an `/operations`
+  console for audit-chain verification, managed-storage inventory,
+  and bounded orphan cleanup. Status messaging routes through a
+  shared toast stack. Records page filters are URL-synced so
+  refresh / back-button / shared links reproduce the view. Every
+  Framer Motion call site consults `useReducedMotion()` and
+  collapses to an instant state change under
+  `prefers-reduced-motion`; `docs/ui_motion_audit.md` catalogues
+  every usage.
 - **Evidence.** Streaming upload writes straight to a server-
   controlled storage root with chunked SHA-256; verification re-reads
   and re-hashes those bytes; content delivery supports HTTP `Range`
