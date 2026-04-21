@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Workflow timeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:24px 20px}
+  .timeline{display:flex;align-items:center;gap:0;width:100%}
+  .stage{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
+  .stage .node{width:14px;height:14px;border-radius:999px;background:#111c33;border:1px solid #1f2a44;z-index:1}
+  .stage.done .node{background:#14b8a6;border-color:#14b8a6}
+  .stage.active .node{background:#0e7490;border-color:#3dabc4;box-shadow:0 0 0 3px #3dabc433}
+  .stage.blocked .node{width:12px;height:12px;border-radius:2px;background:#ef4444;border-color:#ef4444}
+  .stage.future .node{background:#0b1220}
+  .stage .lbl{font-size:10px;color:#94a3b8;letter-spacing:.02em;text-align:center;max-width:90px}
+  .stage.active .lbl{color:#e6edf3;font-weight:600}
+  .stage.blocked .lbl{color:#ef4444}
+  .stage::before{content:"";position:absolute;left:-50%;right:50%;top:7px;height:1px;background:#1f2a44;z-index:0}
+  .stage:first-child::before{display:none}
+  .stage.done::before, .stage.active::before{background:#14b8a6}
+  .meta{margin-top:14px;font-family:"JetBrains Mono",monospace;font-size:11px;color:#94a3b8;display:flex;gap:16px}
+</style></head>
+<body><div class="wrap">
+  <div class="timeline">
+    <div class="stage done"><div class="node"></div><div class="lbl">Received</div></div>
+    <div class="stage done"><div class="node"></div><div class="lbl">Intake</div></div>
+    <div class="stage done"><div class="node"></div><div class="lbl">Identity</div></div>
+    <div class="stage active"><div class="node"></div><div class="lbl">Coverage check</div></div>
+    <div class="stage future"><div class="node"></div><div class="lbl">Triage</div></div>
+    <div class="stage future"><div class="node"></div><div class="lbl">Scheduled</div></div>
+    <div class="stage future"><div class="node"></div><div class="lbl">Visit</div></div>
+    <div class="stage future"><div class="node"></div><div class="lbl">Review</div></div>
+    <div class="stage future"><div class="node"></div><div class="lbl">Closed</div></div>
+  </div>
+  <div class="meta"><span>workflow · healthcare_intake v14</span><span>stage · 4 of 9</span><span>elapsed · 02:41:18</span></div>
+</div></body></html>

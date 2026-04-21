@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Severity panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .panel{background:#0f172a;border:1px solid #1f2a44;border-radius:8px;padding:14px}
+  .hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .ttl{font-size:12px;font-weight:600;letter-spacing:.02em}
+  .count{font-family:"JetBrains Mono",monospace;font-size:11px;color:#94a3b8}
+  .row{display:flex;gap:8px;align-items:flex-start;padding:7px 8px;border-radius:6px;font-size:12px}
+  .row + .row{margin-top:4px}
+  .row.crit{background:#ef444412;color:#fecaca}
+  .row.high{background:#f9731612;color:#fed7aa}
+  .row.mod{background:#eab30812;color:#fde68a}
+  .code{font-family:"JetBrains Mono",monospace;font-size:11px;opacity:.9}
+  .msg{flex:1;line-height:1.45}
+  .empty{font-size:12px;color:#94a3b8;padding:8px 4px}
+</style></head>
+<body><div class="wrap">
+  <div class="panel">
+    <div class="hdr"><span class="ttl" style="color:#ef4444">Blocking</span><span class="count">2 issues</span></div>
+    <div class="row crit"><span class="code">insurance.status_known</span><span class="msg">Coverage status not resolved; cannot advance from <b>Intake</b>.</span></div>
+    <div class="row high"><span class="code">identity.proofed</span><span class="msg">Gov-ID image is low-resolution; require re-upload.</span></div>
+  </div>
+  <div class="panel">
+    <div class="hdr"><span class="ttl" style="color:#eab308">Warnings</span><span class="count">1 issue</span></div>
+    <div class="row mod"><span class="code">appointment.confirmed</span><span class="msg">Patient has not confirmed in 48h.</span></div>
+    <div class="empty">No blocking issues. All block-level rules passed.</div>
+  </div>
+</div></body></html>

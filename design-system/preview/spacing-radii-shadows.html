@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Radii + shadows</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .box{display:flex;flex-direction:column;justify-content:flex-end;height:96px;padding:10px;background:#0f172a;border:1px solid #1f2a44}
+  .name{font-size:12px;font-weight:600}
+  .sub{font-family:"JetBrains Mono",monospace;font-size:10px;color:#94a3b8}
+  .r-sm{border-radius:4px}.r-md{border-radius:6px}.r-lg{border-radius:8px}.r-xl{border-radius:12px}
+  .sh-sm{box-shadow:0 1px 2px rgba(0,0,0,.35)}
+  .sh-md{box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .sh-lg{box-shadow:0 20px 40px rgba(0,0,0,.45)}
+</style></head>
+<body><div class="wrap">
+  <div class="box r-sm"><div class="name">radius-sm</div><div class="sub">4px</div></div>
+  <div class="box r-md"><div class="name">radius-md</div><div class="sub">6px · buttons</div></div>
+  <div class="box r-lg"><div class="name">radius-lg</div><div class="sub">8px · panels</div></div>
+  <div class="box r-xl"><div class="name">radius-xl</div><div class="sub">12px</div></div>
+  <div class="box r-lg sh-sm"><div class="name">shadow-sm</div><div class="sub">subtle lift</div></div>
+  <div class="box r-lg sh-md"><div class="name">shadow-md</div><div class="sub">hero card</div></div>
+  <div class="box r-lg sh-lg"><div class="name">shadow-lg</div><div class="sub">toast · modal</div></div>
+  <div class="box r-lg" style="border-color:#3dabc4"><div class="name">brand border</div><div class="sub">highlight state</div></div>
+</div></body></html>
