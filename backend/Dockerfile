@@ -33,4 +33,4 @@ ENV EVIDENCE_STORAGE_DIR=/var/lib/veriflow/evidence
 EXPOSE 8080
 
 # 🔥 CRITICAL FIX: use $PORT + run migrations
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "python -m scripts.ensure_alembic_baseline && alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT"]
