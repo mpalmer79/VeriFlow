@@ -17,11 +17,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import metrics
 from app.models.audit import AuditLog
 from app.models.record import Record
 
@@ -78,6 +80,7 @@ def verify_chain(
     Returns a dict (suitable for direct JSON serialization). The check
     is read-only; it never mutates audit rows.
     """
+    started = time.perf_counter()
     stmt = (
         select(AuditLog)
         .where(AuditLog.organization_id == organization_id)
@@ -115,6 +118,7 @@ def verify_chain(
                 }
             )
         prev_hash = row.entry_hash
+    metrics.observe_audit_verify(time.perf_counter() - started)
     return {
         "organization_id": organization_id,
         "checked": len(rows),
@@ -171,4 +175,5 @@ def record_event(
     )
     db.add(log)
     db.flush()
+    metrics.observe_audit_write()
     return log
