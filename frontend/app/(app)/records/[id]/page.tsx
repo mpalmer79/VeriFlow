@@ -11,11 +11,14 @@ import {
   useState,
 } from "react";
 
+import { motion } from "framer-motion";
+
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { DURATION_MEDIUM, EASE_OUT_EXPO, fadeRise } from "@/lib/motion";
 import { ActionBar } from "@/components/record-detail/ActionBar";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DocumentEvidencePanel } from "@/components/record-detail/DocumentEvidencePanel";
@@ -458,41 +461,61 @@ export default function RecordDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <motion.div
+      className="space-y-8"
+      initial="hidden"
+      animate="visible"
+      variants={{
+        // One-shot mount stagger: the outer motion.div runs initial ->
+        // visible once, then React re-renders don't re-trigger because
+        // Framer Motion holds the element at "visible" thereafter.
+        hidden: {},
+        visible: { transition: { staggerChildren: 0.04 } },
+      }}
+    >
       {loadError ? <ErrorBanner message={loadError} /> : null}
 
-      <RecordHeader record={record} currentStage={currentStage} />
+      <MountPanel>
+        <RecordHeader record={record} currentStage={currentStage} />
+      </MountPanel>
 
-      <ActionBar
-        stages={workflow?.stages ?? []}
-        currentStageId={record.current_stage_id}
-        targetStageId={targetStageId}
-        onTargetChange={setTargetStageId}
-        onEvaluate={handleEvaluate}
-        onTransition={handleTransition}
-        onRefresh={() => refreshAll({ silent: true })}
-        evaluating={evaluating}
-        transitioning={transitioning}
-        transitionBlockedReason={
-          derivedDecision && derivedDecision.violations.length > 0
-            ? "Resolve blocking issues first"
-            : null
-        }
-      />
+      <MountPanel>
+        <ActionBar
+          stages={workflow?.stages ?? []}
+          currentStageId={record.current_stage_id}
+          targetStageId={targetStageId}
+          onTargetChange={setTargetStageId}
+          onEvaluate={handleEvaluate}
+          onTransition={handleTransition}
+          onRefresh={() => refreshAll({ silent: true })}
+          evaluating={evaluating}
+          transitioning={transitioning}
+          transitionBlockedReason={
+            derivedDecision && derivedDecision.violations.length > 0
+              ? "Resolve blocking issues first"
+              : null
+          }
+        />
+      </MountPanel>
 
-      <EvaluationPanel
-        decision={derivedDecision}
-        onEvaluate={handleEvaluate}
-        evaluating={evaluating}
-      />
+      <MountPanel>
+        <EvaluationPanel
+          decision={derivedDecision}
+          onEvaluate={handleEvaluate}
+          evaluating={evaluating}
+        />
+      </MountPanel>
 
-      <WorkflowTimeline
-        workflowName={workflow?.name}
-        stages={workflow?.stages ?? null}
-        currentStageId={record.current_stage_id}
-      />
+      <MountPanel>
+        <WorkflowTimeline
+          workflowName={workflow?.name}
+          stages={workflow?.stages ?? null}
+          currentStageId={record.current_stage_id}
+        />
+      </MountPanel>
 
-      <DocumentEvidencePanel
+      <MountPanel>
+        <DocumentEvidencePanel
         docStatus={docStatus}
         summary={evidenceSummary}
         upload={{
@@ -516,9 +539,12 @@ export default function RecordDetailPage() {
           onDownload: handleDownload,
           onPreview: handlePreview,
         }}
-      />
+        />
+      </MountPanel>
 
-      <AuditTrail entries={auditEntries} stagesById={stagesById} />
+      <MountPanel>
+        <AuditTrail entries={auditEntries} stagesById={stagesById} />
+      </MountPanel>
 
       <PreviewOverlay preview={preview} onClose={closePreview} />
 
@@ -556,6 +582,22 @@ export default function RecordDetailPage() {
           }}
         />
       ) : null}
-    </div>
+    </motion.div>
+  );
+}
+
+
+function MountPanel({ children }: { children: React.ReactNode }) {
+  // Wraps each top-level panel on the record-detail page so the
+  // parent's staggerChildren schedule can fade it in over 240ms with
+  // the house expo ease. One-shot on mount; data refreshes keep the
+  // child in its `visible` state so nothing re-animates on poll.
+  return (
+    <motion.div
+      variants={fadeRise}
+      transition={{ duration: DURATION_MEDIUM, ease: EASE_OUT_EXPO }}
+    >
+      {children}
+    </motion.div>
   );
 }

@@ -69,6 +69,33 @@
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 16px;
+
+  /* Gradients — three exactly. Used once each:
+   * - hero wash behind the landing headline
+   * - primary CTA fill
+   * - active-stage ring on the workflow timeline
+   * If a fourth use shows up, we are over-using the accent.
+   */
+  --gradient-hero: linear-gradient(
+    110deg,
+    rgb(255 255 255) 0%,
+    rgb(var(--color-brand-50)) 100%
+  );
+  --gradient-cta: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-500)),
+    rgb(var(--color-brand-600))
+  );
+  --gradient-cta-hover: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-600)),
+    rgb(var(--color-brand-700))
+  );
+  --gradient-accent-ring: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-400)),
+    rgb(var(--color-brand-600))
+  );
 }
 
 html[data-theme="dark"] {
@@ -116,4 +143,29 @@ html[data-theme="dark"] {
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
   --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 1px 3px -1px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 12px 28px -8px rgb(0 0 0 / 0.55), 0 6px 12px -6px rgb(0 0 0 / 0.4);
+
+  /* Dark-theme gradient overrides. Hero wash goes brand-900 ->
+   * surface-bg (deep teal blending into the dark surface) instead of
+   * the near-white -> brand-50 ramp used in light mode.
+   */
+  --gradient-hero: linear-gradient(
+    110deg,
+    rgb(var(--color-brand-900)) 0%,
+    rgb(var(--color-bg)) 100%
+  );
+  --gradient-cta: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-500)),
+    rgb(var(--color-brand-600))
+  );
+  --gradient-cta-hover: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-400)),
+    rgb(var(--color-brand-500))
+  );
+  --gradient-accent-ring: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-300)),
+    rgb(var(--color-brand-500))
+  );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Logomark } from "@/components/ui/Logomark";
 import { UserMenu } from "@/components/UserMenu";
 import { clearSession, readToken, readUser } from "@/lib/auth";
@@ -122,6 +123,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3">
+            <ThemeToggle variant="compact" />
             {user ? (
               <UserMenu
                 user={user}
