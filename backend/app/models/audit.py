@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -9,6 +9,16 @@ from app.models.base import Base
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+    # Composite index for the two hot paths:
+    # - `_latest_hash_in_scope` walks audit rows descending by id per
+    #   organization on every audit write
+    # - `verify_chain` does an ordered per-organization scan
+    # A standalone `organization_id` index exists too, but an explicit
+    # (organization_id, id) pair lets the planner satisfy both the
+    # filter and the order-by from one index.
+    __table_args__ = (
+        Index("ix_audit_logs_org_id", "organization_id", "id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     organization_id: Mapped[Optional[int]] = mapped_column(

@@ -482,3 +482,53 @@ def test_cannot_verify_document_from_another_organization(
 
     response = client.post(f"/api/documents/{doc['id']}/verify", headers=auth_headers)
     assert response.status_code == 403
+
+
+# --------------------------------------------------------------------------
+# Signed-access endpoint: expired token handling (Phase 2D)
+# --------------------------------------------------------------------------
+
+
+def test_signed_access_rejects_expired_token(client, auth_headers, db_session):
+    """The signed-content endpoint must refuse a token whose `exp` has
+    passed. We mint the token via `jwt.encode` directly (bypassing
+    `create_content_access_token`) so we can set a past `exp` without
+    mocking time, and without adding freezegun as a dependency.
+    """
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from jose import jwt
+
+    from app.core.config import get_settings
+    from app.core.security import (
+        CONTENT_ACCESS_AUDIENCE,
+        CONTENT_ACCESS_TOKEN_TYPE,
+    )
+
+    _, workflow = _stages(db_session)
+    record = _create_record(client, auth_headers, workflow.id)
+    doc = _upload(client, auth_headers, record["id"], "photo_id")
+
+    settings = get_settings()
+    now = datetime.now(timezone.utc).timestamp()
+    past_exp = int(now) - 60  # expired a minute ago
+
+    payload = {
+        "sub": "1",
+        "iat": int(now) - 120,
+        "nbf": int(now) - 120,
+        "exp": past_exp,
+        "iss": settings.jwt_issuer,
+        "aud": CONTENT_ACCESS_AUDIENCE,
+        "typ": CONTENT_ACCESS_TOKEN_TYPE,
+        "jti": uuid4().hex,
+        "doc": doc["id"],
+        "org": doc["record_id"],  # any int; decode rejects on exp first
+        "disp": "inline",
+    }
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+    response = client.get(f"/api/documents/content/signed?token={token}")
+    assert response.status_code == 401
+    assert "expired" in response.json()["detail"].lower()
