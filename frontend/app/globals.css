@@ -1,3 +1,5 @@
+@import "./theme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,8 +8,8 @@
   html,
   body {
     height: 100%;
-    background-color: #0b1220;
-    color: #e6edf3;
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-text));
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
   body {
