@@ -26,8 +26,14 @@ from app.services.audit_payloads import (
     transition_completed,
 )
 from app.services.evaluation_service import EvaluationDecision
-from app.models.workflow import Workflow
+from app.models.workflow import Workflow, WorkflowStage
 from app.services.record_service import VersionConflict, get_record
+
+
+class StageDeletionRefused(Exception):
+    """Raised when a caller tries to delete a workflow stage that still
+    carries active rules. Cascade-deleting the rules would lose policy
+    without an audit trail."""
 
 
 def get_workflow_for_actor(
@@ -193,3 +199,22 @@ def transition_record(
         decision=decision,
         message=decision.summary,
     )
+
+
+def delete_stage(db: Session, stage: WorkflowStage) -> None:
+    """Delete a workflow stage, refusing when live rules reference it.
+
+    Cascading the rule deletion would quietly drop policy. Callers
+    should either move the rules to another stage, deactivate them
+    explicitly, or delete them with an audit-aware path before the
+    stage is removed.
+    """
+    from app.models.rule import Rule
+
+    has_rules = db.query(Rule).filter(Rule.stage_id == stage.id).first() is not None
+    if has_rules:
+        raise StageDeletionRefused(
+            f"Stage {stage.id} still has active rules; detach them before deleting the stage."
+        )
+    db.delete(stage)
+    db.flush()

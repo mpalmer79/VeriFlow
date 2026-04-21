@@ -38,7 +38,6 @@ import type {
   DocumentStatusResponse,
   DocumentType,
   EvaluationDecision,
-  EvaluationIssue,
   EvidenceSummary,
   IntegrityCheckResult,
   RecordRead,
@@ -98,7 +97,7 @@ export default function RecordDetailPage() {
   const [deleteTarget, setDeleteTarget] = useState<DocumentRead | null>(null);
 
   const refreshAll = useCallback(
-    async (opts: { silent?: boolean } = {}) => {
+    async (opts: { silent?: boolean; signal?: AbortSignal } = {}) => {
       if (!Number.isFinite(recordId)) {
         setLoadError("Invalid record id.");
         setLoading(false);
@@ -108,21 +107,25 @@ export default function RecordDetailPage() {
       setLoadError(null);
       setNotFound(false);
       try {
-        const [rec, status, auditRows, evalRows, summary] = await Promise.all([
-          records.get(recordId),
-          documents.status(recordId),
-          audit.list(recordId, 50),
-          records.evaluations(recordId),
-          records.evidenceSummary(recordId).catch(() => null),
-        ]);
+        const [rec, status, auditRows, evalRows, summary, serverDecision] =
+          await Promise.all([
+            records.get(recordId, opts.signal),
+            documents.status(recordId, opts.signal),
+            audit.list(recordId, 50, opts.signal),
+            records.evaluations(recordId, opts.signal),
+            records.evidenceSummary(recordId, opts.signal).catch(() => null),
+            records.decision(recordId, opts.signal).catch(() => null),
+          ]);
         setRecord(rec);
         setDocStatus(status);
         setAuditEntries(auditRows);
         setEvaluationsRaw(evalRows);
         setEvidenceSummary(summary);
-        const wf = await workflows.get(rec.workflow_id);
+        if (serverDecision) setDecision(serverDecision);
+        const wf = await workflows.get(rec.workflow_id, opts.signal);
         setWorkflow(wf);
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         if (err instanceof ApiError && err.status === 404) {
           setNotFound(true);
         } else if (err instanceof ApiError) {
@@ -138,7 +141,9 @@ export default function RecordDetailPage() {
   );
 
   useEffect(() => {
-    refreshAll();
+    const controller = new AbortController();
+    refreshAll({ signal: controller.signal });
+    return () => controller.abort();
   }, [refreshAll]);
 
   const stagesById = useMemo(() => {
@@ -149,35 +154,11 @@ export default function RecordDetailPage() {
 
   const currentStage = record ? stagesById.get(record.current_stage_id) : undefined;
 
-  const derivedDecision: EvaluationDecision | null = useMemo(() => {
-    if (decision) return decision;
-    if (!record || evaluationsRaw.length === 0) return null;
-    const violations: EvaluationIssue[] = [];
-    const warnings: EvaluationIssue[] = [];
-    for (const row of evaluationsRaw) {
-      if (row.passed) continue;
-      const issue: EvaluationIssue = {
-        rule_code: row.rule_code,
-        message: row.explanation ?? "No explanation recorded.",
-        risk_applied: row.risk_applied,
-      };
-      if (row.action_applied === "block") violations.push(issue);
-      else if (row.action_applied === "warn") warnings.push(issue);
-    }
-    return {
-      can_progress: violations.length === 0,
-      risk_score: record.risk_score,
-      risk_band: record.risk_band,
-      violations,
-      warnings,
-      summary:
-        violations.length > 0
-          ? `${violations.length} blocking issue${violations.length === 1 ? "" : "s"}, ${warnings.length} warning${warnings.length === 1 ? "" : "s"}.`
-          : warnings.length > 0
-          ? `No blocking issues. ${warnings.length} warning${warnings.length === 1 ? "" : "s"} outstanding.`
-          : "All active rules passed in the last evaluation.",
-    };
-  }, [decision, evaluationsRaw, record]);
+  // Decision lives on the server. refreshAll() pulls it from the new
+  // GET /records/:id/decision endpoint; handleEvaluate() / handleTransition()
+  // overwrite it with the live decision returned from their POSTs so
+  // the UI reflects the just-taken action without waiting for the
+  // next refresh.
 
   async function handleEvaluate() {
     if (!record) return;
@@ -491,7 +472,7 @@ export default function RecordDetailPage() {
           evaluating={evaluating}
           transitioning={transitioning}
           transitionBlockedReason={
-            derivedDecision && derivedDecision.violations.length > 0
+            decision && decision.violations.length > 0
               ? "Resolve blocking issues first"
               : null
           }
@@ -500,7 +481,7 @@ export default function RecordDetailPage() {
 
       <MountPanel>
         <EvaluationPanel
-          decision={derivedDecision}
+          decision={decision}
           onEvaluate={handleEvaluate}
           evaluating={evaluating}
         />

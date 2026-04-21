@@ -65,15 +65,21 @@ class ContentAccessReplayGuard:
             return True
 
     def _evict_expired_locked(self, now: float) -> None:
+        # Invariant: all signed-access tokens carry the same TTL today
+        # (CONTENT_ACCESS_DEFAULT_TTL_SECONDS, bounded per-request by
+        # SignedAccessRequest.ttl_seconds <= 600). That makes
+        # insertion-ordered close enough to exp-ordered that walking
+        # the front of the map and stopping at the first non-expired
+        # entry evicts every expired entry cheaply. If the TTL
+        # envelope ever widens asymmetrically (e.g. 10s tokens mixed
+        # with 600s tokens) this short-circuit would leak expired
+        # entries until max_entries forces them out — revisit here.
         for jti in list(self._used.keys()):
             _first_seen, exp = self._used[jti]
             if exp <= now:
                 self._used.pop(jti, None)
             else:
-                # OrderedDict is insertion-ordered, not exp-ordered, so
-                # we have to walk the whole map. Entries are bounded by
-                # `max_entries` which keeps this cheap in practice.
-                continue
+                break
 
     def __len__(self) -> int:
         with self._lock:

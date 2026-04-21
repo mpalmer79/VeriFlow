@@ -207,3 +207,58 @@ def current_evaluations(db: Session, record: Record) -> List[RuleEvaluation]:
         .order_by(RuleEvaluation.id.asc())
     )
     return list(db.execute(stmt).scalars().all())
+
+
+def decision_from_current_state(db: Session, record: Record) -> EvaluationDecision:
+    """Return the current EvaluationDecision without running evaluators
+    or mutating anything.
+
+    This is the read-only counterpart to `evaluate_and_persist`: it
+    reconstructs the same decision shape from the persisted
+    `rule_evaluations` rows plus the record's existing `risk_score` /
+    `risk_band`. Used by the frontend so it can show the current
+    decision on page mount without triggering a fresh evaluation.
+    """
+    rows = current_evaluations(db, record)
+    violations: List[EvaluationIssue] = []
+    warnings: List[EvaluationIssue] = []
+    for row in rows:
+        if row.passed:
+            continue
+        issue = EvaluationIssue(
+            rule_code=row.rule_code,
+            message=row.explanation or "No explanation recorded.",
+            risk_applied=row.risk_applied,
+        )
+        if row.action_applied == RuleActionApplied.BLOCK:
+            violations.append(issue)
+        elif row.action_applied == RuleActionApplied.WARN:
+            warnings.append(issue)
+
+    can_progress = not violations
+    risk_score = record.risk_score
+    risk_band = record.risk_band.value if record.risk_band else RiskBand.LOW.value
+
+    if not rows:
+        summary = "No evaluation on file yet."
+    elif violations:
+        summary = (
+            f"{len(violations)} blocking issue(s); {len(warnings)} warning(s); "
+            f"risk {risk_score} ({risk_band})."
+        )
+    elif warnings:
+        summary = (
+            f"No blocking issues; {len(warnings)} warning(s); "
+            f"risk {risk_score} ({risk_band})."
+        )
+    else:
+        summary = f"All rules passed; risk {risk_score} ({risk_band})."
+
+    return EvaluationDecision(
+        can_progress=can_progress,
+        risk_score=risk_score,
+        risk_band=risk_band,
+        violations=violations,
+        warnings=warnings,
+        summary=summary,
+    )

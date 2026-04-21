@@ -63,17 +63,20 @@ export default function DashboardPage() {
   const [stale, setStale] = useState(false);
   const initialLoadDone = useRef(false);
 
-  const fetchData = useCallback(async (opts?: { background?: boolean }) => {
+  const fetchData = useCallback(async (
+    opts?: { background?: boolean; signal?: AbortSignal },
+  ) => {
     const background = opts?.background === true;
     if (!background) setLoading(true);
     setError(null);
     try {
-      const result = await recordsApi.list({ limit: 200 });
+      const result = await recordsApi.list({ limit: 200 }, opts?.signal);
       setData(result);
       setLastRefreshed(new Date());
       setStageMap(await loadStagesForRecords(result));
       setStale(false);
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const message =
         err instanceof ApiError
           ? err.detail || err.message
@@ -95,7 +98,9 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    void fetchData();
+    const controller = new AbortController();
+    void fetchData({ signal: controller.signal });
+    return () => controller.abort();
   }, [fetchData]);
 
   // 30s polling gated by tab visibility. Backgrounded tabs do not poll

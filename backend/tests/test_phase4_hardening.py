@@ -116,6 +116,11 @@ def test_content_endpoint_requires_authentication(client, auth_headers, db_sessi
     record = _create_record(client, auth_headers, _workflow(db_session).id)
     doc = _upload(client, auth_headers, record["id"]).json()
 
+    # Phase 8A added cookie auth; the TestClient's cookie jar would
+    # otherwise carry the session cookie from `_upload` and keep the
+    # request authenticated. Clear it so we are testing the real
+    # no-auth case.
+    client.cookies.clear()
     response = client.get(f"/api/documents/{doc['id']}/content")
     assert response.status_code == 401
 

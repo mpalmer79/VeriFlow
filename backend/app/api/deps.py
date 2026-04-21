@@ -1,6 +1,6 @@
 from typing import Iterable
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -10,17 +10,29 @@ from app.models.user import User
 from app.services import auth_service
 
 
+SESSION_COOKIE_NAME = "veriflow.session"
+
+
 def get_current_user(
     db: Session = Depends(get_db),
     authorization: str | None = Header(default=None),
+    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
 ) -> User:
-    if not authorization or not authorization.lower().startswith("bearer "):
+    # Prefer the HTTP-only cookie (Phase 8A) so the browser never has
+    # to read the token value; fall back to the Bearer header during
+    # the rollout window so existing clients keep working.
+    token: str | None = None
+    if session_cookie:
+        token = session_cookie
+    elif authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid authorization header",
+            detail="Missing or invalid authorization",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = authorization.split(" ", 1)[1].strip()
     try:
         payload = decode_access_token(token)
     except ValueError:
