@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Buttons</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:grid;grid-template-columns:repeat(4,1fr);gap:10px 12px;align-items:center}
+  .lbl{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#64748b;font-weight:500;grid-column:1/-1;margin-top:6px}
+  button{font-family:inherit;border:0;cursor:pointer;font-size:13px;font-weight:500;padding:8px 14px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;transition:background .12s ease-out, border-color .12s ease-out;transform:translateY(0)}
+  button:active{transform:translateY(1px)}
+  .primary{background:#0e7490;color:#fff}
+  .primary:hover{background:#1c8da8}
+  .secondary{background:transparent;color:#e6edf3;border:1px solid #1f2a44}
+  .secondary:hover{border-color:#64748b}
+  .ghost{background:transparent;color:#e6edf3}
+  .ghost:hover{background:#111c33}
+  .danger{background:transparent;color:#ef4444;border:1px solid #ef444466}
+  .danger:hover{background:#ef444418;border-color:#ef4444}
+  .sm{padding:5px 10px;font-size:12px}
+  .icon-only{padding:6px;border-radius:6px;background:transparent;color:#94a3b8;border:1px solid #1f2a44}
+  .icon-only:hover{color:#e6edf3;border-color:#64748b}
+  svg{width:14px;height:14px;stroke-width:1.75}
+</style></head>
+<body><div class="wrap">
+  <div class="lbl">primary · secondary · ghost · danger</div>
+  <button class="primary">Run evaluation</button>
+  <button class="secondary">Attempt transition</button>
+  <button class="ghost">Cancel</button>
+  <button class="danger">Reject evidence</button>
+
+  <div class="lbl">small sizes + icon variants</div>
+  <button class="primary sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15A9 9 0 1 1 5.64 5.64L23 10"></path></svg>Refresh</button>
+  <button class="secondary sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Approve</button>
+  <button class="icon-only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+  <button class="icon-only"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
+</div></body></html>

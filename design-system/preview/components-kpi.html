@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>KPI cards</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums}
+  .wrap{padding:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .card{background:#0f172a;border:1px solid #1f2a44;border-radius:8px;padding:14px 16px;position:relative}
+  .card.alert{border-color:#ef444499}
+  .lbl{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#64748b;font-weight:500}
+  .num{font-family:"Fraunces",serif;font-weight:600;font-size:34px;letter-spacing:-.015em;margin-top:4px;line-height:1}
+  .delta{font-size:11px;font-family:"JetBrains Mono",monospace;color:#94a3b8;margin-top:6px}
+  .up{color:#22c55e}.down{color:#ef4444}
+  .ico{position:absolute;top:12px;right:12px;color:#3dabc4;opacity:.55}
+  svg{width:16px;height:16px;stroke-width:1.75}
+</style></head>
+<body><div class="wrap">
+  <div class="card"><div class="lbl">Active records</div><div class="num">247</div><div class="delta"><span class="up">▲ 8</span> · 24h</div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+  </div>
+  <div class="card alert"><div class="lbl">Blocked</div><div class="num" style="color:#ef4444">6</div><div class="delta"><span class="up" style="color:#ef4444">▲ 2</span> · vs yesterday</div>
+    <div class="ico" style="color:#ef4444;opacity:.7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+  </div>
+  <div class="card"><div class="lbl">Median risk</div><div class="num">41.2</div><div class="delta"><span class="down">▼ 1.4</span> · 7d trend</div>
+    <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+  </div>
+</div></body></html>

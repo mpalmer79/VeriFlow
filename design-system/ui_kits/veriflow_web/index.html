@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VeriFlow · UI kit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  html, body, #root { margin:0; padding:0; height:100%; background:var(--surface); color:var(--text); }
+  body { font-family: var(--font-sans); font-variant-numeric: tabular-nums; font-feature-settings:"cv02","cv03","cv11"; -webkit-font-smoothing: antialiased; }
+  *, *::before, *::after { box-sizing: border-box; }
+  button { font-family: inherit; }
+  a { color: var(--accent-500); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* shared lightweight utilities */
+  .panel { background: var(--surface-panel); border: 1px solid var(--surface-border); border-radius: var(--radius-lg); }
+  .row { display: flex; align-items: center; }
+  .muted { color: var(--text-muted); }
+  .subtle { color: var(--text-subtle); }
+  .caps { font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--text-subtle); font-weight:500; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .display { font-family: var(--font-display); font-weight: 600; letter-spacing: -.015em; }
+  .pulse { animation: vf-pulse 3s ease-in-out infinite; }
+  @keyframes vf-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.55;transform:scale(.85)} }
+  .spin { animation: vf-spin 1s linear infinite; }
+  @keyframes vf-spin { to { transform: rotate(360deg); } }
+  ::selection { background: var(--brand-500); color: #fff; }
+
+  /* hero gradient applied just to the app header band */
+  .hero-wash { background-image: radial-gradient(ellipse 900px 400px at 15% 0%, rgba(14,116,144,.14), transparent 70%); }
+
+  /* ---------- Motion system ---------- */
+  @keyframes vf-rise-in   { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes vf-fade-in   { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes vf-scale-in  { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+  @keyframes vf-draw      { from { stroke-dashoffset: var(--len, 200); } to { stroke-dashoffset: 0; } }
+  @keyframes vf-chain-pulse { 0%,100% { opacity: .25 } 50% { opacity: .95 } }
+  @keyframes vf-shimmer   { from { background-position: -400px 0 } to { background-position: 400px 0 } }
+  @keyframes vf-float-3d  { 0%,100% { transform: rotateX(18deg) rotateY(-22deg) translateZ(0) } 50% { transform: rotateX(18deg) rotateY(-22deg) translateZ(12px) } }
+  @keyframes vf-ring-spin { to { transform: rotate(360deg); } }
+  @keyframes vf-dot-travel{ 0% { offset-distance: 0% } 100% { offset-distance: 100% } }
+  @keyframes vf-slide-in-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+  @keyframes vf-slide-in-left  { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+  @keyframes vf-sev-sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .vf-slide-r { animation: vf-slide-in-right var(--dur-medium) var(--ease-out-expo) both; }
+  .vf-slide-l { animation: vf-slide-in-left  var(--dur-medium) var(--ease-out-expo) both; }
+
+  .vf-rise  { animation: vf-rise-in  var(--dur-medium) var(--ease-out-expo) both; }
+  .vf-fade  { animation: vf-fade-in  var(--dur-short)  var(--ease-out-expo) both; }
+  .vf-scale { animation: vf-scale-in var(--dur-medium) var(--ease-out-expo) both; }
+  .vf-stagger > * { animation: vf-rise-in var(--dur-medium) var(--ease-out-expo) both; }
+  .vf-stagger > *:nth-child(1){animation-delay: .02s}
+  .vf-stagger > *:nth-child(2){animation-delay: .07s}
+  .vf-stagger > *:nth-child(3){animation-delay: .12s}
+  .vf-stagger > *:nth-child(4){animation-delay: .17s}
+  .vf-stagger > *:nth-child(5){animation-delay: .22s}
+  .vf-stagger > *:nth-child(6){animation-delay: .27s}
+  .vf-stagger > *:nth-child(7){animation-delay: .32s}
+  .vf-stagger > *:nth-child(8){animation-delay: .37s}
+
+  .vf-shimmer {
+    background-image: linear-gradient(90deg, transparent, rgba(61,171,196,.22), transparent);
+    background-size: 400px 100%; background-repeat: no-repeat;
+    animation: vf-shimmer 1.8s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 1ms !important; animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="./components/data.js"></script>
+<script type="text/babel" src="./components/Primitives.jsx"></script>
+<script type="text/babel" src="./components/ChainOfCustody3D.jsx"></script>
+<script type="text/babel" src="./components/Landing.jsx"></script>
+<script type="text/babel" src="./components/Dashboard.jsx"></script>
+<script type="text/babel" src="./components/Records.jsx"></script>
+<script type="text/babel" src="./components/RecordDetail.jsx"></script>
+<script type="text/babel" src="./components/Operations.jsx"></script>
+<script type="text/babel" src="./components/App.jsx"></script>
+
+<script type="text/babel">
+  const root = ReactDOM.createRoot(document.getElementById('root'));
+  root.render(<App />);
+</script>
+</body>
+</html>
