@@ -429,11 +429,13 @@ def test_alembic_env_imports_metadata():
 def test_alembic_baseline_migration_loads():
     import importlib.util
 
+    # Phase 3 replaced the create_all baseline with an explicit DDL
+    # migration renamed from 0001_initial_schema.py to 0001_baseline.py.
     migration_path = (
         Path(__file__).resolve().parents[1]
         / "migrations"
         / "versions"
-        / "0001_initial_schema.py"
+        / "0001_baseline.py"
     )
     assert migration_path.is_file()
 
@@ -445,5 +447,5 @@ def test_alembic_baseline_migration_loads():
     spec.loader.exec_module(module)
     assert hasattr(module, "upgrade")
     assert hasattr(module, "downgrade")
-    assert module.revision == "0001_initial_schema"
+    assert module.revision == "0001_baseline"
     assert module.down_revision is None
