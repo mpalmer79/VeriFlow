@@ -43,6 +43,14 @@ type BannerState =
       warningCount: number;
       riskScore: number;
       riskBand: RiskBand;
+    }
+  | {
+      kind: "terminal_blocked";
+      stageName: string | undefined;
+    }
+  | {
+      kind: "closed";
+      stageName: string | undefined;
     };
 
 function pickTopIssue(
@@ -61,9 +69,12 @@ function toneClassNames(kind: BannerState["kind"]): string {
     case "not_evaluated":
       return "rounded-lg border border-surface-border bg-surface-panel p-5";
     case "blocked":
+    case "terminal_blocked":
       return "rounded-lg border border-severity-critical/60 bg-severity-critical/10 p-5";
     case "ready":
       return "rounded-lg border border-severity-verified/60 bg-severity-verified/10 p-5";
+    case "closed":
+      return "rounded-lg border border-surface-border bg-surface-muted p-5";
   }
 }
 
@@ -86,15 +97,21 @@ export function DecisionBanner({
   const reduce = useReducedMotion();
 
   const state: BannerState = useMemo(() => {
+    // Authoritative record state trumps any stale decision payload:
+    // a closed or terminally-blocked record is done routing through
+    // the rule engine, regardless of what the last evaluation said.
+    if (record.status === "closed") {
+      return { kind: "closed", stageName: currentStage?.name };
+    }
+    if (currentStage?.is_terminal === true && record.status === "blocked") {
+      return { kind: "terminal_blocked", stageName: currentStage.name };
+    }
     if (decision === null) {
       return { kind: "not_evaluated" };
     }
     if (decision.violations.length > 0) {
       const top = pickTopIssue(decision.violations);
-      // violations.length > 0 guarantees top is non-null, but narrow
-      // explicitly rather than assert.
-      const topIssue: EvaluationIssue =
-        top ?? decision.violations[0];
+      const topIssue: EvaluationIssue = top ?? decision.violations[0];
       return {
         kind: "blocked",
         topIssue,
@@ -111,9 +128,16 @@ export function DecisionBanner({
       riskScore: decision.risk_score,
       riskBand: decision.risk_band,
     };
-    // Re-derive only when decision identity, stage selection, or the
-    // record's optimistic-concurrency version changes.
-  }, [decision, record.version, targetStage?.id]);
+    // record.version bumps on every status/stage change, so keying on
+    // it covers record.status and currentStage.is_terminal transitions.
+  }, [
+    decision,
+    record.status,
+    record.version,
+    currentStage?.is_terminal,
+    currentStage?.name,
+    targetStage?.id,
+  ]);
 
   const transition = reduce
     ? { duration: 0 }
@@ -121,6 +145,15 @@ export function DecisionBanner({
 
   const stageClauseVisible =
     currentStage !== undefined && totalStages !== undefined;
+
+  const showAdvanceCta =
+    (state.kind === "ready" || state.kind === "terminal_blocked") &&
+    targetStage !== undefined &&
+    targetStage.id !== record.current_stage_id;
+
+  const showChooseStageHint =
+    (state.kind === "ready" || state.kind === "terminal_blocked") &&
+    (targetStage === undefined || targetStage.id === record.current_stage_id);
 
   return (
     <motion.section
@@ -140,7 +173,7 @@ export function DecisionBanner({
               aria-hidden="true"
             />
           ) : null}
-          {state.kind === "blocked" ? (
+          {state.kind === "blocked" || state.kind === "terminal_blocked" ? (
             <AlertOctagon
               size={24}
               className="text-severity-critical"
@@ -154,13 +187,22 @@ export function DecisionBanner({
               aria-hidden="true"
             />
           ) : null}
+          {state.kind === "closed" ? (
+            <CircleCheck
+              size={24}
+              className="text-text-muted"
+              aria-hidden="true"
+            />
+          ) : null}
         </div>
 
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-xl font-semibold tracking-tight text-text sm:text-2xl">
             {state.kind === "not_evaluated" ? "Not evaluated yet." : null}
             {state.kind === "blocked" ? "Blocked." : null}
+            {state.kind === "terminal_blocked" ? "Blocked." : null}
             {state.kind === "ready" ? "Ready to advance." : null}
+            {state.kind === "closed" ? "Closed." : null}
           </h2>
           <p className="mt-1 text-sm text-text-muted">
             {state.kind === "not_evaluated"
@@ -168,6 +210,11 @@ export function DecisionBanner({
               : null}
             {state.kind === "blocked"
               ? `${state.violationCount} ${pluralize(state.violationCount, "rule", "rules")} failing · ${state.warningCount} ${pluralize(state.warningCount, "warning", "warnings")} · risk ${state.riskScore}/${state.riskBand}`
+              : null}
+            {state.kind === "terminal_blocked"
+              ? state.stageName
+                ? `Record is at the terminal ${state.stageName} stage. Advance to a non-terminal stage to reopen the workflow.`
+                : "Record is at a terminal blocked stage. Advance to a non-terminal stage to reopen the workflow."
               : null}
             {state.kind === "ready" ? (
               <>
@@ -177,6 +224,9 @@ export function DecisionBanner({
                   : null}
               </>
             ) : null}
+            {state.kind === "closed"
+              ? "This record reached the terminal closed stage. No further action required."
+              : null}
           </p>
         </div>
 
@@ -202,9 +252,7 @@ export function DecisionBanner({
               Resolve blocking issues
             </button>
           ) : null}
-          {state.kind === "ready" &&
-          targetStage !== undefined &&
-          targetStage.id !== record.current_stage_id ? (
+          {showAdvanceCta && targetStage !== undefined ? (
             <button
               type="button"
               onClick={onTransition}
@@ -215,11 +263,14 @@ export function DecisionBanner({
               {transitioning ? "Transitioning…" : `Advance to ${targetStage.name}`}
             </button>
           ) : null}
-          {state.kind === "ready" &&
-          (targetStage === undefined ||
-            targetStage.id === record.current_stage_id) ? (
+          {showChooseStageHint ? (
             <span className="text-xs text-text-subtle">
               Choose next stage below.
+            </span>
+          ) : null}
+          {state.kind === "closed" ? (
+            <span className="text-xs text-text-subtle">
+              Archived. No action required.
             </span>
           ) : null}
         </div>
