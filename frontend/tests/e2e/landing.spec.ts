@@ -17,10 +17,12 @@ test.describe("landing page", () => {
     ).toBeVisible();
   });
 
-  test('"Enter demo" links to /enter', async ({ page }) => {
+  test('"Enter demo" links to /enter with the reviewer-auto param', async ({ page }) => {
     await page.goto("/");
     const cta = page.getByRole("link", { name: /enter demo/i });
-    await expect(cta).toHaveAttribute("href", "/enter");
+    // The primary CTA auto-logs-in as the reviewer demo account and
+    // deep-links to a blocked record; see frontend/app/enter/page.tsx.
+    await expect(cta).toHaveAttribute("href", "/enter?auto=reviewer");
   });
 
   test('"See how it works" scrolls to the pillars section', async ({ page }) => {

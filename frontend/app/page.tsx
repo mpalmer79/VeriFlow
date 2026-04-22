@@ -88,7 +88,14 @@ export default function Landing() {
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
-    if (readToken()) {
+    // Escape hatch: an authenticated reviewer can still view the
+    // landing page from inside the demo by passing ?from=demo. A
+    // future PR wires the matching "Return to landing" link into
+    // the app shell; this keeps that change to one file.
+    const fromDemo =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("from") === "demo";
+    if (readToken() && !fromDemo) {
       setRedirecting(true);
       router.replace("/dashboard");
     }
@@ -177,7 +184,7 @@ function HeroSection({
           >
             <motion.div whileHover={{ y: -1 }} whileTap={{ y: 1 }}>
               <Link
-                href="/enter"
+                href="/enter?auto=reviewer"
                 className="bg-gradient-cta inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-brand-300"
               >
                 Enter demo
@@ -384,8 +391,28 @@ function LandingFooter() {
             Docs
           </a>
         </nav>
-        <div className="text-xs text-text-subtle">
-          Built with FastAPI and Next.js.
+        <div className="flex flex-col gap-1 text-xs text-text-subtle md:items-end">
+          <div>
+            Built by{" "}
+            <a
+              href="LINKEDIN_URL"
+              className="transition-colors hover:text-text"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Michael Palmer
+            </a>
+            {" · "}
+            <a
+              href="GITHUB_PROFILE_URL"
+              className="transition-colors hover:text-text"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              GitHub
+            </a>
+          </div>
+          <div>Built with FastAPI and Next.js.</div>
         </div>
       </div>
     </footer>
