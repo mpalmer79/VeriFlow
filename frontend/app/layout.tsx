@@ -47,7 +47,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{ __html: THEME_FLASH_SUPPRESSION }}
         />
       </head>
-      <body className="min-h-screen bg-surface font-sans text-text antialiased">
+      <body className="min-h-screen bg-surface bg-gradient-hero bg-fixed font-sans text-text antialiased">
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
