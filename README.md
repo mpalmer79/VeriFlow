@@ -1,5 +1,10 @@
 # VeriFlow
 
+![VeriFlow record detail page showing a blocked record with rule violations and contextual actions.](docs/images/hero.png)
+
+> Live demo: LIVE_URL_HERE — click Enter demo to auto-login as the reviewer account. No signup required.
+> Built by Michael Palmer — LINKEDIN_URL · GITHUB_PROFILE_URL
+
 VeriFlow is a workflow and evidence-control platform for
 compliance-heavy operations. It enforces staged progression against a
 code-driven rule registry, scores operational risk, and produces a
@@ -12,6 +17,14 @@ intake, vendor onboarding, claims triage, and any process where
 controlled state transitions and verifiable document evidence matter
 more than throughput. VeriFlow is **not** an EHR, scheduling system,
 or CRM.
+
+## At a glance
+
+- Stack: Next.js 14 + TypeScript + Tailwind on the frontend; FastAPI + SQLAlchemy 2.x + PostgreSQL on the backend
+- Deployed on Railway with CI on every push (SQLite broad job, PostgreSQL targeted job, Playwright end-to-end)
+- Hash-chained audit trail with a verify endpoint that walks the chain and reports broken links
+- Streaming uploads with SHA-256 at ingest and re-hash at verification; one-use signed URLs for content delivery
+- Code-driven rule registry with explainable risk scoring and stage-gated transitions
 
 ## What it actually does
 
@@ -349,58 +362,9 @@ the required stack setup.
   and `/api/documents/{id}/signed-access`. Sliding-window, in-process;
   swap for Redis-backed if you run multiple replicas.
 
-## Engineering story so far
+## Engineering log
 
-- **Phases 0–1** — monorepo, data model, auth, record CRUD.
-- **Phase 2** — rule registry, risk scoring, evaluation, transitions.
-- **Phase 3** — documents as first-class evidence, required-document
-  logic, stage-aware rule filtering, canonical audit payloads.
-- **Hardening rounds** — optimistic concurrency, audit hash chain,
-  document integrity metadata, real upload + verification + integrity
-  check + record-level cleanup + secure content delivery + range
-  support + evidence preview + signed URLs + orphan sweep.
-- **Phase 7** — backend modularity (document service
-  split), frontend componentization and polish, CI workflow with
-  PostgreSQL matrix, Dockerfiles + Compose, JWT-secret and CORS
-  tightening, rate limiting, and a PostgreSQL test path.
-- **Phase 8** — productization and deployment readiness:
-  shared in-app `ConfirmDialog` replacing native `window.confirm` /
-  `window.prompt`, admin-gated `/operations` UI for audit-chain
-  verification and storage inventory + orphan cleanup, dev-only seed
-  gating with an explicit opt-in override, readiness endpoint with a
-  live DB ping, Railway configuration for both services, deployment
-  docs, and Playwright groundwork.
-- **Phase 9** — optimization and completion: pytest
-  `postgres` / `migration` markers, CI split into a broad SQLite job
-  and a narrow PostgreSQL job (upgrade/downgrade round-trip plus the
-  dialect-sensitive subset), real Playwright flows for auth/shell,
-  records list + detail + metadata-only semantics, and the operations
-  console, Railway config completion (frontend healthcheck, bounded
-  restart retries), deployment docs rewritten to separate automated
-  from manual, and a restrained UX pass on the operations admin
-  surface (captured run timestamp, auto-dismissed flashes, explicit
-  pre-run empty state).
-- **Phase 10** — runtime + product refinement: the backend broad
-  suite drops from ~5 min to ~20 s by swapping the test `CryptContext`
-  from bcrypt to `plaintext` at session scope and binding the app to
-  the test engine once per session; typography system (Inter +
-  JetBrains Mono via `next/font/google`, body-wide `tabular-nums`,
-  `.mono` utility for identifiers); controlled motion system;
-  product polish on identifiers, integrity hashes, and record
-  references; two new Playwright specs for the confirm-dialog flow
-  and the typography/motion wiring.
-- **Phase 11 (this pass)** — trust-hardening + browser confidence:
-  a bounded, single-node jti replay guard on signed content-access
-  tokens with a short grace window so a captured URL can no longer be
-  replayed after the browser finishes loading it; a dedicated
-  `e2e (playwright, chromium)` CI job that installs Chromium, boots
-  the real stack in background processes, and runs the small
-  Playwright suite against it; operations-admin polish (explicit
-  "Read-only checks" vs "Destructive operations" grouping, pluralised
-  audit-count copy, stronger destructive confirm copy that quotes
-  the exact file count, better preamble on the cleanup panel);
-  README reframed around evidence control and audit-chain
-  verifiability rather than generic "workflow intelligence" framing.
+Twelve numbered phases from monorepo bootstrap through trust-hardening. Highlights: a code-driven rule engine with explainable risk scoring, a SHA-256 hash-chained audit trail with a verify endpoint, streaming upload and verification with signed-URL content delivery and bounded replay prevention, a two-job backend CI split (SQLite broad and PostgreSQL targeted), and a chromium-only Playwright end-to-end job against the real stack. Full history in CHANGELOG.md.
 
 ## Known limitations
 
