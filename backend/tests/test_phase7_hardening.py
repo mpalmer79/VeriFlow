@@ -337,9 +337,13 @@ def test_record_detail_page_uses_extracted_components():
     )
     assert page.is_file()
     text = page.read_text(encoding="utf-8")
+    # RecordHeader and ActionBar were demoted off this page in PR #53
+    # (feat/decision-banner-hero) — the DecisionBanner now carries the
+    # orientation strip and contextual transition controls that used to
+    # live in those components. The component files remain on disk
+    # (test_phase10_hardening.py still reads RecordHeader.tsx) but the
+    # record-detail page no longer imports them.
     for expected in (
-        "@/components/record-detail/RecordHeader",
-        "@/components/record-detail/ActionBar",
         "@/components/record-detail/EvaluationPanel",
         "@/components/record-detail/WorkflowTimeline",
         "@/components/record-detail/DocumentEvidencePanel",
