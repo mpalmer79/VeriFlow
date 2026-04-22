@@ -3,7 +3,7 @@
 ![VeriFlow record detail page showing a blocked record with rule violations and contextual actions.](docs/images/hero.png)
 
 > Live demo: LIVE_URL_HERE — click Enter demo to auto-login as the reviewer account. No signup required.
-> Built by Michael Palmer — LINKEDIN_URL · GITHUB_PROFILE_URL
+> Built by Michael Palmer — https://www.linkedin.com/in/mpalmer1234/ · https://github.com/mpalmer79/
 
 VeriFlow is a workflow and evidence-control platform for
 compliance-heavy operations. It enforces staged progression against a
