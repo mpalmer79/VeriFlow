@@ -2,7 +2,7 @@
 
 ![VeriFlow record detail page showing a blocked record with rule violations and contextual actions.](docs/images/hero.png)
 
-> Live demo: LIVE_URL_HERE — click Enter demo to auto-login as the reviewer account. No signup required.
+> Live demo: https://veriflow.up.railway.app/ — click Enter demo to auto-login as the reviewer account. No signup required.
 > Built by Michael Palmer — <a href="https://www.linkedin.com/in/mpalmer1234/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a> <a href="https://github.com/mpalmer79/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
 
 VeriFlow is a workflow and evidence-control platform for
