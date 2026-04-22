@@ -19,7 +19,6 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { DURATION_MEDIUM, EASE_OUT_EXPO, fadeRise } from "@/lib/motion";
-import { ActionBar } from "@/components/record-detail/ActionBar";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DecisionBanner } from "@/components/record-detail/DecisionBanner";
 import { DocumentEvidencePanel } from "@/components/record-detail/DocumentEvidencePanel";
@@ -28,7 +27,6 @@ import {
   PreviewOverlay,
   PreviewTarget,
 } from "@/components/record-detail/PreviewOverlay";
-import { RecordHeader } from "@/components/record-detail/RecordHeader";
 import { WorkflowTimeline } from "@/components/record-detail/WorkflowTimeline";
 import { useToast } from "@/components/ui/Toast";
 import { ApiError, audit, documents, records, workflows } from "@/lib/api";
@@ -476,43 +474,37 @@ export default function RecordDetailPage() {
     >
       {loadError ? <ErrorBanner message={loadError} /> : null}
 
-      <MountPanel>
-        <DecisionBanner
-          record={record}
-          currentStage={currentStage}
-          decision={decision}
-          targetStage={targetStage}
-          totalStages={totalStages}
-          evaluating={evaluating}
-          transitioning={transitioning}
-          onEvaluate={handleEvaluate}
-          onTransition={handleTransition}
-          onFocusEvaluation={focusEvaluation}
-        />
-      </MountPanel>
+      <Breadcrumbs
+        items={[
+          { label: "Records", href: "/records" },
+          { label: record.subject_full_name },
+        ]}
+      />
 
-      <MountPanel>
-        <RecordHeader record={record} currentStage={currentStage} />
-      </MountPanel>
-
-      <MountPanel>
-        <ActionBar
-          stages={workflow?.stages ?? []}
-          currentStageId={record.current_stage_id}
-          targetStageId={targetStageId}
-          onTargetChange={setTargetStageId}
-          onEvaluate={handleEvaluate}
-          onTransition={handleTransition}
-          onRefresh={() => refreshAll({ silent: true })}
-          evaluating={evaluating}
-          transitioning={transitioning}
-          transitionBlockedReason={
-            decision && decision.violations.length > 0
-              ? "Resolve blocking issues first"
-              : null
-          }
-        />
-      </MountPanel>
+      {/* Banner is rendered directly (no MountPanel) so it is exempt
+          from the parent's staggerChildren schedule — the lede
+          establishes the page, the supporting panels fade in below. */}
+      <DecisionBanner
+        record={record}
+        currentStage={currentStage}
+        decision={decision}
+        targetStage={targetStage}
+        totalStages={totalStages}
+        evaluating={evaluating}
+        transitioning={transitioning}
+        onEvaluate={handleEvaluate}
+        onTransition={handleTransition}
+        onFocusEvaluation={focusEvaluation}
+        orientation={{
+          subjectFullName: record.subject_full_name,
+          externalReference: record.external_reference,
+          currentStage,
+          totalStages,
+        }}
+        stages={workflow?.stages ?? []}
+        targetStageId={targetStageId}
+        onTargetChange={setTargetStageId}
+      />
 
       <div
         ref={evaluationSectionRef}

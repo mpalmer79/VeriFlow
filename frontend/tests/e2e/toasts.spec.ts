@@ -12,11 +12,12 @@ test.describe("toast notifications", () => {
       page.getByRole("heading", { name: "Evaluation" }),
     ).toBeVisible();
 
-    // "Run evaluation" appears both in the ActionBar (primary) and in
-    // the EvaluationPanel empty state. Scope to the ActionBar region
-    // so we always click the one the page intends as the action.
-    const actionBar = page.getByRole("region", { name: /record actions/i });
-    await actionBar.getByRole("button", { name: /^Run evaluation$/i }).click();
+    // "Run evaluation" lives on the DecisionBanner (when the record is
+    // not yet evaluated) and in the EvaluationPanel empty state. Scope
+    // by aria-label so we always click the banner's primary CTA.
+    await page
+      .getByRole("button", { name: /^Run evaluation for this record$/i })
+      .click();
 
     const viewport = page.getByRole("region", { name: /notifications/i }).or(
       page.locator('[aria-label="Notifications"]'),
@@ -29,8 +30,9 @@ test.describe("toast notifications", () => {
   test("toast can be dismissed manually", async ({ page }) => {
     await page.goto("/records");
     await page.getByRole("link", { name: "Casey Nguyen" }).click();
-    const actionBar = page.getByRole("region", { name: /record actions/i });
-    await actionBar.getByRole("button", { name: /^Run evaluation$/i }).click();
+    await page
+      .getByRole("button", { name: /^Run evaluation for this record$/i })
+      .click();
 
     const viewport = page.locator('[aria-label="Notifications"]');
     const toast = viewport.locator('[role="status"], [role="alert"]').first();

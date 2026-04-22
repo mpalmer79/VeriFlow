@@ -1,11 +1,9 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { useMemo } from "react";
 
 import { Activity, AlertOctagon, CircleCheck } from "@/components/icons";
 import { RuleCodeBadge } from "@/components/ui/RuleCodeBadge";
-import { DURATION_MEDIUM, EASE_OUT_EXPO, fadeRise } from "@/lib/motion";
 import type {
   EvaluationDecision,
   EvaluationIssue,
@@ -13,6 +11,13 @@ import type {
   RiskBand,
   WorkflowStage,
 } from "@/lib/types";
+
+export interface DecisionBannerOrientation {
+  subjectFullName: string;
+  externalReference: string | null;
+  currentStage: WorkflowStage | undefined;
+  totalStages: number | undefined;
+}
 
 export interface DecisionBannerProps {
   record: RecordRead;
@@ -25,6 +30,10 @@ export interface DecisionBannerProps {
   onEvaluate: () => void;
   onTransition: () => void;
   onFocusEvaluation: () => void;
+  orientation: DecisionBannerOrientation;
+  stages: WorkflowStage[];
+  targetStageId: number | "";
+  onTargetChange: (id: number | "") => void;
 }
 
 type BannerState =
@@ -67,7 +76,10 @@ function pickTopIssue(
 function toneClassNames(kind: BannerState["kind"]): string {
   switch (kind) {
     case "not_evaluated":
-      return "rounded-lg border border-surface-border bg-surface-panel p-5";
+      // A record that has never been evaluated is a control gap, not a
+      // neutral "default" — render it in the warning tier so it reads
+      // as "needs attention," not "nothing happened yet."
+      return "rounded-lg border border-severity-moderate/60 bg-severity-moderate/10 p-5";
     case "blocked":
     case "terminal_blocked":
       return "rounded-lg border border-severity-critical/60 bg-severity-critical/10 p-5";
@@ -82,6 +94,77 @@ function pluralize(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
 }
 
+interface StagePickerProps {
+  stages: WorkflowStage[];
+  currentStageId: number;
+  targetStageId: number | "";
+  onTargetChange: (id: number | "") => void;
+  onTransition: () => void;
+  transitioning: boolean;
+}
+
+function StagePicker({
+  stages,
+  currentStageId,
+  targetStageId,
+  onTargetChange,
+  onTransition,
+  transitioning,
+}: StagePickerProps) {
+  const available = stages
+    .slice()
+    .sort((a, b) => a.order_index - b.order_index)
+    .filter((s) => s.id !== currentStageId);
+
+  const targetStage =
+    targetStageId === ""
+      ? undefined
+      : available.find((s) => s.id === Number(targetStageId));
+
+  const advanceDisabled = transitioning || targetStageId === "";
+
+  return (
+    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+      <label className="sr-only" htmlFor="target-stage">
+        Transition to
+      </label>
+      <select
+        id="target-stage"
+        className="input w-full sm:w-56"
+        value={targetStageId}
+        onChange={(e) =>
+          onTargetChange(e.target.value === "" ? "" : Number(e.target.value))
+        }
+        disabled={transitioning}
+      >
+        <option value="">Select stage…</option>
+        {available.map((s) => (
+          <option key={s.id} value={s.id}>
+            {s.name}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={onTransition}
+        disabled={advanceDisabled}
+        aria-label={
+          targetStage
+            ? `Advance record to stage ${targetStage.name}`
+            : "Advance — select a target stage first"
+        }
+        className="btn-primary w-full sm:w-auto"
+      >
+        {transitioning
+          ? "Transitioning…"
+          : targetStage
+            ? `Advance to ${targetStage.name}`
+            : "Advance"}
+      </button>
+    </div>
+  );
+}
+
 export function DecisionBanner({
   record,
   currentStage,
@@ -93,9 +176,11 @@ export function DecisionBanner({
   onEvaluate,
   onTransition,
   onFocusEvaluation,
+  orientation,
+  stages,
+  targetStageId,
+  onTargetChange,
 }: DecisionBannerProps): JSX.Element {
-  const reduce = useReducedMotion();
-
   const state: BannerState = useMemo(() => {
     // Authoritative record state trumps any stale decision payload:
     // a closed or terminally-blocked record is done routing through
@@ -128,8 +213,6 @@ export function DecisionBanner({
       riskScore: decision.risk_score,
       riskBand: decision.risk_band,
     };
-    // record.version bumps on every status/stage change, so keying on
-    // it covers record.status and currentStage.is_terminal transitions.
   }, [
     decision,
     record.status,
@@ -139,37 +222,50 @@ export function DecisionBanner({
     targetStage?.id,
   ]);
 
-  const transition = reduce
-    ? { duration: 0 }
-    : { duration: DURATION_MEDIUM, ease: EASE_OUT_EXPO };
-
   const stageClauseVisible =
-    currentStage !== undefined && totalStages !== undefined;
-
-  const showAdvanceCta =
-    (state.kind === "ready" || state.kind === "terminal_blocked") &&
-    targetStage !== undefined &&
-    targetStage.id !== record.current_stage_id;
-
-  const showChooseStageHint =
-    (state.kind === "ready" || state.kind === "terminal_blocked") &&
-    (targetStage === undefined || targetStage.id === record.current_stage_id);
+    orientation.currentStage !== undefined &&
+    orientation.totalStages !== undefined;
 
   return (
-    <motion.section
+    // Rendered as a plain <section> (no motion) so the parent
+    // staggerChildren schedule skips the banner entirely — motion now
+    // reinforces that this element is the lede, not flattens it into
+    // one more panel in the cascade.
+    <section
       role={state.kind === "not_evaluated" ? undefined : "status"}
       aria-live={state.kind === "not_evaluated" ? undefined : "polite"}
       aria-atomic="true"
-      variants={fadeRise}
-      transition={transition}
       className={toneClassNames(state.kind)}
     >
-      <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:items-start">
+      {/* Orientation strip — the only place on the page where subject,
+          reference, and stage position live. RecordHeader is gone. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+        <span>{orientation.subjectFullName}</span>
+        <span aria-hidden="true">·</span>
+        {orientation.externalReference ? (
+          <span className="mono text-text">{orientation.externalReference}</span>
+        ) : (
+          <span>—</span>
+        )}
+        {stageClauseVisible &&
+        orientation.currentStage !== undefined &&
+        orientation.totalStages !== undefined ? (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>
+              {`Stage ${orientation.currentStage.order_index + 1} of ${orientation.totalStages} — ${orientation.currentStage.name}`}
+            </span>
+          </>
+        ) : null}
+      </div>
+      <div className="mt-3 h-px w-full bg-surface-border/60" aria-hidden="true" />
+
+      <div className="mt-4 flex flex-col items-stretch gap-4 sm:flex-row sm:items-start">
         <div className="flex flex-shrink-0 items-start">
           {state.kind === "not_evaluated" ? (
             <Activity
               size={24}
-              className="text-text-muted"
+              className="text-severity-moderate"
               aria-hidden="true"
             />
           ) : null}
@@ -230,7 +326,7 @@ export function DecisionBanner({
           </p>
         </div>
 
-        <div className="flex flex-shrink-0 items-start sm:self-start">
+        <div className="flex flex-shrink-0 flex-col items-stretch gap-2 sm:self-start">
           {state.kind === "not_evaluated" ? (
             <button
               type="button"
@@ -252,21 +348,15 @@ export function DecisionBanner({
               Resolve blocking issues
             </button>
           ) : null}
-          {showAdvanceCta && targetStage !== undefined ? (
-            <button
-              type="button"
-              onClick={onTransition}
-              disabled={transitioning}
-              aria-label={`Advance record to stage ${targetStage.name}`}
-              className="btn-primary w-full sm:w-auto"
-            >
-              {transitioning ? "Transitioning…" : `Advance to ${targetStage.name}`}
-            </button>
-          ) : null}
-          {showChooseStageHint ? (
-            <span className="text-xs text-text-subtle">
-              Choose next stage below.
-            </span>
+          {state.kind === "ready" || state.kind === "terminal_blocked" ? (
+            <StagePicker
+              stages={stages}
+              currentStageId={record.current_stage_id}
+              targetStageId={targetStageId}
+              onTargetChange={onTargetChange}
+              onTransition={onTransition}
+              transitioning={transitioning}
+            />
           ) : null}
           {state.kind === "closed" ? (
             <span className="text-xs text-text-subtle">
@@ -277,64 +367,49 @@ export function DecisionBanner({
       </div>
 
       {state.kind === "blocked" ? (
-        <div className="mt-4 border-l-2 border-surface-border/80 pl-3">
+        <div className="mt-4 rounded-md bg-severity-critical/5 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <RuleCodeBadge code={state.topIssue.rule_code} />
             <span className="text-xs font-semibold text-severity-critical">
               +{state.topIssue.risk_applied}
             </span>
           </div>
-          <p className="mt-1.5 line-clamp-2 text-sm text-text-muted">
+          <p className="mt-1.5 line-clamp-3 text-sm text-text">
             {state.topIssue.message}
           </p>
+          {state.violationCount > 1 ? (
+            <button
+              type="button"
+              onClick={onFocusEvaluation}
+              className="mt-2 text-xs text-text-muted underline-offset-2 hover:text-text hover:underline focus:outline-none focus:underline"
+            >
+              {`+ ${state.violationCount - 1} more blocking ${state.violationCount - 1 === 1 ? "issue" : "issues"}`}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
       {state.kind === "ready" && state.topWarning !== null ? (
-        <div className="mt-4 border-l-2 border-surface-border/80 pl-3">
+        <div className="mt-4 rounded-md bg-severity-moderate/5 p-3">
           <div className="flex flex-wrap items-center gap-2">
             <RuleCodeBadge code={state.topWarning.rule_code} />
             <span className="text-xs font-semibold text-severity-moderate">
               +{state.topWarning.risk_applied}
             </span>
           </div>
-          <p className="mt-1.5 line-clamp-2 text-sm text-text-muted">
+          <p className="mt-1.5 line-clamp-3 text-sm text-text">
             {state.topWarning.message}
           </p>
         </div>
       ) : null}
 
       {state.kind === "ready" && state.topWarning === null ? (
-        <div className="mt-4 border-l-2 border-surface-border/80 pl-3">
+        <div className="mt-4 rounded-md bg-severity-verified/5 p-3">
           <p className="text-sm text-text-muted">
             All block-level rules passed.
           </p>
         </div>
       ) : null}
-
-      <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-surface-border/60 pt-3 text-xs text-text-muted">
-        <span>{record.subject_full_name}</span>
-        <span aria-hidden="true">·</span>
-        {record.external_reference ? (
-          <span className="mono text-text">{record.external_reference}</span>
-        ) : (
-          <span>—</span>
-        )}
-        <span aria-hidden="true">·</span>
-        {stageClauseVisible && currentStage !== undefined && totalStages !== undefined ? (
-          <>
-            <span>
-              {`Stage ${currentStage.order_index + 1} of ${totalStages}`}
-            </span>
-            <span aria-hidden="true">·</span>
-          </>
-        ) : null}
-        {currentStage !== undefined ? (
-          <span>{currentStage.name}</span>
-        ) : (
-          <span>—</span>
-        )}
-      </div>
-    </motion.section>
+    </section>
   );
 }
