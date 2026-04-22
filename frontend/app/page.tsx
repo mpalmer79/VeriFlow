@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState, type MouseEvent } from "react";
 
+import { ChainHero3D } from "@/components/landing/ChainHero3D";
 import { ChainMotif } from "@/components/landing/ChainMotif";
 import { RiskBadge } from "@/components/RiskBadge";
 import { SeverityPanel } from "@/components/SeverityPanel";
@@ -128,8 +129,8 @@ function HeroSection({
         <ThemeToggle variant="full" />
       </div>
       <div className="relative mx-auto flex min-h-[92vh] max-w-6xl flex-col items-center justify-center px-6 py-24 text-center">
-        <ChainMotif
-          className="pointer-events-none absolute right-[-4rem] top-16 hidden text-brand-500 opacity-40 md:block"
+        <ChainHero3D
+          className="absolute right-[-3rem] top-16 hidden w-[520px] max-w-[45vw] md:block lg:w-[620px] xl:w-[720px]"
         />
         <ChainMotif
           className="pointer-events-none absolute bottom-24 left-[-6rem] hidden text-brand-700 opacity-30 md:block"
