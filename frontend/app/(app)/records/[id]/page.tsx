@@ -21,6 +21,7 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { DURATION_MEDIUM, EASE_OUT_EXPO, fadeRise } from "@/lib/motion";
 import { ActionBar } from "@/components/record-detail/ActionBar";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
+import { DecisionBanner } from "@/components/record-detail/DecisionBanner";
 import { DocumentEvidencePanel } from "@/components/record-detail/DocumentEvidencePanel";
 import { EvaluationPanel } from "@/components/record-detail/EvaluationPanel";
 import {
@@ -153,6 +154,25 @@ export default function RecordDetailPage() {
   }, [workflow]);
 
   const currentStage = record ? stagesById.get(record.current_stage_id) : undefined;
+
+  const targetStage = useMemo(() => {
+    if (targetStageId === "") return undefined;
+    return stagesById.get(Number(targetStageId));
+  }, [targetStageId, stagesById]);
+
+  const totalStages = workflow?.stages.length;
+
+  const evaluationSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const focusEvaluation = useCallback(() => {
+    const node = evaluationSectionRef.current;
+    if (!node) return;
+    node.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Move keyboard focus into the evaluation region so the user can
+    // tab directly into the action that matters.
+    node.setAttribute("tabindex", "-1");
+    node.focus({ preventScroll: true });
+  }, []);
 
   // Decision lives on the server. refreshAll() pulls it from the new
   // GET /records/:id/decision endpoint; handleEvaluate() / handleTransition()
@@ -457,6 +477,21 @@ export default function RecordDetailPage() {
       {loadError ? <ErrorBanner message={loadError} /> : null}
 
       <MountPanel>
+        <DecisionBanner
+          record={record}
+          currentStage={currentStage}
+          decision={decision}
+          targetStage={targetStage}
+          totalStages={totalStages}
+          evaluating={evaluating}
+          transitioning={transitioning}
+          onEvaluate={handleEvaluate}
+          onTransition={handleTransition}
+          onFocusEvaluation={focusEvaluation}
+        />
+      </MountPanel>
+
+      <MountPanel>
         <RecordHeader record={record} currentStage={currentStage} />
       </MountPanel>
 
@@ -479,13 +514,20 @@ export default function RecordDetailPage() {
         />
       </MountPanel>
 
-      <MountPanel>
-        <EvaluationPanel
-          decision={decision}
-          onEvaluate={handleEvaluate}
-          evaluating={evaluating}
-        />
-      </MountPanel>
+      <div
+        ref={evaluationSectionRef}
+        id="evaluation"
+        aria-label="Evaluation"
+        className="outline-none"
+      >
+        <MountPanel>
+          <EvaluationPanel
+            decision={decision}
+            onEvaluate={handleEvaluate}
+            evaluating={evaluating}
+          />
+        </MountPanel>
+      </div>
 
       <MountPanel>
         <WorkflowTimeline
