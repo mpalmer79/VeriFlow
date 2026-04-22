@@ -130,7 +130,7 @@ function HeroSection({
       </div>
       <div className="relative mx-auto flex min-h-[92vh] max-w-6xl flex-col items-center justify-center px-6 py-24 text-center">
         <ChainHero3D
-          className="absolute right-[-3rem] top-16 hidden w-[520px] max-w-[45vw] md:block lg:w-[620px] xl:w-[720px]"
+          className="absolute left-1/2 top-16 w-[92vw] -translate-x-1/2 md:w-[720px] lg:w-[960px] xl:w-[1120px]"
         />
         <ChainMotif
           className="pointer-events-none absolute bottom-24 left-[-6rem] hidden text-brand-700 opacity-30 md:block"
