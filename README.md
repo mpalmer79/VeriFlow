@@ -3,7 +3,8 @@
 ![VeriFlow landing page showing the evidence-chain hero, the "Process compliance you can prove" headline, and the Enter demo call to action.](docs/images/hero.png)
 
 > Live demo: https://veriflow.up.railway.app/ — click Enter demo to auto-login as the admin account. No signup required.
-> Built by Michael Palmer — <a href="https://www.linkedin.com/in/mpalmer1234/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a> <a href="https://github.com/mpalmer79/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
+> Built by Michael Palmer
+<a href="https://www.linkedin.com/in/mpalmer1234/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a> <a href="https://github.com/mpalmer79/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
 
 VeriFlow is a workflow and evidence-control platform for
 compliance-heavy operations. It enforces staged progression against a
