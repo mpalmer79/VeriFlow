@@ -26,7 +26,7 @@ export function RecordsListIntro() {
         <span className="flex items-center gap-2">
           <span className="field-label">About this page</span>
           <span className="text-sm font-medium text-text">
-            What does this page do and how does it work?
+            Tell me about this page and how it works
           </span>
         </span>
         <ChevronRight
