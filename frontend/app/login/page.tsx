@@ -9,6 +9,7 @@ import { readToken, saveSession } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { AlertTriangle } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { fadeRise, SPRING_DEFAULT } from "@/lib/motion";
 
 const DEMO_PASSWORD = "VeriFlow!2025";
@@ -94,7 +95,10 @@ function LoginPageInner() {
   const entrance = reduce ? { duration: 0 } : SPRING_DEFAULT;
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+    <div className="relative flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="absolute right-6 top-6 z-10">
+        <ThemeToggle variant="full" />
+      </div>
       <motion.div
         variants={fadeRise}
         initial="hidden"

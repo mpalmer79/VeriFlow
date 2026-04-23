@@ -98,7 +98,7 @@ export function ThemeToggle({ variant = "full" }: ThemeToggleProps) {
       aria-label="Theme"
       onKeyDown={onKeyDown}
       tabIndex={0}
-      className="relative inline-flex h-9 w-[88px] items-center rounded-full border border-surface-border bg-surface-muted p-0.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-brand-400"
+      className="relative inline-flex h-10 w-[112px] items-center rounded-full border border-surface-border bg-surface-muted p-0.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-400"
     >
       {OPTIONS.map((option) => {
         const active = option.value === theme;
@@ -115,9 +115,9 @@ export function ThemeToggle({ variant = "full" }: ThemeToggleProps) {
             }`}
           >
             {option.value === "light" ? (
-              <SunIcon size={12} />
+              <SunIcon size={14} />
             ) : (
-              <MoonIcon size={12} />
+              <MoonIcon size={14} />
             )}
             <span>{option.label}</span>
             {active ? (

@@ -1,12 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { readToken } from "@/lib/auth";
 import { demoSignInAs, isDemoMode } from "@/lib/demo";
 import { ApiError, records } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export default function Enter() {
   return (
@@ -90,8 +91,9 @@ function EnterInner() {
     };
   }, [router, isReviewerAuto, isAdminAuto]);
 
+  let body: ReactNode = null;
   if (autoFailed) {
-    return (
+    body = (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-md border border-severity-critical/40 bg-severity-critical/10 p-4 text-sm text-severity-critical">
           <div className="mb-1 text-xs font-medium uppercase tracking-wide">
@@ -106,10 +108,8 @@ function EnterInner() {
         </div>
       </div>
     );
-  }
-
-  if (failureMessage) {
-    return (
+  } else if (failureMessage) {
+    body = (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
         <div className="w-full max-w-md rounded-md border border-severity-critical/40 bg-severity-critical/10 p-4 text-sm text-severity-critical">
           <div className="mb-1 text-xs font-medium uppercase tracking-wide">
@@ -119,17 +119,22 @@ function EnterInner() {
         </div>
       </div>
     );
-  }
-
-  if (isReviewerAuto || isAdminAuto) {
-    return (
+  } else if (isReviewerAuto || isAdminAuto) {
+    body = (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
         <div className="text-sm text-text-muted">Signing in to demo…</div>
       </div>
     );
   }
 
-  return null;
+  return (
+    <>
+      <div className="fixed right-6 top-6 z-50">
+        <ThemeToggle variant="full" />
+      </div>
+      {body}
+    </>
+  );
 }
 
 async function findFirstBlockedRecordPath(): Promise<string> {
