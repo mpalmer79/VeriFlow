@@ -92,7 +92,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="border-b border-surface-border bg-surface-panel">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-6">
           <Link
-            href="/dashboard"
+            href="/"
+            aria-label="VeriFlow — back to landing"
             className="flex items-center gap-2 tracking-tight"
           >
             <Logomark className="text-brand-400" size={22} />
@@ -123,7 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-3">
-            <ThemeToggle variant="compact" />
+            <ThemeToggle variant="full" />
             {user ? (
               <UserMenu
                 user={user}
