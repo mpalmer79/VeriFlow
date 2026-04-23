@@ -17,6 +17,8 @@ import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StageBadge } from "@/components/StageBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DashboardIntro } from "@/components/ui/DashboardIntro";
+import { InfoPopover } from "@/components/ui/InfoPopover";
 import { KPICard } from "@/components/ui/KPICard";
 import { MotionList } from "@/components/ui/MotionList";
 import { ApiError, records as recordsApi } from "@/lib/api";
@@ -186,6 +188,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      <DashboardIntro />
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold text-text">
@@ -197,6 +200,16 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           <LiveIndicator stale={stale} />
+          <InfoPopover label="About the LIVE / STALE indicator" align="right">
+            <p>
+              The pill reflects a 30-second background poll gated on tab
+              visibility. Minimized tabs stop polling; re-focusing the tab
+              triggers an immediate refresh. On fetch failure the pill flips
+              to <span className="font-medium text-text">STALE</span> and
+              the last good snapshot stays on screen &mdash; operators keep
+              context instead of seeing empty panels.
+            </p>
+          </InfoPopover>
           <span className="text-xs text-text-muted">
             Last refreshed:{" "}
             <span className="tabular-nums text-text">
@@ -303,12 +316,25 @@ export default function DashboardPage() {
             description="Blocked and high-risk records, highest risk first."
             className="lg:col-span-2"
             actions={
-              <Link
-                href="/records"
-                className="text-xs font-medium text-accent hover:underline"
-              >
-                View all records
-              </Link>
+              <>
+                <InfoPopover label="About the Needs attention sort order" align="right">
+                  <p>
+                    Rows are sorted{" "}
+                    <span className="font-medium text-text">blocked first</span>,
+                    then by descending risk score, then by most recent update.
+                    Capped at eight entries to keep the pane scannable &mdash;
+                    click{" "}
+                    <span className="font-medium text-text">View all records</span>{" "}
+                    to see the full list with URL-persisted filters.
+                  </p>
+                </InfoPopover>
+                <Link
+                  href="/records"
+                  className="text-xs font-medium text-accent hover:underline"
+                >
+                  View all records
+                </Link>
+              </>
             }
           >
             {attentionRows.length === 0 ? (
