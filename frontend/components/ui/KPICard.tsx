@@ -1,6 +1,8 @@
 "use client";
 
-import type { LucideIcon } from "@/components/icons";
+import Link from "next/link";
+
+import { ChevronRight, type LucideIcon } from "@/components/icons";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 
 export type KPITone = "neutral" | "critical" | "warning" | "ok";
@@ -12,6 +14,12 @@ interface KPICardProps {
   tone?: KPITone;
   icon?: LucideIcon;
   highlighted?: boolean;
+  /**
+   * When provided, the card renders as a Next.js Link with hover/focus
+   * affordances and a chevron indicator. When omitted the card renders
+   * as a plain div (display-only).
+   */
+  href?: string;
 }
 
 const toneText: Record<KPITone, string> = {
@@ -42,13 +50,27 @@ export function KPICard({
   tone = "neutral",
   icon: Icon,
   highlighted = false,
+  href,
 }: KPICardProps) {
-  return (
-    <div
-      className={`panel relative flex flex-col justify-between p-5 sm:p-6 ${
-        highlighted ? highlightBorder[tone] : ""
-      }`}
-    >
+  // Interactive affordance is opt-in via href. The global prefers-
+  // reduced-motion rule in app/globals.css clamps transition-opacity
+  // to 1ms so the chevron snaps rather than fades under that setting.
+  const interactiveClasses = href
+    ? "group cursor-pointer transition-colors hover:border-text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+    : "";
+
+  const baseClassName = `panel relative flex flex-col justify-between p-5 sm:p-6 ${
+    highlighted ? highlightBorder[tone] : ""
+  } ${interactiveClasses}`.trim();
+
+  // Chevron sits bottom-right when the tone icon already occupies
+  // top-right, top-right otherwise. Sublabels in the dashboard cards
+  // are short (≤ ~3 words) so there's no horizontal overlap at the
+  // widths this component renders at.
+  const chevronPosition = Icon ? "bottom-4 right-4" : "top-4 right-4";
+
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div className="field-label">{label}</div>
         {Icon ? <Icon size={22} className={toneIcon[tone]} aria-hidden /> : null}
@@ -61,6 +83,27 @@ export function KPICard({
       {sublabel ? (
         <div className="mt-2 text-xs text-text-muted">{sublabel}</div>
       ) : null}
-    </div>
+      {href ? (
+        <ChevronRight
+          size={16}
+          aria-hidden
+          className={`pointer-events-none absolute ${chevronPosition} text-text-muted/40 opacity-0 transition-opacity group-hover:text-text-muted group-hover:opacity-100 group-focus-visible:opacity-100`}
+        />
+      ) : null}
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        aria-label={`View records matching ${label}`}
+        className={baseClassName}
+      >
+        {body}
+      </Link>
+    );
+  }
+
+  return <div className={baseClassName}>{body}</div>;
 }

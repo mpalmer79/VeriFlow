@@ -10,6 +10,7 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { RecordsListIntro } from "@/components/ui/RecordsListIntro";
 import { ApiError, records as recordsApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
@@ -148,6 +149,13 @@ function RecordsPageInner() {
 
   return (
     <div className="flex flex-col gap-6">
+      <Breadcrumbs
+        items={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "Records" },
+        ]}
+      />
+
       <header>
         <h1 className="text-xl font-semibold text-text">Records</h1>
         <p className="mt-1 text-sm text-text-muted">
