@@ -21,6 +21,7 @@ function EnterInner() {
   const searchParams = useSearchParams();
   const auto = searchParams.get("auto");
   const isReviewerAuto = auto === "reviewer";
+  const isAdminAuto = auto === "admin";
 
   const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const [autoFailed, setAutoFailed] = useState(false);
@@ -44,6 +45,10 @@ function EnterInner() {
           cancelled = true;
         };
       }
+      if (isAdminAuto) {
+        router.replace("/dashboard");
+        return;
+      }
       router.replace("/dashboard");
       return;
     }
@@ -60,11 +65,16 @@ function EnterInner() {
           if (!cancelled) router.replace(target);
           return;
         }
+        if (isAdminAuto) {
+          await demoSignInAs("admin");
+          if (!cancelled) router.replace("/dashboard");
+          return;
+        }
         await demoSignInAs("admin");
         if (!cancelled) router.replace("/dashboard");
       } catch (err) {
         if (cancelled) return;
-        if (isReviewerAuto) {
+        if (isReviewerAuto || isAdminAuto) {
           setAutoFailed(true);
           return;
         }
@@ -78,7 +88,7 @@ function EnterInner() {
     return () => {
       cancelled = true;
     };
-  }, [router, isReviewerAuto]);
+  }, [router, isReviewerAuto, isAdminAuto]);
 
   if (autoFailed) {
     return (
@@ -111,7 +121,7 @@ function EnterInner() {
     );
   }
 
-  if (isReviewerAuto) {
+  if (isReviewerAuto || isAdminAuto) {
     return (
       <div className="flex min-h-screen items-center justify-center px-4 py-10">
         <div className="text-sm text-text-muted">Signing in to demo…</div>
