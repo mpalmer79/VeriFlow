@@ -148,7 +148,7 @@ function HeroSection({
           >
             Process compliance
             <br />
-            <span className="text-brand-300">you can prove.</span>
+            <span className="text-brand-700">you can prove.</span>
           </motion.h1>
           <motion.p
             variants={fadeRise}
