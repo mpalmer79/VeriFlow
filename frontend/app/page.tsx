@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion } from "framer-motion";
-import { useEffect, useState, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 
 import { ChainHero3D } from "@/components/landing/ChainHero3D";
 import { ChainMotif } from "@/components/landing/ChainMotif";
@@ -21,7 +21,6 @@ import {
   type LucideIcon,
 } from "@/components/icons";
 import type { WorkflowStage } from "@/lib/types";
-import { readToken } from "@/lib/auth";
 import {
   fadeRise,
   fadeRiseSlow,
@@ -85,23 +84,6 @@ const LANDING_CURRENT_STAGE = 3;
 export default function Landing() {
   const router = useRouter();
   const reduce = useReducedMotion();
-  const [redirecting, setRedirecting] = useState(false);
-
-  useEffect(() => {
-    // Escape hatch: an authenticated reviewer can still view the
-    // landing page from inside the demo by passing ?from=demo. A
-    // future PR wires the matching "Return to landing" link into
-    // the app shell; this keeps that change to one file.
-    const fromDemo =
-      typeof window !== "undefined" &&
-      new URLSearchParams(window.location.search).get("from") === "demo";
-    if (readToken() && !fromDemo) {
-      setRedirecting(true);
-      router.replace("/dashboard");
-    }
-  }, [router]);
-
-  if (redirecting) return null;
 
   function handleAnchorClick(e: MouseEvent<HTMLAnchorElement>, targetId: string) {
     const target = typeof document !== "undefined" ? document.getElementById(targetId) : null;
@@ -184,7 +166,7 @@ function HeroSection({
           >
             <motion.div whileHover={{ y: -1 }} whileTap={{ y: 1 }}>
               <Link
-                href="/enter?auto=reviewer"
+                href="/enter?auto=admin"
                 className="bg-gradient-cta inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-brand-300"
               >
                 Enter demo
@@ -197,6 +179,13 @@ function HeroSection({
               className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-panel/60 px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-text-subtle"
             >
               See how it works
+              <ChevronRight size={16} aria-hidden />
+            </a>
+            <a
+              href="/design-system"
+              className="inline-flex items-center gap-1.5 rounded-md border border-surface-border bg-surface-panel/60 px-5 py-2.5 text-sm font-medium text-text transition-colors hover:border-text-subtle"
+            >
+              View design system
               <ChevronRight size={16} aria-hidden />
             </a>
           </motion.div>

@@ -44,6 +44,10 @@
   --color-brand-800: 19 77 99;
   --color-brand-900: 18 64 79;
 
+  --color-cream-50: 253 251 246;
+  --color-cream-100: 248 243 232;
+  --color-cream-200: 240 232 217;
+
   --color-accent-from: 22 125 146;
   --color-accent-to: 14 108 125;
 
@@ -77,9 +81,10 @@
    * If a fourth use shows up, we are over-using the accent.
    */
   --gradient-hero: linear-gradient(
-    110deg,
+    135deg,
     rgb(255 255 255) 0%,
-    rgb(var(--color-brand-50)) 100%
+    rgb(var(--color-cream-50)) 40%,
+    rgb(var(--color-cream-200)) 100%
   );
   --gradient-cta: linear-gradient(
     135deg,

@@ -19,6 +19,20 @@ const nextConfig = {
     NEXT_PUBLIC_API_BASE_URL: explicit || fallback,
     NEXT_PUBLIC_DEMO_MODE: process.env.NEXT_PUBLIC_DEMO_MODE || "",
   },
+  async redirects() {
+    return [
+      {
+        source: "/design-system",
+        destination: "/design-system/ui_kits/veriflow_web/index.html",
+        permanent: false,
+      },
+      {
+        source: "/design-system/",
+        destination: "/design-system/ui_kits/veriflow_web/index.html",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
