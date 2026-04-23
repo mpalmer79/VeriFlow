@@ -10,6 +10,7 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Panel } from "@/components/Panel";
 import { RiskBadge } from "@/components/RiskBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { RecordsListIntro } from "@/components/ui/RecordsListIntro";
 import { ApiError, records as recordsApi } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import {
@@ -153,6 +154,8 @@ function RecordsPageInner() {
           All records across the active workflow.
         </p>
       </header>
+
+      <RecordsListIntro />
 
       <div className="flex flex-wrap items-center gap-3">
         <input
