@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Spacing scale</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:flex;flex-direction:column;gap:6px}
+  .row{display:flex;align-items:center;gap:12px;font-size:12px}
+  .bar{height:14px;background:linear-gradient(90deg,#0e7490,#3dabc4);border-radius:3px}
+  .lbl{width:60px;font-family:"JetBrains Mono",monospace;color:#94a3b8;font-size:11px}
+  .val{color:#64748b;font-size:11px;font-family:"JetBrains Mono",monospace}
+</style></head>
+<body><div class="wrap">
+  <div class="row"><span class="lbl">space-1</span><span class="bar" style="width:4px"></span><span class="val">4px</span></div>
+  <div class="row"><span class="lbl">space-2</span><span class="bar" style="width:8px"></span><span class="val">8px</span></div>
+  <div class="row"><span class="lbl">space-3</span><span class="bar" style="width:12px"></span><span class="val">12px</span></div>
+  <div class="row"><span class="lbl">space-4</span><span class="bar" style="width:16px"></span><span class="val">16px · default panel padding</span></div>
+  <div class="row"><span class="lbl">space-5</span><span class="bar" style="width:20px"></span><span class="val">20px</span></div>
+  <div class="row"><span class="lbl">space-6</span><span class="bar" style="width:24px"></span><span class="val">24px · page gutter</span></div>
+  <div class="row"><span class="lbl">space-8</span><span class="bar" style="width:32px"></span><span class="val">32px</span></div>
+  <div class="row"><span class="lbl">space-10</span><span class="bar" style="width:40px"></span><span class="val">40px</span></div>
+  <div class="row"><span class="lbl">space-12</span><span class="bar" style="width:48px"></span><span class="val">48px</span></div>
+</div></body></html>

@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Imagery · Stock photography</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  html, body { margin: 0; background: var(--surface); color: var(--text); font-family: var(--font-sans); }
+  *, *::before, *::after { box-sizing: border-box; }
+  button, select { font-family: inherit; }
+
+  .page {
+    max-width: 1280px; margin: 0 auto; padding: 28px 32px 80px;
+  }
+  header.hd {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 20px; gap: 20px;
+  }
+  .hd h1 { font-family: var(--font-display); font-weight: 600; letter-spacing: -.02em;
+    font-size: 32px; line-height: 1.05; margin: 0; }
+  .hd p { font-size: 13px; color: var(--text-muted); margin: 6px 0 0; max-width: 560px; line-height: 1.55; }
+  .overline { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--brand-400); font-weight: 600; margin-bottom: 10px; }
+
+  .cat-nav {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    background: var(--surface-panel); border: 1px solid var(--surface-border);
+    border-radius: 8px; padding: 4px; margin-bottom: 18px;
+  }
+  .cat-nav button {
+    background: transparent; border: 0; color: var(--text-muted);
+    padding: 7px 12px; border-radius: 5px; font-size: 12px; cursor: pointer;
+    transition: background 120ms, color 120ms;
+  }
+  .cat-nav button:hover { color: var(--text); background: var(--surface-muted); }
+  .cat-nav button.active { background: var(--brand-700); color: #fff; }
+  .cat-nav .meta { margin-left: auto; display: flex; align-items: center; gap: 8px;
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); padding-right: 10px; }
+  .cat-nav .meta .dot { width:6px; height:6px; border-radius: 999px; background: var(--severity-verified); }
+
+  .grid { display: grid; gap: 10px; }
+  .g-3 { grid-template-columns: repeat(3, 1fr); }
+  .g-4 { grid-template-columns: repeat(4, 1fr); }
+  .g-6 { grid-template-columns: repeat(6, 1fr); }
+
+  .card {
+    position: relative; aspect-ratio: 4 / 3; overflow: hidden;
+    border-radius: 8px; background: var(--surface-muted);
+    border: 1px solid var(--surface-border);
+    cursor: pointer; transform: translateZ(0);
+    transition: transform 260ms var(--ease-out-expo), border-color 160ms;
+  }
+  .card:hover { border-color: var(--brand-400); transform: translateY(-3px); }
+  .card img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: transform 420ms var(--ease-out-expo), filter 300ms;
+  }
+  .card:hover img { transform: scale(1.04); }
+  .card .fallback {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--text-subtle); font-family: var(--font-mono); font-size: 11px;
+    background: linear-gradient(135deg, rgba(14,116,144,.15), rgba(14,116,144,.02));
+  }
+  .card .cap {
+    position: absolute; inset: auto 0 0 0; padding: 10px 12px;
+    font-family: var(--font-mono); font-size: 10px; color: #e6edf3;
+    background: linear-gradient(to top, rgba(8,14,27,.85), transparent);
+    opacity: 0; transition: opacity 160ms;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none;
+  }
+  .card:hover .cap { opacity: 1; }
+  .card .tag { letter-spacing: .08em; text-transform: uppercase; color: var(--brand-300); font-size: 9px; }
+
+  /* tone filters */
+  .tone-desat img   { filter: saturate(.6) brightness(.95); }
+  .tone-brand img   { filter: saturate(.9) hue-rotate(-8deg); }
+  .tone-mono img    { filter: grayscale(.85) contrast(1.05); }
+  .tone-dark img    { filter: brightness(.82) contrast(1.08); }
+  .tone-natural img { filter: none; }
+
+  .crop-sq .card  { aspect-ratio: 1 / 1; }
+  .crop-4x3 .card { aspect-ratio: 4 / 3; }
+  .crop-3x2 .card { aspect-ratio: 3 / 2; }
+  .crop-16x9 .card{ aspect-ratio: 16 / 9; }
+  .crop-port .card{ aspect-ratio: 3 / 4; }
+
+  /* Usage notes */
+  .notes {
+    margin-top: 28px; background: var(--surface-panel); border: 1px solid var(--surface-border);
+    border-radius: 8px; padding: 16px 20px; display: grid;
+    grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 13px; line-height: 1.55;
+  }
+  .notes h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--brand-400); font-weight: 600; }
+  .notes p { margin: 0; color: var(--text-muted); }
+
+  /* Tweaks panel */
+  .tweaks {
+    position: fixed; right: 20px; bottom: 20px; z-index: 30;
+    background: var(--surface-panel); border: 1px solid var(--surface-border);
+    border-radius: 10px; box-shadow: var(--shadow-lg);
+    width: 280px; padding: 14px 16px; display: none;
+    font-size: 12px;
+  }
+  .tweaks.open { display: block; animation: tw-in .3s var(--ease-out-expo); }
+  @keyframes tw-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .tweaks h4 { margin: 0 0 10px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--brand-400); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .tweaks h4 button {
+    background: transparent; border: 0; color: var(--text-subtle); cursor: pointer; font-size: 11px;
+  }
+  .tweaks .row { margin: 10px 0; }
+  .tweaks label {
+    display: block; font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-subtle); margin-bottom: 4px;
+  }
+  .tweaks select, .tweaks input[type=range] {
+    width: 100%; background: var(--surface); color: var(--text);
+    border: 1px solid var(--surface-border); border-radius: 5px;
+    padding: 6px 8px; font-size: 12px; font-family: inherit;
+  }
+  .tweaks .seg { display: flex; gap: 4px; }
+  .tweaks .seg button {
+    flex: 1; background: var(--surface); border: 1px solid var(--surface-border);
+    color: var(--text-muted); padding: 6px 8px; border-radius: 5px; font-size: 11px; cursor: pointer;
+  }
+  .tweaks .seg button.on { background: var(--brand-700); border-color: var(--brand-500); color: #fff; }
+  .tweaks .hint { font-size: 10px; color: var(--text-subtle); margin-top: 8px; font-family: var(--font-mono); }
+
+  .vf-stagger > * { animation: rise .45s var(--ease-out-expo) both; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .vf-stagger > *:nth-child(1) { animation-delay: .02s }
+  .vf-stagger > *:nth-child(2) { animation-delay: .05s }
+  .vf-stagger > *:nth-child(3) { animation-delay: .08s }
+  .vf-stagger > *:nth-child(4) { animation-delay: .11s }
+  .vf-stagger > *:nth-child(5) { animation-delay: .14s }
+  .vf-stagger > *:nth-child(6) { animation-delay: .17s }
+  .vf-stagger > *:nth-child(7) { animation-delay: .20s }
+  .vf-stagger > *:nth-child(8) { animation-delay: .23s }
+  .vf-stagger > *:nth-child(9) { animation-delay: .26s }
+  .vf-stagger > *:nth-child(10){ animation-delay: .29s }
+  .vf-stagger > *:nth-child(11){ animation-delay: .32s }
+  .vf-stagger > *:nth-child(12){ animation-delay: .35s }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="hd">
+    <div>
+      <div class="overline">Imagery</div>
+      <h1>Stock photography for marketing + narrative surfaces</h1>
+      <p>Used on landing, sales collateral, case studies, and deck opens — <strong>never in product chrome</strong>.
+         Product UI stays iconographic. Filter by category, tone, and crop.</p>
+    </div>
+  </header>
+
+  <nav class="cat-nav" id="catNav"></nav>
+
+  <div class="grid g-4 crop-4x3 tone-natural vf-stagger" id="grid"></div>
+
+  <section class="notes">
+    <div>
+      <h3>Use for</h3>
+      <p>Landing hero backgrounds, pillar cards, marketing case studies, deck covers, narrative breaks inside long reports.</p>
+    </div>
+    <div>
+      <h3>Do not use for</h3>
+      <p>Dashboard, records, record detail, or any operational chrome. Product surfaces stay iconographic. No stock people in workflows.</p>
+    </div>
+    <div>
+      <h3>Treatment</h3>
+      <p>Desaturate 40–60% and overlay with <span style="font-family:var(--font-mono)">var(--brand-700)</span> at 30–45% for consistent brand tone. Always check licensing before production use.</p>
+    </div>
+  </section>
+</div>
+
+<button id="tweaksToggle" style="display:none"></button>
+<div class="tweaks" id="tweaks">
+  <h4>Tweaks <button id="closeTweaks">×</button></h4>
+
+  <div class="row">
+    <label>Category</label>
+    <select id="tCategory"></select>
+  </div>
+
+  <div class="row">
+    <label>Tone</label>
+    <div class="seg" id="tTone">
+      <button data-v="natural" class="on">Natural</button>
+      <button data-v="desat">Desat.</button>
+      <button data-v="brand">Brand</button>
+      <button data-v="mono">Mono</button>
+      <button data-v="dark">Dark</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Crop</label>
+    <div class="seg" id="tCrop">
+      <button data-v="sq">1:1</button>
+      <button data-v="4x3" class="on">4:3</button>
+      <button data-v="3x2">3:2</button>
+      <button data-v="16x9">16:9</button>
+      <button data-v="port">3:4</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Density</label>
+    <div class="seg" id="tDensity">
+      <button data-v="3">3 col</button>
+      <button data-v="4" class="on">4 col</button>
+      <button data-v="6">6 col</button>
+    </div>
+  </div>
+
+  <div class="hint">Tweaks persist across reloads.</div>
+</div>
+
+<script>
+/*EDITMODE-BEGIN*/const TWEAK_DEFAULTS = {
+  "category": "all",
+  "tone": "natural",
+  "crop": "4x3",
+  "density": "4"
+}/*EDITMODE-END*/;
+
+// Curated, professional subjects mapped to the VeriFlow product domain.
+// Unsplash Source URLs are stable and keyed by topic for reproducible results.
+const LIBRARY = [
+  // Compliance & audit
+  { cat: "compliance", tag: "audit desk",      q: "audit,documents,office",        seed: 101 },
+  { cat: "compliance", tag: "ledger close-up", q: "ledger,paper,close-up",         seed: 102 },
+  { cat: "compliance", tag: "signed form",     q: "signature,contract,paperwork",  seed: 103 },
+  { cat: "compliance", tag: "stamped docs",    q: "stamp,official,document",       seed: 104 },
+
+  // Healthcare intake
+  { cat: "healthcare", tag: "intake desk",     q: "hospital,reception,desk",       seed: 201 },
+  { cat: "healthcare", tag: "clinician notes", q: "clinician,clipboard,notes",     seed: 202 },
+  { cat: "healthcare", tag: "clinic hallway",  q: "clinic,hallway,architecture",   seed: 203 },
+  { cat: "healthcare", tag: "waiting area",    q: "waiting,room,light",            seed: 204 },
+
+  // Operations & infrastructure
+  { cat: "operations", tag: "server rack",     q: "server,rack,datacenter",        seed: 301 },
+  { cat: "operations", tag: "control room",    q: "control,room,monitors",         seed: 302 },
+  { cat: "operations", tag: "network cables",  q: "cables,network,technology",     seed: 303 },
+  { cat: "operations", tag: "operator",        q: "operator,terminal,screens",     seed: 304 },
+
+  // Security & verification
+  { cat: "security",   tag: "vault",           q: "vault,safe,steel",              seed: 401 },
+  { cat: "security",   tag: "cryptography",    q: "cryptography,hash,circuit",     seed: 402 },
+  { cat: "security",   tag: "fingerprint",     q: "fingerprint,biometric",         seed: 403 },
+  { cat: "security",   tag: "badge scanner",   q: "badge,access,scanner",          seed: 404 },
+
+  // Architecture & space (abstract, clean backgrounds)
+  { cat: "architecture", tag: "atrium",        q: "atrium,architecture,glass",     seed: 501 },
+  { cat: "architecture", tag: "stairwell",     q: "stairwell,concrete,minimal",    seed: 502 },
+  { cat: "architecture", tag: "lobby",         q: "lobby,corporate,minimal",       seed: 503 },
+  { cat: "architecture", tag: "skyline",       q: "skyline,city,dusk",             seed: 504 },
+];
+
+const CATEGORIES = [
+  { id: "all",          label: "All" },
+  { id: "compliance",   label: "Compliance + audit" },
+  { id: "healthcare",   label: "Healthcare intake" },
+  { id: "operations",   label: "Operations" },
+  { id: "security",     label: "Security + verification" },
+  { id: "architecture", label: "Architecture" },
+];
+
+// --- State -------------------------------------------------------------
+let state = { ...TWEAK_DEFAULTS };
+
+function imgUrl(entry, w = 640) {
+  const h = Math.round(w * 0.75);
+  return `https://source.unsplash.com/${w}x${h}/?${encodeURIComponent(entry.q)}&sig=${entry.seed}`;
+}
+
+// --- Rendering ---------------------------------------------------------
+function renderCats() {
+  const nav = document.getElementById("catNav");
+  nav.innerHTML = "";
+  CATEGORIES.forEach(c => {
+    const b = document.createElement("button");
+    b.textContent = c.label;
+    b.className = state.category === c.id ? "active" : "";
+    b.onclick = () => { state.category = c.id; persist(); render(); };
+    nav.appendChild(b);
+  });
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  const n = filtered().length;
+  meta.innerHTML = `<span class="dot"></span> ${n} image${n === 1 ? "" : "s"}`;
+  nav.appendChild(meta);
+}
+
+function filtered() {
+  if (state.category === "all") return LIBRARY;
+  return LIBRARY.filter(l => l.cat === state.category);
+}
+
+function render() {
+  renderCats();
+  const grid = document.getElementById("grid");
+  grid.className = `grid g-${state.density} crop-${state.crop} tone-${state.tone} vf-stagger`;
+  grid.innerHTML = "";
+  filtered().forEach(entry => {
+    const card = document.createElement("div");
+    card.className = "card";
+    const fb = document.createElement("div");
+    fb.className = "fallback";
+    fb.textContent = entry.q.replace(/,/g, " · ");
+    card.appendChild(fb);
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = entry.tag;
+    img.src = imgUrl(entry, 640);
+    img.onerror = () => { img.remove(); };
+    card.appendChild(img);
+    const cap = document.createElement("div");
+    cap.className = "cap";
+    cap.innerHTML = `<span>${entry.tag}</span><span class="tag">${entry.cat}</span>`;
+    card.appendChild(cap);
+    grid.appendChild(card);
+  });
+}
+
+// --- Tweaks wiring -----------------------------------------------------
+function setSeg(groupId, val) {
+  const g = document.getElementById(groupId);
+  [...g.children].forEach(b => b.classList.toggle("on", b.dataset.v === val));
+}
+function wireSeg(groupId, key) {
+  const g = document.getElementById(groupId);
+  [...g.children].forEach(b => {
+    b.onclick = () => { state[key] = b.dataset.v; setSeg(groupId, b.dataset.v); persist(); render(); };
+  });
+}
+function persist() {
+  try { localStorage.setItem("vf-imagery-tweaks", JSON.stringify(state)); } catch {}
+  try {
+    window.parent.postMessage({ type: "__edit_mode_set_keys", edits: state }, "*");
+  } catch {}
+}
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("vf-imagery-tweaks") || "null");
+    if (saved) state = { ...state, ...saved };
+  } catch {}
+}
+
+function populateCategorySelect() {
+  const sel = document.getElementById("tCategory");
+  sel.innerHTML = "";
+  CATEGORIES.forEach(c => {
+    const o = document.createElement("option");
+    o.value = c.id; o.textContent = c.label;
+    if (c.id === state.category) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = () => { state.category = sel.value; persist(); render(); };
+}
+
+// --- Init --------------------------------------------------------------
+loadState();
+populateCategorySelect();
+wireSeg("tTone", "tone");
+wireSeg("tCrop", "crop");
+wireSeg("tDensity", "density");
+setSeg("tTone", state.tone);
+setSeg("tCrop", state.crop);
+setSeg("tDensity", state.density);
+render();
+
+// --- Edit mode handshake ------------------------------------------------
+const panel = document.getElementById("tweaks");
+const closeBtn = document.getElementById("closeTweaks");
+closeBtn.onclick = () => { panel.classList.remove("open"); };
+
+window.addEventListener("message", (e) => {
+  const t = e.data && e.data.type;
+  if (t === "__activate_edit_mode")    panel.classList.add("open");
+  if (t === "__deactivate_edit_mode")  panel.classList.remove("open");
+});
+try {
+  window.parent.postMessage({ type: "__edit_mode_available" }, "*");
+} catch {}
+</script>
+</body>
+</html>

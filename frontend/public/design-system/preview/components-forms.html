@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Form inputs</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .lbl{font-size:11px;letter-spacing:.03em;text-transform:uppercase;color:#64748b;font-weight:500}
+  .inp{background:#0b1220;border:1px solid #1f2a44;border-radius:6px;padding:8px 10px;color:#e6edf3;font-family:inherit;font-size:13px;outline:none}
+  .inp:focus{border-color:#3dabc4;box-shadow:0 0 0 3px #3dabc422}
+  .inp.mono{font-family:"JetBrains Mono",monospace;font-size:12px}
+  .sel{background:#0b1220;border:1px solid #1f2a44;border-radius:6px;padding:8px 28px 8px 10px;color:#e6edf3;font-size:13px;font-family:inherit;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");background-repeat:no-repeat;background-position:right 10px center}
+  .check{display:flex;align-items:center;gap:8px;font-size:13px}
+  .check input{accent-color:#0e7490;width:14px;height:14px}
+  .toggle{width:30px;height:18px;background:#1f2a44;border-radius:999px;position:relative;cursor:pointer}
+  .toggle.on{background:#0e7490}
+  .toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;background:#e6edf3;border-radius:999px;transition:left .18s}
+  .toggle.on::after{left:14px}
+</style></head>
+<body><div class="wrap">
+  <div class="field"><span class="lbl">Record reference</span><input class="inp mono" value="VF-2417-03A"></div>
+  <div class="field"><span class="lbl">Assignee</span><select class="sel"><option>Marcy Palmer</option></select></div>
+  <div class="field"><span class="lbl">Decision note</span><input class="inp" placeholder="Describe the override…"></div>
+  <div class="field"><span class="lbl">Workflow</span><select class="sel"><option>healthcare_intake · v14</option></select></div>
+  <div class="check"><input type="checkbox" checked>Require verified evidence for this stage</div>
+  <div class="check"><div class="toggle on"></div>Strict mode (fail on warning)</div>
+</div></body></html>

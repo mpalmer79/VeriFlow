@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Colors · Brand teal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#0b1220; --panel:#0f172a; --border:#1f2a44; --text:#e6edf3; --muted:#94a3b8; --subtle:#64748b; }
+  html, body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family:"Inter",system-ui,sans-serif; font-feature-settings:"cv02","cv03","cv11"; }
+  .wrap { padding:20px; }
+  .grid { display:grid; grid-template-columns:repeat(9, 1fr); gap:8px; }
+  .sw { border-radius:6px; height:72px; display:flex; align-items:flex-end; padding:6px 8px; border:1px solid var(--border); font-size:10px; font-family:"JetBrains Mono",ui-monospace,monospace; color:#0b1220; }
+  .sw.dark { color:#e6edf3; }
+  .lbl { display:block; font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:var(--subtle); margin-bottom:2px; font-weight:500; }
+  .name { opacity:.85; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="grid">
+    <div class="sw" style="background:#edfafd"><div><span class="lbl" style="color:#0b1220;opacity:.55">50</span><span class="name">#edfafd</span></div></div>
+    <div class="sw" style="background:#d2f1f6"><div><span class="lbl" style="color:#0b1220;opacity:.55">100</span><span class="name">#d2f1f6</span></div></div>
+    <div class="sw" style="background:#aae1ec"><div><span class="lbl" style="color:#0b1220;opacity:.55">200</span><span class="name">#aae1ec</span></div></div>
+    <div class="sw" style="background:#75cadb"><div><span class="lbl" style="color:#0b1220;opacity:.6">300</span><span class="name">#75cadb</span></div></div>
+    <div class="sw" style="background:#3dabc4"><div><span class="lbl" style="color:#0b1220;opacity:.65">400</span><span class="name">#3dabc4</span></div></div>
+    <div class="sw dark" style="background:#1c8da8"><div><span class="lbl">500</span><span class="name">#1c8da8</span></div></div>
+    <div class="sw dark" style="background:#0e7490"><div><span class="lbl">600 · CTA</span><span class="name">#0e7490</span></div></div>
+    <div class="sw dark" style="background:#0f5c78"><div><span class="lbl">700</span><span class="name">#0f5c78</span></div></div>
+    <div class="sw dark" style="background:#12404f"><div><span class="lbl">900</span><span class="name">#12404f</span></div></div>
+  </div>
+</div>
+</body>
+</html>

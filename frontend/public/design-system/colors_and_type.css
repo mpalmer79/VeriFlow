@@ -1,0 +1,357 @@
+/* VeriFlow — colors_and_type.css
+ *
+ * Single source of truth for tokens used across preview cards, UI kits,
+ * and downstream design artifacts. Mirrors frontend/app/theme.css and
+ * frontend/tailwind.config.ts in the main repo (post Phase 5/6).
+ *
+ * The app ships two themes. :root carries the LIGHT theme (the current
+ * default, designed for daylight operations work). html[data-theme="dark"]
+ * carries the DARK theme (deliberate port of the pre-Phase-5 look).
+ * Downstream artifacts pick one by setting data-theme on a wrapping
+ * element, or by letting the :root default take effect.
+ *
+ * Color values are stored as space-separated RGB channels so alpha
+ * modifiers work via rgb(var(--color-xxx) / 0.15) — the same shape
+ * Tailwind uses against this config in the real repo.
+ */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap");
+
+/* ============================================================
+ * LIGHT THEME (default)
+ * ============================================================ */
+:root {
+  /* ---------- Surfaces (warm off-white, white elevated) ---------- */
+  --color-bg:              250 250 249;   /* page */
+  --color-bg-elevated:     255 255 255;   /* panels, cards */
+  --color-bg-sunken:       244 244 242;
+  --color-surface-border:  220 216 212;
+  --color-surface-muted:   244 243 241;
+
+  /* ---------- Text ---------- */
+  --color-text:         28 25 23;
+  --color-text-muted:   87 83 78;
+  --color-text-subtle:  120 113 108;
+
+  /* ---------- Brand teal (9-stop ramp, tuned for AA on white) ---------- */
+  --color-brand-50:   237 250 253;
+  --color-brand-100:  210 241 246;
+  --color-brand-200:  170 225 236;
+  --color-brand-300:  117 202 219;
+  --color-brand-400:   46 157 179;
+  --color-brand-500:   22 125 146;
+  --color-brand-600:   14 108 125;   /* primary CTA */
+  --color-brand-700:   15  92 120;
+  --color-brand-800:   19  77  99;
+  --color-brand-900:   18  64  79;
+
+  /* ---------- Accent anchors for gradients ---------- */
+  --color-accent-from: 22 125 146;
+  --color-accent-to:   14 108 125;
+
+  /* ---------- Status palette (AA against elevated surface) ---------- */
+  --color-danger:          185  28  28;
+  --color-danger-bg:       254 242 242;
+  --color-danger-border:   252 165 165;
+  --color-warning:         154  86  16;
+  --color-warning-bg:      255 247 237;
+  --color-warning-border:  253 186 116;
+  --color-success:          21 128  61;
+  --color-success-bg:      240 253 244;
+  --color-success-border:  134 239 172;
+  --color-info:             14 108 125;
+  --color-info-bg:         237 250 253;
+  --color-info-border:     170 225 236;
+
+  /* ---------- Severity ramp (theme-stable — domain semantics) ---------- */
+  --severity-low:       #22c55e;
+  --severity-moderate:  #eab308;
+  --severity-high:      #f97316;
+  --severity-critical:  #ef4444;
+  --severity-verified:  #14b8a6;
+  --severity-rejected:  #b45309;
+
+  /* ---------- Radii ---------- */
+  --radius-sm:    4px;
+  --radius-md:    8px;   /* buttons, chips, inputs */
+  --radius-lg:   12px;   /* panels, cards */
+  --radius-xl:   16px;
+  --radius-pill: 9999px;
+
+  /* ---------- Shadows (soft, light-theme tuned) ---------- */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.08),
+               0 1px 3px -1px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 12px 28px -8px rgb(0 0 0 / 0.12),
+               0 6px 12px -6px rgb(0 0 0 / 0.06);
+
+  /* ---------- Gradients (exactly three slots, per theme.css) ----------
+   * - hero wash behind the landing headline
+   * - primary CTA fill (+ hover variant)
+   * - active-stage ring on the workflow timeline
+   */
+  --gradient-hero: linear-gradient(
+    110deg,
+    rgb(255 255 255) 0%,
+    rgb(var(--color-brand-50)) 100%
+  );
+  --gradient-cta: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-500)),
+    rgb(var(--color-brand-600))
+  );
+  --gradient-cta-hover: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-600)),
+    rgb(var(--color-brand-700))
+  );
+  --gradient-accent-ring: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-400)),
+    rgb(var(--color-brand-600))
+  );
+
+  /* ---------- Motion ---------- */
+  --dur-micro:  120ms;
+  --dur-short:  220ms;
+  --dur-medium: 380ms;
+  --dur-long:   620ms;
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ---------- Type: families ---------- */
+  --font-sans:    "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+
+  /* ---------- Type: scale (base roles) ---------- */
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-base: 14px;
+  --text-md:   16px;
+  --text-lg:   18px;
+  --text-xl:   22px;
+  --text-2xl:  28px;
+  --text-3xl:  36px;
+  --text-4xl:  48px;
+  --text-5xl:  60px;
+
+  /* ---------- Semantic type roles ---------- */
+  --hero-size: 60px;  --hero-line: 1.05;  --hero-tracking: -0.02em;
+  --h1-size:   36px;  --h1-line:   1.1;   --h1-tracking:   -0.015em;
+  --h2-size:   28px;  --h2-line:   1.15;  --h2-tracking:   -0.01em;
+  --h3-size:   22px;  --h3-line:   1.2;
+  --body-size: 14px;  --body-line: 1.55;
+  --small-size: 12px; --small-line: 1.5;
+  --caps-size: 12px;  --caps-track: 0.04em;
+}
+
+/* ============================================================
+ * DARK THEME — set data-theme="dark" on <html> or any wrapper.
+ * ============================================================ */
+html[data-theme="dark"],
+[data-theme="dark"] {
+  /* Surfaces — deep navy stack */
+  --color-bg:              11 18 32;     /* page (#0b1220) */
+  --color-bg-elevated:     15 23 42;     /* panel (#0f172a) */
+  --color-bg-sunken:        8 14 24;
+  --color-surface-border:  31 42 68;     /* (#1f2a44) */
+  --color-surface-muted:   17 28 51;     /* (#111c33) */
+
+  /* Text */
+  --color-text:         230 237 243;
+  --color-text-muted:   148 163 184;
+  --color-text-subtle:  100 116 139;
+
+  /* Brand — slightly lighter mid-range on dark for contrast */
+  --color-brand-50:   237 250 253;
+  --color-brand-100:  210 241 246;
+  --color-brand-200:  170 225 236;
+  --color-brand-300:  117 202 219;
+  --color-brand-400:   61 171 196;
+  --color-brand-500:   28 141 168;
+  --color-brand-600:   14 116 144;
+  --color-brand-700:   15  92 120;
+  --color-brand-800:   19  77  99;
+  --color-brand-900:   18  64  79;
+
+  --color-accent-from: 28 141 168;
+  --color-accent-to:   14 116 144;
+
+  /* Status palette — AA against elevated dark surface */
+  --color-danger:          248 113 113;
+  --color-danger-bg:        67  16  16;
+  --color-danger-border:   153  27  27;
+  --color-warning:         251 146  60;
+  --color-warning-bg:       67  34   8;
+  --color-warning-border:  154  52  18;
+  --color-success:          74 222 128;
+  --color-success-bg:        5  46  22;
+  --color-success-border:   22 101  52;
+  --color-info:             61 171 196;
+  --color-info-bg:          11  54  66;
+  --color-info-border:      15  92 120;
+
+  /* Shadows — deeper on dark */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  --shadow-md: 0 2px 6px -1px rgb(0 0 0 / 0.45),
+               0 1px 3px -1px rgb(0 0 0 / 0.40);
+  --shadow-lg: 0 12px 28px -8px rgb(0 0 0 / 0.55),
+               0 6px 12px -6px rgb(0 0 0 / 0.40);
+
+  /* Gradients — dark-mode overrides */
+  --gradient-hero: linear-gradient(
+    110deg,
+    rgb(var(--color-brand-900)) 0%,
+    rgb(var(--color-bg)) 100%
+  );
+  --gradient-cta: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-500)),
+    rgb(var(--color-brand-600))
+  );
+  --gradient-cta-hover: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-400)),
+    rgb(var(--color-brand-500))
+  );
+  --gradient-accent-ring: linear-gradient(
+    135deg,
+    rgb(var(--color-brand-300)),
+    rgb(var(--color-brand-500))
+  );
+}
+
+/* ============================================================
+ * Convenience rgb() aliases — flat-color forms of the channel
+ * tokens so downstream preview cards and UI-kit components that
+ * use var(--surface), var(--text), var(--brand-600) etc. keep
+ * working in both themes.
+ * ============================================================ */
+:root,
+html[data-theme="dark"],
+[data-theme="dark"] {
+  --surface:        rgb(var(--color-bg));
+  --surface-panel:  rgb(var(--color-bg-elevated));
+  --surface-muted:  rgb(var(--color-surface-muted));
+  --surface-sunken: rgb(var(--color-bg-sunken));
+  --surface-border: rgb(var(--color-surface-border));
+
+  --text:          rgb(var(--color-text));
+  --text-muted:    rgb(var(--color-text-muted));
+  --text-subtle:   rgb(var(--color-text-subtle));
+  --text-inverse:  rgb(var(--color-bg));
+
+  --brand-50:   rgb(var(--color-brand-50));
+  --brand-100:  rgb(var(--color-brand-100));
+  --brand-200:  rgb(var(--color-brand-200));
+  --brand-300:  rgb(var(--color-brand-300));
+  --brand-400:  rgb(var(--color-brand-400));
+  --brand-500:  rgb(var(--color-brand-500));
+  --brand-600:  rgb(var(--color-brand-600));
+  --brand-700:  rgb(var(--color-brand-700));
+  --brand-800:  rgb(var(--color-brand-800));
+  --brand-900:  rgb(var(--color-brand-900));
+
+  --accent-400: #60a5fa;
+  --accent-500: #3b82f6;
+  --accent-600: #2563eb;
+}
+
+/* ============================================================
+ * Semantic typography classes (theme-agnostic)
+ * ============================================================ */
+.hero, h1.hero {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--hero-size);
+  line-height: var(--hero-line);
+  letter-spacing: var(--hero-tracking);
+  color: var(--text);
+}
+h1, .h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--h1-size);
+  line-height: var(--h1-line);
+  letter-spacing: var(--h1-tracking);
+  color: var(--text);
+}
+h2, .h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--h2-size);
+  line-height: var(--h2-line);
+  letter-spacing: var(--h2-tracking);
+  color: var(--text);
+}
+h3, .h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--h3-size);
+  line-height: var(--h3-line);
+  color: var(--text);
+}
+p, .body {
+  font-family: var(--font-sans);
+  font-size: var(--body-size);
+  line-height: var(--body-line);
+  color: var(--text);
+}
+.body-muted { color: var(--text-muted); }
+.small {
+  font-family: var(--font-sans);
+  font-size: var(--small-size);
+  line-height: var(--small-line);
+  color: var(--text-muted);
+}
+.field-label {
+  font-family: var(--font-sans);
+  font-size: var(--caps-size);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+.overline {
+  font-family: var(--font-sans);
+  font-size: var(--caps-size);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--brand-400);
+}
+code, .mono, kbd, samp {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.kpi {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+/* ============================================================
+ * Base resets (opt-in via .vf-root)
+ * ============================================================ */
+.vf-root {
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv02", "cv03", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+ * Decorative utilities (from landing page)
+ * ============================================================ */
+.brand-gradient {
+  background-image:
+    radial-gradient(ellipse 800px 500px at 15% 0%,
+      rgba(14, 116, 144, 0.22), transparent 70%);
+}
+.textured {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.05  0 0 0 0 0.07  0 0 0 0 0.12  0 0 0 0.02 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
