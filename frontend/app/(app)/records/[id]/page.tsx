@@ -19,6 +19,10 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 import { RecordDetailIntro } from "@/components/ui/RecordDetailIntro";
+// Brand glyphs not in the icon barrel yet — direct lucide-react
+// import keeps this change to a single file. Mirrors the same pair
+// on the landing page.
+import { Github, Linkedin } from "lucide-react";
 import { DURATION_MEDIUM, EASE_OUT_EXPO, fadeRise } from "@/lib/motion";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DecisionBanner } from "@/components/record-detail/DecisionBanner";
@@ -481,6 +485,33 @@ export default function RecordDetailPage() {
           { label: record.subject_full_name },
         ]}
       />
+
+      <motion.div
+        variants={fadeRise}
+        transition={{ duration: DURATION_MEDIUM, ease: EASE_OUT_EXPO }}
+        className="flex items-center justify-center gap-3"
+      >
+        <a
+          href="https://github.com/mpalmer79/VeriFlow"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="View the VeriFlow project on GitHub (opens in a new tab)"
+          className="inline-flex items-center gap-2 rounded-full border border-surface-border bg-surface-panel/70 px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:border-text-subtle hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-300"
+        >
+          <Github size={14} aria-hidden />
+          <span>GitHub</span>
+        </a>
+        <a
+          href="https://www.linkedin.com/in/mpalmer1234/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Visit Michael Palmer on LinkedIn (opens in a new tab)"
+          className="inline-flex items-center gap-2 rounded-full border border-surface-border bg-surface-panel/70 px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:border-text-subtle hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-300"
+        >
+          <Linkedin size={14} aria-hidden />
+          <span>LinkedIn</span>
+        </a>
+      </motion.div>
 
       <RecordDetailIntro />
 
