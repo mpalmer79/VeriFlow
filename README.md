@@ -1,15 +1,15 @@
 # VeriFlow
 
-![VeriFlow record detail page showing a blocked record with rule violations and contextual actions.](docs/images/hero.png)
+![VeriFlow landing page showing the evidence-chain hero, the "Process compliance you can prove" headline, and the Enter demo call to action.](docs/images/hero.png)
 
-> Live demo: https://veriflow.up.railway.app/ — click Enter demo to auto-login as the reviewer account. No signup required.
+> Live demo: https://veriflow.up.railway.app/ — click Enter demo to auto-login as the admin account. No signup required.
 > Built by Michael Palmer — <a href="https://www.linkedin.com/in/mpalmer1234/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white" alt="LinkedIn"></a> <a href="https://github.com/mpalmer79/" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"></a>
 
 VeriFlow is a workflow and evidence-control platform for
 compliance-heavy operations. It enforces staged progression against a
 code-driven rule registry, scores operational risk, and produces a
 tamper-evident audit trail and verifiable evidence chain so every
-decision on a record is explainable after the fact. 
+decision on a record is explainable after the fact.
 
 The engine is domain-agnostic. The first reference scenario is a
 healthcare intake workflow, but the same data model handles loan
@@ -25,6 +25,7 @@ or CRM.
 - Hash-chained audit trail with a verify endpoint that walks the chain and reports broken links
 - Streaming uploads with SHA-256 at ingest and re-hash at verification; one-use signed URLs for content delivery
 - Code-driven rule registry with explainable risk scoring and stage-gated transitions
+- Standalone design system at https://veriflow.up.railway.app/design-system — tokens, component previews, and full-screen mocks of every surface
 
 ## What it actually does
 
@@ -65,32 +66,51 @@ or CRM.
   hosted deploys.
 - **Frontend.** Next.js 14 + TypeScript + Tailwind with Inter,
   JetBrains Mono, and Fraunces (display) via `next/font`, a brand
-  teal ramp for CTAs and hero surfaces, and Framer Motion as the
-  single motion primitive. The root `/` is a product landing page
-  with a real `SeverityPanel` mock and an animated hash-chain motif;
-  `/enter` preserves the demo-signin path. The dashboard is an
-  operations-intelligence surface: KPI hero cards with count-up
-  animation, 30s visibility-gated polling with a LIVE / STALE pill,
-  and a `Needs attention` table that stagger-reveals on mount and
-  smoothly reflows on poll changes. The record detail page is
-  componentized into focused pieces (header with breadcrumbs and
-  display-font subject name, action bar with a brand-primary
-  "Attempt transition" CTA gated on blocking issues, evaluation
-  panel with can-progress and risk-score bars that animate between
-  states, a rebuilt `WorkflowTimeline` with animated advance,
-  evidence panel with a keyboard-accessible overflow menu for
-  secondary document actions, audit trail with human-readable
-  events and copyable rule-code badges, preview modal with
-  accessible dialog semantics). Destructive confirmations use the
-  shared in-app `ConfirmDialog`. Admins get an `/operations`
-  console for audit-chain verification, managed-storage inventory,
-  and bounded orphan cleanup. Status messaging routes through a
+  teal ramp for accents, and Framer Motion as the single motion
+  primitive. The root `/` is a product landing page with a real
+  `SeverityPanel` mock, an animated hash-chain motif, and a
+  three-CTA hero (Enter demo, See how it works, View design
+  system). The landing page always renders — authenticated
+  visitors see it rather than getting silently redirected — and
+  the primary CTA auto-signs-in as admin for a zero-friction demo.
+  The record detail page is led by a `DecisionBanner` that is the
+  verdict surface: a compact orientation strip for context, a
+  verdict heading sized as the largest type on the page, a
+  promoted top-issue block with rule code and risk contribution,
+  and a contextual primary CTA that switches between "Resolve
+  blocking issues," stage advancement, or evaluation depending on
+  state. Below it, a componentized stack: evaluation panel with
+  can-progress and risk-score bars that animate between states, a
+  `WorkflowTimeline` with animated advance, an evidence panel with
+  a keyboard-accessible overflow menu for secondary document
+  actions, an audit trail with human-readable events and copyable
+  rule-code badges, and a preview modal with accessible dialog
+  semantics. The dashboard is an operations-intelligence surface:
+  KPI hero cards with count-up animation, 30s visibility-gated
+  polling with a LIVE / STALE pill, and a `Needs attention` table
+  that stagger-reveals on mount and smoothly reflows on poll
+  changes. Destructive confirmations use the shared in-app
+  `ConfirmDialog`. Admins get an `/operations` console for
+  audit-chain verification, managed-storage inventory, and
+  bounded orphan cleanup. Status messaging routes through a
   shared toast stack. Records page filters are URL-synced so
   refresh / back-button / shared links reproduce the view. Every
   Framer Motion call site consults `useReducedMotion()` and
   collapses to an instant state change under
   `prefers-reduced-motion`; `docs/ui_motion_audit.md` catalogues
   every usage.
+- **Design system.** A standalone reference at
+  `design-system/` in the repo and at `/design-system` on the
+  deployed site. Canonical tokens live in
+  `design-system/colors_and_type.css`; HTML previews under
+  `design-system/preview/` cover colors, typography, spacing,
+  badges, buttons, forms, KPI cells, severity panels, and
+  timelines. A React-based UI kit under
+  `design-system/ui_kits/veriflow_web/` renders full-screen mocks
+  of every app surface (landing, dashboard, records, record
+  detail, operations). A prebuild step copies the folder into
+  the Next.js `public/` tree so Railway serves it at the same
+  origin as the app.
 - **Evidence.** Streaming upload writes straight to a server-
   controlled storage root with chunked SHA-256; verification re-reads
   and re-hashes those bytes; content delivery supports HTTP `Range`
@@ -167,6 +187,8 @@ clinical decision support are implied.
 │   │   └── seed/               Idempotent demo data
 │   └── tests/                  pytest suite (SQLite by default,
 │                               Postgres when TEST_DATABASE_URL is set)
+├── design-system/              Standalone reference: tokens, previews,
+│                               and full-screen UI kit mocks
 ├── frontend/
 │   ├── Dockerfile
 │   ├── app/                    Next.js app-router pages
@@ -215,6 +237,12 @@ cp .env.example .env.local
 npm install
 npm run dev
 ```
+
+The frontend `build` script runs a `prebuild` step that copies
+`design-system/` into `frontend/public/design-system/` so the deployed
+Next.js app serves the design system at `/design-system` on the same
+origin. The copied tree is gitignored; the source of truth is the
+top-level `design-system/` folder.
 
 ## Local demo access
 
@@ -307,7 +335,7 @@ Backend:
 
 ```bash
 cd backend
-pytest                                # all 199 tests (SQLite)
+pytest                                # all tests (SQLite)
 pytest -m "not postgres"              # broad suite only; mirrors the SQLite CI job
 pytest -m "postgres or migration"     # targeted subset; mirrors the PostgreSQL CI job
 TEST_DATABASE_URL=postgresql+psycopg2://… pytest -m "postgres or migration"
@@ -364,7 +392,16 @@ the required stack setup.
 
 ## Engineering log
 
-Twelve numbered phases from monorepo bootstrap through trust-hardening. Highlights: a code-driven rule engine with explainable risk scoring, a SHA-256 hash-chained audit trail with a verify endpoint, streaming upload and verification with signed-URL content delivery and bounded replay prevention, a two-job backend CI split (SQLite broad and PostgreSQL targeted), and a chromium-only Playwright end-to-end job against the real stack. Full history in CHANGELOG.md.
+A sequence of scoped, single-commit PRs against a staff-level remediation
+plan produced the current state of the codebase: a code-driven rule
+engine with explainable risk scoring, a SHA-256 hash-chained audit trail
+with a verify endpoint, streaming upload and verification with
+signed-URL content delivery and bounded replay prevention, a two-job
+backend CI split (SQLite broad and PostgreSQL targeted), a chromium-only
+Playwright end-to-end job against the real stack, a verdict-led record
+detail page built around an evaluation-aware `DecisionBanner`, and a
+standalone design system served at `/design-system` on the same origin
+as the app. Full history in CHANGELOG.md.
 
 ## Known limitations
 
@@ -399,3 +436,4 @@ Twelve numbered phases from monorepo bootstrap through trust-hardening. Highligh
 - [`docs/product_overview.md`](./docs/product_overview.md) — problem framing and product capabilities
 - [`docs/migrations.md`](./docs/migrations.md) — Alembic layout and evolution strategy
 - [`docs/deployment.md`](./docs/deployment.md) — Railway deployment wiring and release workflow
+- [`docs/build_history.md`](./docs/build_history.md) — original multi-phase build prompt preserved as historical context
