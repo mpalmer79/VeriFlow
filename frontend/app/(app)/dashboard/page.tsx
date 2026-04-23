@@ -244,6 +244,7 @@ export default function DashboardPage() {
             }
             icon={Activity}
             tone="neutral"
+            href="/records"
           />
         </motion.div>
         <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
@@ -259,6 +260,7 @@ export default function DashboardPage() {
             }
             icon={Clock}
             tone="neutral"
+            href="/records?status=in_progress"
           />
         </motion.div>
         <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
@@ -275,6 +277,7 @@ export default function DashboardPage() {
             icon={AlertOctagon}
             tone="critical"
             highlighted={!!data && stats.blocked > 0}
+            href="/records?status=blocked"
           />
         </motion.div>
         <motion.div variants={fadeRise} transition={SPRING_DEFAULT}>
@@ -290,6 +293,7 @@ export default function DashboardPage() {
             }
             icon={AlertTriangle}
             tone="warning"
+            href="/records?risk=high"
           />
         </motion.div>
       </motion.div>
