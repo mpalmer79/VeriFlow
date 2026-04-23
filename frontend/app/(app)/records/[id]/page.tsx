@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
+import { RecordDetailIntro } from "@/components/ui/RecordDetailIntro";
 import { DURATION_MEDIUM, EASE_OUT_EXPO, fadeRise } from "@/lib/motion";
 import { AuditTrail } from "@/components/record-detail/AuditTrail";
 import { DecisionBanner } from "@/components/record-detail/DecisionBanner";
@@ -480,6 +481,8 @@ export default function RecordDetailPage() {
           { label: record.subject_full_name },
         ]}
       />
+
+      <RecordDetailIntro />
 
       {/* Banner is rendered directly (no MountPanel) so it is exempt
           from the parent's staggerChildren schedule — the lede
