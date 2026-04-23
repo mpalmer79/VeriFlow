@@ -15,9 +15,11 @@ test.describe("records flow", () => {
     await expect(subjectLink).toBeVisible();
     await subjectLink.click();
     await expect(page).toHaveURL(/\/records\/\d+/);
-    await expect(
-      page.getByRole("heading", { name: "Riley Thompson" })
-    ).toBeVisible();
+    // RecordHeader was removed; the subject name now lives in the
+    // DecisionBanner's orientation strip as plain text (and in the
+    // breadcrumbs). The DecisionBanner's h2 carries the decision state
+    // ("Ready to advance.", "Blocked.", etc.), not the subject.
+    await expect(page.getByText("Riley Thompson").first()).toBeVisible();
   });
 
   test("record detail renders the major sections", async ({ page }) => {
