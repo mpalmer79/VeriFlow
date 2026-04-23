@@ -4,6 +4,10 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Check, ChevronRight } from "@/components/icons";
+// Home is not in the icon barrel yet. Importing direct from lucide-react
+// instead of editing components/icons/index.ts keeps this PR to one file;
+// followup can migrate it into the barrel.
+import { Home } from "lucide-react";
 import { DURATION_MICRO, EASE_OUT } from "@/lib/motion";
 import { DEMO_ROLES } from "@/lib/demo";
 import type { UserPublic, UserRole } from "@/lib/types";
@@ -164,9 +168,18 @@ export function UserMenu({
                     </motion.ul>
                   ) : null}
                 </AnimatePresence>
-                <div className="my-1 border-t border-surface-border" />
               </>
             ) : null}
+            <a
+              href="/"
+              role="menuitem"
+              onClick={close}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-text no-underline transition-colors hover:bg-surface-muted focus:bg-surface-muted focus:outline-none"
+            >
+              <Home size={12} className="text-text-subtle" aria-hidden />
+              <span>Back to landing</span>
+            </a>
+            <div className="my-1 border-t border-surface-border" />
             <button
               type="button"
               role="menuitem"
