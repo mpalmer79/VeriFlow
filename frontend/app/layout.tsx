@@ -31,9 +31,33 @@ const fraunces = Fraunces({
 const THEME_FLASH_SUPPRESSION = `(function(){try{var s=localStorage.getItem("veriflow.theme");var t=(s==="light"||s==="dark")?s:(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");document.documentElement.dataset.theme=t;}catch(_e){document.documentElement.dataset.theme="light";}})();`;
 
 export const metadata: Metadata = {
-  title: "VeriFlow",
+  title: "VeriFlow — Process compliance you can prove.",
   description:
-    "Workflow intelligence platform for process compliance, operational risk, and explainable decisions.",
+    "A workflow and evidence-control platform with a hash-chained audit trail, streaming content verification, and a code-driven rule engine.",
+  metadataBase: new URL("https://veriflow.up.railway.app"),
+  openGraph: {
+    title: "VeriFlow — Process compliance you can prove.",
+    description:
+      "A workflow and evidence-control platform with a hash-chained audit trail, streaming content verification, and a code-driven rule engine.",
+    url: "https://veriflow.up.railway.app",
+    siteName: "VeriFlow",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "VeriFlow — workflow and evidence-control platform",
+      },
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VeriFlow — Process compliance you can prove.",
+    description:
+      "Workflow and evidence-control platform with a verifiable audit trail.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
