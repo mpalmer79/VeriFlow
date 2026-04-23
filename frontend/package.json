@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node -e \"const fs=require('fs'); const p=require('path'); const src=p.resolve(__dirname,'..','design-system'); const dst=p.resolve(__dirname,'public','design-system'); if(!fs.existsSync(src)){console.error('design-system source missing at',src); process.exit(1);} fs.rmSync(dst,{recursive:true,force:true}); fs.cpSync(src,dst,{recursive:true}); console.log('Copied design-system to public/design-system');\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Status badges</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:500;border:1px solid}
+  .dot{width:7px;height:7px;border-radius:999px}
+  .b-pending{color:#94a3b8;border-color:#1f2a44;background:#111c33}
+  .b-progress{color:#60a5fa;border-color:#3b82f666;background:#3b82f626}
+  .b-blocked{color:#ef4444;border-color:#ef444466;background:#ef444422}
+  .b-verified{color:#14b8a6;border-color:#14b8a666;background:#14b8a622}
+  .b-closed{color:#94a3b8;border-color:#1f2a44;background:#0f172a}
+  .b-live{color:#22c55e;border-color:#22c55e66;background:#22c55e1e;padding:3px 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+  .b-stale{color:#eab308;border-color:#eab30866;background:#eab3081e;padding:3px 8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+  @keyframes pulse {0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.85)}}
+  .pulse{animation:pulse 3s ease-in-out infinite}
+  .risk{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:600}
+  .r-low{background:#22c55e22;color:#22c55e;border:1px solid #22c55e66}
+  .r-mod{background:#eab30822;color:#eab308;border:1px solid #eab30866}
+  .r-hi{background:#f9731622;color:#f97316;border:1px solid #f9731666}
+  .r-crit{background:#ef444422;color:#ef4444;border:1px solid #ef444466}
+</style></head>
+<body><div class="wrap">
+  <span class="badge b-pending"><span class="dot" style="background:#64748b"></span>Pending</span>
+  <span class="badge b-progress"><span class="dot" style="background:#3b82f6"></span>In progress</span>
+  <span class="badge b-blocked"><span class="dot pulse" style="background:#ef4444"></span>Blocked</span>
+  <span class="badge b-verified"><span class="dot" style="background:#14b8a6"></span>Verified</span>
+  <span class="badge b-closed"><span class="dot" style="background:#64748b"></span>Closed</span>
+  <span class="b-live badge"><span class="dot pulse" style="background:#22c55e"></span>Live</span>
+  <span class="b-stale badge"><span class="dot" style="background:#eab308"></span>Stale</span>
+  <span class="risk r-low">Risk 12</span>
+  <span class="risk r-mod">Risk 41</span>
+  <span class="risk r-hi">Risk 68</span>
+  <span class="risk r-crit">Risk 91</span>
+</div></body></html>

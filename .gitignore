@@ -27,9 +27,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Generated at build time by frontend/package.json prebuild script.
-frontend/public/design-system/
-
 # Editors & OS
 .vscode/
 .idea/

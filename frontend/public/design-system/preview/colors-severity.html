@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Colors · Severity</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;background:#0b1220;color:#e6edf3;font-family:Inter,sans-serif}
+  .wrap{padding:20px;display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid #1f2a44;border-radius:8px;background:#0f172a}
+  .chip{width:14px;height:14px;border-radius:999px;flex-shrink:0}
+  .name{font-weight:600;font-size:13px}
+  .hex{font-family:"JetBrains Mono",monospace;font-size:11px;color:#94a3b8}
+  .tag{margin-left:auto;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid}
+  .t-low{border-color:#22c55e66;background:#22c55e26;color:#22c55e}
+  .t-moderate{border-color:#eab30866;background:#eab30826;color:#eab308}
+  .t-high{border-color:#f9731666;background:#f9731626;color:#f97316}
+  .t-critical{border-color:#ef444466;background:#ef444426;color:#ef4444}
+  .t-verified{border-color:#14b8a666;background:#14b8a626;color:#14b8a6}
+  .t-rejected{border-color:#b4530966;background:#b4530926;color:#d97706}
+</style></head>
+<body><div class="wrap">
+  <div class="row"><span class="chip" style="background:#22c55e"></span><div><div class="name">low</div><div class="hex">#22c55e</div></div><span class="tag t-low">Low</span></div>
+  <div class="row"><span class="chip" style="background:#eab308"></span><div><div class="name">moderate</div><div class="hex">#eab308</div></div><span class="tag t-moderate">Moderate</span></div>
+  <div class="row"><span class="chip" style="background:#f97316"></span><div><div class="name">high</div><div class="hex">#f97316</div></div><span class="tag t-high">High</span></div>
+  <div class="row"><span class="chip" style="background:#ef4444"></span><div><div class="name">critical</div><div class="hex">#ef4444</div></div><span class="tag t-critical">Critical</span></div>
+  <div class="row"><span class="chip" style="background:#14b8a6"></span><div><div class="name">verified</div><div class="hex">#14b8a6</div></div><span class="tag t-verified">Verified</span></div>
+  <div class="row"><span class="chip" style="background:#b45309"></span><div><div class="name">rejected</div><div class="hex">#b45309</div></div><span class="tag t-rejected">Rejected</span></div>
+</div></body></html>
