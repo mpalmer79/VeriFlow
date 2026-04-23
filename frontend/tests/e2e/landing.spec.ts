@@ -17,12 +17,13 @@ test.describe("landing page", () => {
     ).toBeVisible();
   });
 
-  test('"Enter demo" links to /enter with the reviewer-auto param', async ({ page }) => {
+  test('"Enter demo" links to /enter with the admin-auto param', async ({ page }) => {
     await page.goto("/");
     const cta = page.getByRole("link", { name: /enter demo/i });
-    // The primary CTA auto-logs-in as the reviewer demo account and
-    // deep-links to a blocked record; see frontend/app/enter/page.tsx.
-    await expect(cta).toHaveAttribute("href", "/enter?auto=reviewer");
+    // The primary CTA auto-logs-in as the admin demo account so the
+    // recruiter tour exposes every feature, including the admin-only
+    // Operations surface. See frontend/app/enter/page.tsx.
+    await expect(cta).toHaveAttribute("href", "/enter?auto=admin");
   });
 
   test('"See how it works" scrolls to the pillars section', async ({ page }) => {
@@ -36,9 +37,15 @@ test.describe("landing page", () => {
     ).toBeVisible();
   });
 
-  test("authenticated visitors are redirected to /dashboard", async ({ page }) => {
+  test("authenticated visitors still see the landing page", async ({ page }) => {
     await loginAs(page, "admin");
     await page.goto("/");
-    await expect(page).toHaveURL(/\/dashboard/);
+    // PR #60 removed the auto-redirect so a returning visitor whose
+    // browser carries a cached demo token can always reach the marketing
+    // surface again.
+    await expect(
+      page.getByRole("heading", { name: /process compliance/i, level: 1 }),
+    ).toBeVisible();
+    await expect(page).not.toHaveURL(/\/dashboard/);
   });
 });
