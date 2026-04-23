@@ -20,6 +20,9 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from "@/components/icons";
+// Brand glyphs not in the icon barrel yet — direct lucide-react import
+// keeps this change to one file. A followup can migrate them.
+import { Github, Linkedin } from "lucide-react";
 import type { WorkflowStage } from "@/lib/types";
 import {
   fadeRise,
@@ -187,6 +190,32 @@ function HeroSection({
             >
               View design system
               <ChevronRight size={16} aria-hidden />
+            </a>
+          </motion.div>
+          <motion.div
+            variants={fadeRise}
+            transition={SPRING_DEFAULT}
+            className="mt-12 flex items-center justify-center gap-3"
+          >
+            <a
+              href="https://github.com/mpalmer79/VeriFlow"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="View the VeriFlow project on GitHub (opens in a new tab)"
+              className="inline-flex items-center gap-2 rounded-full border border-surface-border bg-surface-panel/70 px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:border-text-subtle hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-300"
+            >
+              <Github size={14} aria-hidden />
+              <span>GitHub</span>
+            </a>
+            <a
+              href="https://www.linkedin.com/in/mpalmer1234/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Visit Michael Palmer on LinkedIn (opens in a new tab)"
+              className="inline-flex items-center gap-2 rounded-full border border-surface-border bg-surface-panel/70 px-4 py-2 text-xs font-medium text-text-muted transition-colors hover:border-text-subtle hover:text-text focus:outline-none focus:ring-2 focus:ring-brand-300"
+            >
+              <Linkedin size={14} aria-hidden />
+              <span>LinkedIn</span>
             </a>
           </motion.div>
         </motion.div>
